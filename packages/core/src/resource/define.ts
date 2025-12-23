@@ -7,12 +7,10 @@ import { createEmptyHooks, createResourceFeatures } from '../types/index.js';
  * Define a new resource
  */
 export function defineResource<
-  TName extends string,
-  TSchema extends AnyZodSchema,
-  TCreateSchema extends AnyZodSchema = TSchema,
-  TUpdateSchema extends AnyZodSchema = z.ZodObject<{
-    [K in keyof z.infer<TSchema>]?: z.ZodOptional<z.ZodType<z.infer<TSchema>[K]>>;
-  }>,
+  const TName extends string,
+  const TSchema extends AnyZodSchema,
+  const TCreateSchema extends AnyZodSchema = TSchema,
+  const TUpdateSchema extends AnyZodSchema = TSchema,
 >(
   input: ResourceDefinitionInput<TName, TSchema, TCreateSchema, TUpdateSchema>
 ): ResourceDefinition<TName, TSchema, TCreateSchema, TUpdateSchema> {
@@ -22,8 +20,19 @@ export function defineResource<
   const createSchema = (input.createSchema ?? input.schema) as TCreateSchema;
 
   // Generate update schema if not provided (partial of main schema)
-  const updateSchema = (input.updateSchema ??
-    (input.schema instanceof z.ZodObject ? input.schema.partial() : input.schema)) as TUpdateSchema;
+  const updateSchema = (() => {
+    if (input.updateSchema) {
+      return input.updateSchema;
+    }
+
+    // Only generate partial for ZodObject types
+    if (input.schema instanceof z.ZodObject) {
+      return input.schema.partial();
+    }
+
+    // For non-object schemas, use the original schema
+    return input.schema;
+  })() as TUpdateSchema;
 
   // Generate default permissions based on features
   const basePermissions = generatePermissions(input.name, features);

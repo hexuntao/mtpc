@@ -6,6 +6,21 @@ import type {
 } from '../types/index.js';
 
 /**
+ * Type guards for safe type checking
+ */
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number' && !Number.isNaN(value);
+}
+
+function isValidDate(value: unknown): value is Date {
+  return value instanceof Date && !Number.isNaN(value.getTime());
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(item => typeof item === 'string');
+}
+
+/**
  * Evaluate a single condition
  */
 export async function evaluateCondition(
@@ -82,7 +97,7 @@ function resolveFieldValue(field: string, context: PolicyEvaluationContext): unk
 }
 
 /**
- * Compare values based on operator
+ * Compare values based on operator with type safety
  */
 function compareValues(actual: unknown, operator: string, expected: unknown): boolean {
   switch (operator) {
@@ -90,36 +105,62 @@ function compareValues(actual: unknown, operator: string, expected: unknown): bo
       return actual === expected;
     case 'neq':
       return actual !== expected;
+
+    // Numeric comparisons with type safety
     case 'gt':
-      return (actual as number) > (expected as number);
+      return isNumber(actual) && isNumber(expected) && actual > expected;
     case 'gte':
-      return (actual as number) >= (expected as number);
+      return isNumber(actual) && isNumber(expected) && actual >= expected;
     case 'lt':
-      return (actual as number) < (expected as number);
+      return isNumber(actual) && isNumber(expected) && actual < expected;
     case 'lte':
-      return (actual as number) <= (expected as number);
+      return isNumber(actual) && isNumber(expected) && actual <= expected;
+
+    // Array operations
     case 'in':
       return Array.isArray(expected) && expected.includes(actual);
     case 'notIn':
       return Array.isArray(expected) && !expected.includes(actual);
+
+    // Contains operations with type checking
     case 'contains':
       if (Array.isArray(actual)) {
         return actual.includes(expected);
       }
-      if (typeof actual === 'string') {
-        return actual.includes(expected as string);
+      if (typeof actual === 'string' && typeof expected === 'string') {
+        return actual.includes(expected);
       }
       return false;
+
+    // String operations
     case 'startsWith':
-      return typeof actual === 'string' && actual.startsWith(expected as string);
+      return (
+        typeof actual === 'string' && typeof expected === 'string' && actual.startsWith(expected)
+      );
     case 'endsWith':
-      return typeof actual === 'string' && actual.endsWith(expected as string);
+      return (
+        typeof actual === 'string' && typeof expected === 'string' && actual.endsWith(expected)
+      );
+
+    // Regex matching with error handling
     case 'matches':
-      return typeof actual === 'string' && new RegExp(expected as string).test(actual);
+      if (typeof actual !== 'string' || typeof expected !== 'string') {
+        return false;
+      }
+      try {
+        const regex = new RegExp(expected);
+        return regex.test(actual);
+      } catch {
+        // Invalid regex pattern, return false
+        return false;
+      }
+
+    // Existence checks
     case 'exists':
       return actual !== undefined && actual !== null;
     case 'notExists':
       return actual === undefined || actual === null;
+
     default:
       return false;
   }
@@ -135,11 +176,11 @@ function evaluateTimeCondition(
   const now = context.request.timestamp;
   const { operator, value } = condition;
 
-  if (!operator || !value) {
+  if (!operator || !value || !isValidDate(now)) {
     return false;
   }
 
-  if (typeof value === 'object' && value !== null) {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     const timeConfig = value as {
       after?: string;
       before?: string;
@@ -147,24 +188,51 @@ function evaluateTimeCondition(
       hourRange?: [number, number];
     };
 
-    // Check after/before
-    if (timeConfig.after && now < new Date(timeConfig.after)) {
-      return false;
-    }
-    if (timeConfig.before && now > new Date(timeConfig.before)) {
-      return false;
-    }
-
-    // Check day of week
-    if (timeConfig.dayOfWeek && !timeConfig.dayOfWeek.includes(now.getDay())) {
-      return false;
-    }
-
-    // Check hour range
-    if (timeConfig.hourRange) {
-      const hour = now.getHours();
-      if (hour < timeConfig.hourRange[0] || hour > timeConfig.hourRange[1]) {
+    // Check after/before with proper validation
+    if (timeConfig.after) {
+      const afterDate = new Date(timeConfig.after);
+      if (isValidDate(afterDate) && now < afterDate) {
         return false;
+      }
+    }
+
+    if (timeConfig.before) {
+      const beforeDate = new Date(timeConfig.before);
+      if (isValidDate(beforeDate) && now > beforeDate) {
+        return false;
+      }
+    }
+
+    // Check day of week (0-6)
+    if (timeConfig.dayOfWeek && Array.isArray(timeConfig.dayOfWeek)) {
+      const dayOfWeek = now.getDay();
+      if (timeConfig.dayOfWeek.some(d => typeof d === 'number' && d >= 0 && d <= 6)) {
+        if (!timeConfig.dayOfWeek.includes(now.getDay())) {
+          return false;
+        }
+      }
+    }
+
+    // Check hour range (0-23)
+    if (
+      timeConfig.hourRange &&
+      Array.isArray(timeConfig.hourRange) &&
+      timeConfig.hourRange.length === 2
+    ) {
+      const hour = now.getHours();
+      const [start, end] = timeConfig.hourRange;
+      if (
+        isNumber(start) &&
+        isNumber(end) &&
+        start >= 0 &&
+        start <= 23 &&
+        end >= 0 &&
+        end <= 23 &&
+        start <= end
+      ) {
+        if (hour < start || hour > end) {
+          return false;
+        }
       }
     }
 
@@ -197,34 +265,68 @@ function evaluateIpCondition(
     return !value.some(pattern => matchIp(clientIp, pattern as string));
   }
 
-  if (operator === 'eq') {
-    return matchIp(clientIp, value as string);
+  if (operator === 'eq' && typeof value === 'string') {
+    return matchIp(clientIp, value);
   }
 
   return false;
 }
 
 /**
- * Match IP against pattern (simple implementation)
+ * Match IP against pattern with improved CIDR support
+ * Note: For production, consider using a library like 'ipaddr.js'
  */
 function matchIp(ip: string, pattern: string): boolean {
+  // Validate IP format (basic IPv4)
+  const ipRegex =
+    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+  if (!ipRegex.test(ip)) {
+    return false;
+  }
+
   // Exact match
   if (ip === pattern) {
     return true;
   }
 
-  // CIDR notation (simplified)
+  // CIDR notation - FIXED implementation
   if (pattern.includes('/')) {
-    // For production, use a proper IP matching library
-    const [network] = pattern.split('/');
-    return ip.startsWith(network.split('.').slice(0, -1).join('.'));
+    const parts = pattern.split('/');
+    if (parts.length !== 2) {
+      return false;
+    }
+
+    const [network, prefixLengthStr] = parts;
+    const prefixLength = parseInt(prefixLengthStr, 10);
+
+    // Validate CIDR format
+    if (
+      !ipRegex.test(network) ||
+      Number.isNaN(prefixLength) ||
+      prefixLength < 0 ||
+      prefixLength > 32
+    ) {
+      return false;
+    }
+
+    // Convert IP to 32-bit number
+    const ipToInt = (ipAddr: string): number => {
+      return ipAddr.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+    };
+
+    const ipInt = ipToInt(ip);
+    const networkInt = ipToInt(network);
+
+    // Create mask
+    const mask = (-1 << (32 - prefixLength)) >>> 0;
+
+    // Compare network portions
+    return (ipInt & mask) === (networkInt & mask);
   }
 
-  // Wildcard
+  // Wildcard support (e.g., 192.168.1.*)
   if (pattern.includes('*')) {
-    const regex = new RegExp(
-      '^' + pattern.replace(/./g, '.').replace(/*/g, '\d+') + '$'
-    );
+    const regex = new RegExp('^' + pattern.replace(/\*/g, '\\d{1,3}') + '$');
     return regex.test(ip);
   }
 
@@ -232,7 +334,7 @@ function matchIp(ip: string, pattern: string): boolean {
 }
 
 /**
- * Evaluate custom condition
+ * Evaluate custom condition with better error handling
  */
 async function evaluateCustomCondition(
   condition: PolicyCondition,
@@ -244,8 +346,10 @@ async function evaluateCustomCondition(
 
   try {
     const result = await condition.fn(context);
-    return result;
-  } catch {
+    return result === true;
+  } catch (error) {
+    // In production, use a proper logger
+    console.error('Custom condition evaluation failed:', error);
     return false;
   }
 }
@@ -253,25 +357,19 @@ async function evaluateCustomCondition(
 /**
  * Create a field condition
  */
-export function fieldCondition(
-  field: string,
-  operator: string,
-  value: unknown
-): PolicyCondition {
+export function fieldCondition(field: string, operator: string, value: unknown): PolicyCondition {
   return { type: 'field', field, operator, value };
 }
 
 /**
  * Create a time condition
  */
-export function timeCondition(
-  config: {
-    after?: string;
-    before?: string;
-    dayOfWeek?: number[];
-    hourRange?: [number, number];
-  }
-): PolicyCondition {
+export function timeCondition(config: {
+  after?: string;
+  before?: string;
+  dayOfWeek?: number[];
+  hourRange?: [number, number];
+}): PolicyCondition {
   return { type: 'time', operator: 'match', value: config };
 }
 
