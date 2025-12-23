@@ -1,7 +1,21 @@
 import type { ResourceDefinition, ResourceFeatures } from '../types/index.js';
 
 /**
- * Check if resource has feature enabled
+ * 检查资源是否启用了指定特性
+ * 支持检查基本特性和高级特性
+ *
+ * @param resource 资源定义对象
+ * @param feature 要检查的特性名称
+ * @returns 如果启用了该特性返回 true，否则返回 false
+ *
+ * @example
+ * ```typescript
+ * const userResource = resource('user', userSchema).enable('create', 'read').build();
+ *
+ * hasFeature(userResource, 'create'); // true
+ * hasFeature(userResource, 'delete'); // false
+ * hasFeature(userResource, 'advanced.softDelete'); // false
+ * ```
  */
 export function hasFeature(
   resource: ResourceDefinition,
@@ -19,28 +33,77 @@ export function hasFeature(
 }
 
 /**
- * Get all permission codes for a resource
+ * 获取资源的所有权限代码
+ * 格式为 "资源名:动作名"
+ *
+ * @param resource 资源定义对象
+ * @returns 权限代码字符串数组
+ *
+ * @example
+ * ```typescript
+ * const userResource = resource('user', userSchema).enable('create', 'read').build();
+ * const codes = getResourcePermissionCodes(userResource);
+ * // ['user:create', 'user:read']
+ * ```
  */
 export function getResourcePermissionCodes(resource: ResourceDefinition): string[] {
   return resource.permissions.map(p => `${resource.name}:${p.action}`);
 }
 
 /**
- * Get resource actions
+ * 获取资源的所有动作
+ *
+ * @param resource 资源定义对象
+ * @returns 动作名称字符串数组
+ *
+ * @example
+ * ```typescript
+ * const userResource = resource('user', userSchema).enable('create', 'read').build();
+ * const actions = getResourceActions(userResource);
+ * // ['create', 'read']
+ * ```
  */
 export function getResourceActions(resource: ResourceDefinition): string[] {
   return resource.permissions.map(p => p.action);
 }
 
 /**
- * Check if resource supports action
+ * 检查资源是否支持指定动作
+ *
+ * @param resource 资源定义对象
+ * @param action 动作名称
+ * @returns 如果支持该动作返回 true，否则返回 false
+ *
+ * @example
+ * ```typescript
+ * const userResource = resource('user', userSchema).enable('create', 'read').build();
+ *
+ * supportsAction(userResource, 'create'); // true
+ * supportsAction(userResource, 'delete'); // false
+ * ```
  */
 export function supportsAction(resource: ResourceDefinition, action: string): boolean {
   return resource.permissions.some(p => p.action === action);
 }
 
 /**
- * Get resource field names from schema
+ * 从资源的 Zod 模式中获取字段名列表
+ * 仅支持 ZodObject 类型
+ *
+ * @param resource 资源定义对象
+ * @returns 字段名字符串数组，如果不是对象模式则返回空数组
+ *
+ * @example
+ * ```typescript
+ * const userResource = resource('user', z.object({
+ *   id: z.string(),
+ *   name: z.string(),
+ *   email: z.string()
+ * })).build();
+ *
+ * const fields = getResourceFields(userResource);
+ * // ['id', 'name', 'email']
+ * ```
  */
 export function getResourceFields(resource: ResourceDefinition): string[] {
   const schema = resource.schema;
@@ -53,7 +116,32 @@ export function getResourceFields(resource: ResourceDefinition): string[] {
 }
 
 /**
- * Merge resource definitions
+ * 扩展资源定义
+ * 将基础资源与扩展配置合并，创建新的资源定义
+ * 用于继承和复用资源定义
+ *
+ * @param base 基础资源定义
+ * @param extension 扩展配置（部分资源定义属性）
+ * @returns 合并后的资源定义对象
+ *
+ * @example
+ * ```typescript
+ * const baseUser = resource('user', userSchema)
+ *   .enable('create', 'read')
+ *   .build();
+ *
+ * const adminUser = extendResource(baseUser, {
+ *   features: {
+ *     delete: true,
+ *     advanced: {
+ *       auditLog: true
+ *     }
+ *   },
+ *   permissions: [
+ *     { action: 'manage', description: '管理用户' }
+ *   ]
+ * });
+ * ```
  */
 export function extendResource<T extends ResourceDefinition>(
   base: T,
@@ -81,7 +169,20 @@ export function extendResource<T extends ResourceDefinition>(
 }
 
 /**
- * Merge hooks
+ * 合并钩子函数
+ * 将基础钩子与扩展钩子合并，扩展钩子追加到基础钩子之后
+ *
+ * @param base 基础钩子对象
+ * @param extension 扩展钩子对象
+ * @returns 合并后的钩子对象
+ *
+ * @example
+ * ```typescript
+ * const baseHooks = { beforeCreate: [validateUser] };
+ * const extensionHooks = { beforeCreate: [logAccess], afterCreate: [sendEmail] };
+ * const merged = mergeHooks(baseHooks, extensionHooks);
+ * // { beforeCreate: [validateUser, logAccess], afterCreate: [sendEmail] }
+ * ```
  */
 function mergeHooks(
   base: ResourceDefinition['hooks'],
