@@ -387,7 +387,7 @@ function evaluateTimeCondition(
       Array.isArray(timeConfig.hourRange) &&
       timeConfig.hourRange.length === 2
     ) {
-      const hour = now.getHours();
+      const hour = now.getUTCHours();
       const [start, end] = timeConfig.hourRange;
       if (
         isNumber(start) &&
