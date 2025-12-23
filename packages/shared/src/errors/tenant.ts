@@ -1,12 +1,12 @@
-import { MTPCError } from "./base.js";
+import { MTPCError } from './base.js';
 
 /**
  * Tenant not found error
  */
 export class TenantNotFoundError extends MTPCError {
   constructor(tenantId: string) {
-    super(`Tenant not found: ${tenantId}`, "TENANT_NOT_FOUND", { tenantId });
-    this.name = "TenantNotFoundError";
+    super(`Tenant not found: ${tenantId}`, 'TENANT_NOT_FOUND', { tenantId });
+    this.name = 'TenantNotFoundError';
   }
 }
 
@@ -15,8 +15,8 @@ export class TenantNotFoundError extends MTPCError {
  */
 export class MissingTenantContextError extends MTPCError {
   constructor() {
-    super("Tenant context is required but not provided", "MISSING_TENANT_CONTEXT");
-    this.name = "MissingTenantContextError";
+    super('Tenant context is required but not provided', 'MISSING_TENANT_CONTEXT');
+    this.name = 'MissingTenantContextError';
   }
 }
 
@@ -25,7 +25,7 @@ export class MissingTenantContextError extends MTPCError {
  */
 export class InvalidTenantError extends MTPCError {
   constructor(reason: string) {
-    super(`Invalid tenant: ${reason}`, "INVALID_TENANT", { reason });
-    this.name = "InvalidTenantError";
+    super(`Invalid tenant: ${reason}`, 'INVALID_TENANT', { reason });
+    this.name = 'InvalidTenantError';
   }
 }

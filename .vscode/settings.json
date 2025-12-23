@@ -1,12 +1,17 @@
 {
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "biomejs.biome",
+
   "[javascript][typescript][javascriptreact][typescriptreact][json][css][scss][less]": {
     "editor.defaultFormatter": "biomejs.biome",
     "editor.formatOnSave": true
   },
+
   "editor.codeActionsOnSave": {
     "source.fixAll.biome": "explicit",
     "source.organizeImports.biome": "explicit"
-  }
+  },
+
+  // 禁用 Prettier（如果安装了）
+  "prettier.enable": false
 }

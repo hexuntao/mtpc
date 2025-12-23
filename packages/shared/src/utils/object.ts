@@ -2,7 +2,7 @@
  * Deep clone an object
  */
 export function deepClone<T>(obj: T): T {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return obj;
   }
 
@@ -54,9 +54,11 @@ export function deepMerge<T extends Record<string, unknown>>(
 /**
  * Check if value is a plain object
  */
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
+export function isPlainObject(
+  value: unknown
+): value is Record<string, unknown> {
   return (
-    typeof value === "object" &&
+    typeof value === 'object' &&
     value !== null &&
     !Array.isArray(value) &&
     Object.getPrototypeOf(value) === Object.prototype
@@ -96,8 +98,11 @@ export function omit<T extends Record<string, unknown>, K extends keyof T>(
 /**
  * Get nested value from object by path
  */
-export function getByPath(obj: Record<string, unknown>, path: string | string[]): unknown {
-  const keys = Array.isArray(path) ? path : path.split(".");
+export function getByPath(
+  obj: Record<string, unknown>,
+  path: string | string[]
+): unknown {
+  const keys = Array.isArray(path) ? path : path.split('.');
   let current: unknown = obj;
 
   for (const key of keys) {
@@ -118,7 +123,7 @@ export function setByPath(
   path: string | string[],
   value: unknown
 ): void {
-  const keys = Array.isArray(path) ? path : path.split(".");
+  const keys = Array.isArray(path) ? path : path.split('.');
   let current = obj;
 
   for (let i = 0; i < keys.length - 1; i++) {

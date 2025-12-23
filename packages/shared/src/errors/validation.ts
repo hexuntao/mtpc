@@ -1,5 +1,5 @@
-import type { ZodError } from "zod";
-import { MTPCError } from "./base.js";
+import type { ZodError } from 'zod';
+import { MTPCError } from './base.js';
 
 /**
  * Validation error
@@ -16,14 +16,14 @@ export class ValidationError extends MTPCError {
       message: issue.message,
     }));
 
-    super("Validation failed", "VALIDATION_ERROR", { issues });
-    this.name = "ValidationError";
+    super('Validation failed', 'VALIDATION_ERROR', { issues });
+    this.name = 'ValidationError';
     this.issues = issues;
   }
 
   static fromMessage(message: string, path: string[] = []) {
-    const error = new MTPCError(message, "VALIDATION_ERROR", { path });
-    error.name = "ValidationError";
+    const error = new MTPCError(message, 'VALIDATION_ERROR', { path });
+    error.name = 'ValidationError';
     return error;
   }
 }

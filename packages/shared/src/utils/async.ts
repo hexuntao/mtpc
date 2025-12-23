@@ -98,7 +98,7 @@ export function createDeferred<T>(): {
 export async function withTimeout<T>(
   promise: Promise<T>,
   ms: number,
-  message = "Operation timed out"
+  message = 'Operation timed out'
 ): Promise<T> {
   const timeout = new Promise<never>((_, reject) => {
     setTimeout(() => reject(new Error(message)), ms);
