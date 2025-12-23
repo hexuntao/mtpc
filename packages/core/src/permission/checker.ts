@@ -1,4 +1,5 @@
 import { createPermissionCode, PermissionDeniedError, parsePermissionCode } from '@mtpc/shared';
+import { InvalidTenantError, MissingTenantContextError } from '@mtpc/shared/errors';
 import type {
   BatchPermissionCheckResult,
   PermissionCheckContext,
@@ -115,6 +116,16 @@ export class PermissionChecker {
     const startTime = Date.now();
     const permissionCode = createPermissionCode(context.resource, context.action);
 
+    // ========== 入口验证：Tenant Context 不可缺失 ==========
+    // 符合 Architecture.md - "Fail-safe" 原则
+    if (!context.tenant) {
+      throw new MissingTenantContextError();
+    }
+    if (!context.tenant.id || typeof context.tenant.id !== 'string') {
+      throw new InvalidTenantError('Tenant ID must be a non-empty string');
+    }
+    // ======================================================
+
     // 1. 系统主体拥有所有权限
     if (context.subject.type === 'system') {
       return {
@@ -149,7 +160,18 @@ export class PermissionChecker {
       permissions = cached.permissions;
     } else {
       // 从外部源解析并缓存
-      permissions = await this.permissionResolver(context.tenant.id, context.subject.id);
+      // 异常处理：resolver 失败时返回空权限集（Fail-safe）
+      try {
+        permissions = await this.permissionResolver(context.tenant.id, context.subject.id);
+        // 确保返回 Set 类型
+        if (!(permissions instanceof Set)) {
+          permissions = new Set();
+        }
+      } catch {
+        // resolver 异常时返回空权限集，等同于"无权限"
+        // 这符合 Fail-safe 原则：任何异常路径都导向拒绝
+        permissions = new Set();
+      }
       this.cache.set(cacheKey, {
         permissions,
         expiresAt: Date.now() + this.CACHE_TTL,
