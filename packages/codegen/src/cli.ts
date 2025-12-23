@@ -6,9 +6,11 @@ import { parseArgs } from 'util';
 import { createCodegen } from './codegen.js';
 
 /**
- * CLI entry point
+ * CLI 入口函数
+ * 处理命令行参数并执行相应的命令
  */
 async function main() {
+  // 解析命令行参数
   const { values, positionals } = parseArgs({
     args: process.argv.slice(2),
     options: {
@@ -39,13 +41,16 @@ async function main() {
     allowPositionals: true,
   });
 
+  // 显示帮助信息
   if (values.help) {
     printHelp();
     process.exit(0);
   }
 
+  // 获取命令（默认为 generate）
   const command = positionals[0] ?? 'generate';
 
+  // 执行对应的命令
   switch (command) {
     case 'generate':
       await runGenerate(values);
@@ -61,11 +66,15 @@ async function main() {
 }
 
 /**
- * Run generate command
+ * 执行 generate 命令
+ * 从配置文件读取资源定义并生成代码
+ *
+ * @param options 命令行选项
  */
 async function runGenerate(options: Record<string, unknown>) {
   const configPath = path.resolve(process.cwd(), options.config as string);
 
+  // 检查配置文件是否存在
   if (!fs.existsSync(configPath)) {
     console.error(`Config file not found: ${configPath}`);
     console.log('Run "mtpc-codegen init" to create a config file.');
@@ -73,14 +82,17 @@ async function runGenerate(options: Record<string, unknown>) {
   }
 
   try {
+    // 动态导入配置文件
     const config = await import(configPath);
     const resources = config.default?.resources ?? config.resources ?? [];
 
+    // 检查是否有资源定义
     if (resources.length === 0) {
       console.warn('No resources found in config.');
       return;
     }
 
+    // 创建代码生成器并执行生成
     const codegen = createCodegen({
       resources,
       outputDir: options.output as string,
@@ -91,6 +103,7 @@ async function runGenerate(options: Record<string, unknown>) {
       clean: options.clean as boolean,
     });
 
+    // 检查是否有错误
     if (result.errors.length > 0) {
       console.error('\nGeneration failed with errors.');
       process.exit(1);
@@ -104,20 +117,25 @@ async function runGenerate(options: Record<string, unknown>) {
 }
 
 /**
- * Run init command
+ * 执行 init 命令
+ * 创建示例配置文件
+ *
+ * @param options 命令行选项
  */
 async function runInit(options: Record<string, unknown>) {
   const configPath = path.resolve(process.cwd(), options.config as string);
 
+  // 检查配置文件是否已存在
   if (fs.existsSync(configPath)) {
     console.log(`Config file already exists: ${configPath}`);
     return;
   }
 
+  // 示例配置文件内容
   const configContent = `import { z } from 'zod';
 import { defineResource } from '@mtpc/core';
 
-// Example resource definition
+// 示例资源定义
 const exampleResource = defineResource({
   name: 'example',
   schema: z.object({
@@ -143,6 +161,7 @@ export const resources = [exampleResource];
 export default { resources };
 `;
 
+  // 写入配置文件
   fs.writeFileSync(configPath, configContent, 'utf-8');
   console.log(`Created config file: ${configPath}`);
   console.log('\nEdit the config file to define your resources, then run:');
@@ -150,7 +169,7 @@ export default { resources };
 }
 
 /**
- * Print help
+ * 打印帮助信息
  */
 function printHelp() {
   console.log(`
@@ -178,4 +197,5 @@ Examples:
 `);
 }
 
+// 执行 CLI
 main().catch(console.error);

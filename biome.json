@@ -47,7 +47,7 @@
       "recommended": true,
       "complexity": {
         "noExtraBooleanCast": "error",
-        "noUselessConstructor": "error",
+        "noUselessConstructor": "off",
         "noUselessRename": "error",
         "noUselessTernary": "error",
         "noVoid": "error",
@@ -94,6 +94,7 @@
         "noControlCharactersInRegex": "off",
         "noConfusingVoidType": "off",
         "noImplicitAnyLet": "off",
+        "noTemplateCurlyInString": "off",
         "noAssignInExpressions": "off",
         "noUnknownAtRules": "off"
       },

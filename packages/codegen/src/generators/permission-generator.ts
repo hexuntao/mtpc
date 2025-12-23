@@ -1,10 +1,27 @@
 import type { Permission, ResourceDefinition } from '@mtpc/core';
 import { compileResourcePermissions } from '@mtpc/core';
-import { toPascalCase, toSnakeCase } from '@mtpc/shared';
+import { toPascalCase } from '@mtpc/shared';
 import type { GeneratedFile, PermissionOptions } from '../types.js';
 
 /**
- * Generate permission code constants
+ * 生成权限代码常量
+ *
+ * 根据资源定义生成权限代码常量文件，支持多种输出格式：
+ * - const: 导出独立的常量和一个聚合对象
+ * - enum: 导出 TypeScript 枚举
+ * - object: 按资源分组的对象格式
+ *
+ * @param resources - 资源定义数组
+ * @param options - 生成选项
+ * @returns 生成的文件对象
+ *
+ * @example
+ * ```typescript
+ * const result = generatePermissionCodes(
+ *   [userResource, postResource],
+ *   { outputFile: 'permissions.ts', format: 'const', prefix: 'APP_' }
+ * );
+ * ```
  */
 export function generatePermissionCodes(
   resources: ResourceDefinition[],
@@ -12,7 +29,7 @@ export function generatePermissionCodes(
 ): GeneratedFile {
   const { outputFile = 'permissions.ts', format = 'const', prefix = '' } = options;
 
-  // Collect all permissions
+  // 收集所有权限
   const allPermissions: Permission[] = [];
   for (const resource of resources) {
     const perms = compileResourcePermissions(resource.name, resource.permissions);
@@ -42,7 +59,18 @@ export function generatePermissionCodes(
 }
 
 /**
- * Generate const format
+ * 生成常量格式输出
+ *
+ * 生成独立的常量声明，例如：
+ * ```typescript
+ * export const USER_CREATE = 'user:create';
+ * export const USER_READ = 'user:read';
+ * export const PERMISSIONS = { USER_CREATE: 'user:create', ... } as const;
+ * ```
+ *
+ * @param permissions - 权限数组
+ * @param prefix - 常量名称前缀
+ * @returns 生成的代码字符串
  */
 function generateConstFormat(permissions: Permission[], prefix: string): string {
   const lines: string[] = [
@@ -51,6 +79,7 @@ function generateConstFormat(permissions: Permission[], prefix: string): string 
     '',
     '/**',
     ' * Permission code constants',
+    ' * 权限代码常量',
     ' */',
     '',
   ];
@@ -63,6 +92,7 @@ function generateConstFormat(permissions: Permission[], prefix: string): string 
   lines.push('');
   lines.push('/**');
   lines.push(' * All permission codes');
+  lines.push(' * 所有权限代码的聚合对象');
   lines.push(' */');
   lines.push('export const PERMISSIONS = {');
 
@@ -80,7 +110,19 @@ function generateConstFormat(permissions: Permission[], prefix: string): string 
 }
 
 /**
- * Generate enum format
+ * 生成枚举格式输出
+ *
+ * 生成 TypeScript 枚举，例如：
+ * ```typescript
+ * export enum Permission {
+ *   UserCreate = 'user:create',
+ *   UserRead = 'user:read',
+ * }
+ * ```
+ *
+ * @param permissions - 权限数组
+ * @param prefix - 枚举名称前缀
+ * @returns 生成的代码字符串
  */
 function generateEnumFormat(permissions: Permission[], prefix: string): string {
   const lines: string[] = [
@@ -89,6 +131,7 @@ function generateEnumFormat(permissions: Permission[], prefix: string): string {
     '',
     '/**',
     ' * Permission codes enum',
+    ' * 权限代码枚举',
     ' */',
     `export enum ${prefix}Permission {`,
   ];
@@ -105,7 +148,22 @@ function generateEnumFormat(permissions: Permission[], prefix: string): string {
 }
 
 /**
- * Generate object format (grouped by resource)
+ * 生成对象格式输出（按资源分组）
+ *
+ * 生成按资源分组的权限对象，例如：
+ * ```typescript
+ * export const Permissions = {
+ *   user: {
+ *     create: 'user:create',
+ *     read: 'user:read',
+ *   },
+ *   post: { ... }
+ * } as const;
+ * ```
+ *
+ * @param resources - 资源定义数组
+ * @param prefix - 对象名称前缀
+ * @returns 生成的代码字符串
  */
 function generateObjectFormat(resources: ResourceDefinition[], prefix: string): string {
   const lines: string[] = [
@@ -114,6 +172,7 @@ function generateObjectFormat(resources: ResourceDefinition[], prefix: string): 
     '',
     '/**',
     ' * Permission codes by resource',
+    ' * 按资源分组的权限代码',
     ' */',
     `export const ${prefix}Permissions = {`,
   ];
@@ -141,7 +200,26 @@ function generateObjectFormat(resources: ResourceDefinition[], prefix: string): 
 }
 
 /**
- * Generate permission code types
+ * 生成权限类型定义
+ *
+ * 生成类型安全的权限相关类型：
+ * - ResourceName: 所有资源名称的联合类型
+ * - ResourceActions: 每个资源对应的操作类型映射
+ * - PermissionCode: 模板字面量类型，格式为 `resource:action`
+ *
+ * @param resources - 资源定义数组
+ * @returns 生成的类型定义文件
+ *
+ * @example
+ * 生成的类型：
+ * ```typescript
+ * type ResourceName = 'user' | 'post';
+ * type ResourceActions = {
+ *   user: 'create' | 'read' | 'update' | 'delete';
+ *   post: 'create' | 'read' | 'update' | 'delete';
+ * };
+ * type PermissionCode<R extends ResourceName = ResourceName> = `${R}:${ResourceActions[R]}`;
+ * ```
  */
 export function generatePermissionTypes(resources: ResourceDefinition[]): GeneratedFile {
   const lines: string[] = [
@@ -150,6 +228,7 @@ export function generatePermissionTypes(resources: ResourceDefinition[]): Genera
     '',
     '/**',
     ' * Resource names',
+    ' * 资源名称联合类型',
     ' */',
     'export type ResourceName =',
   ];
@@ -162,6 +241,7 @@ export function generatePermissionTypes(resources: ResourceDefinition[]): Genera
   lines.push('');
   lines.push('/**');
   lines.push(' * Actions by resource');
+  lines.push(' * 每个资源对应的操作类型映射');
   lines.push(' */');
   lines.push('export type ResourceActions = {');
 
@@ -174,6 +254,7 @@ export function generatePermissionTypes(resources: ResourceDefinition[]): Genera
   lines.push('');
   lines.push('/**');
   lines.push(' * Permission code type');
+  lines.push(' * 权限代码模板字面量类型');
   lines.push(' */');
   lines.push('export type PermissionCode<R extends ResourceName = ResourceName> =');
   lines.push('  `${R}:${ResourceActions[R]}`;');

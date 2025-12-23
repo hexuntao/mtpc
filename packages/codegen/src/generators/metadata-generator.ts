@@ -1,39 +1,85 @@
-import type { Permission, ResourceDefinition } from '@mtpc/core';
+import type { ResourceDefinition } from '@mtpc/core';
 import { compileResourcePermissions } from '@mtpc/core';
 import type { GeneratedFile, MetadataOptions } from '../types.js';
 
 /**
- * Resource metadata for UI consumption
+ * 资源元数据输出接口（用于 UI 消费）
+ *
+ * 定义了资源元数据的完整结构，包含：
+ * - 基本信息（名称、显示名、描述等）
+ * - 特性开关（增删改查列表）
+ * - 权限列表
+ * - 字段定义
  */
 interface ResourceMetadataOutput {
+  /** 资源名称 */
   name: string;
+  /** 显示名称 */
   displayName: string;
+  /** 复数名称 */
   pluralName: string;
+  /** 描述 */
   description?: string;
+  /** 图标 */
   icon?: string;
+  /** 分组 */
   group?: string;
+  /** 是否隐藏 */
   hidden: boolean;
+  /** 特性开关 */
   features: {
+    /** 创建 */
     create: boolean;
+    /** 读取 */
     read: boolean;
+    /** 更新 */
     update: boolean;
+    /** 删除 */
     delete: boolean;
+    /** 列表 */
     list: boolean;
   };
+  /** 权限列表 */
   permissions: Array<{
+    /** 权限代码 */
     code: string;
+    /** 操作 */
     action: string;
+    /** 描述 */
     description?: string;
   }>;
+  /** 字段列表 */
   fields: Array<{
+    /** 字段名 */
     name: string;
+    /** 字段类型 */
     type: string;
+    /** 是否必填 */
     required: boolean;
   }>;
 }
 
 /**
- * Generate metadata JSON
+ * 生成元数据 JSON 文件
+ *
+ * 根据资源定义生成 JSON 格式的元数据文件，供前端 UI 使用。
+ * 包含资源的完整元信息，可用于动态生成 UI 界面。
+ *
+ * @param resources - 资源定义数组
+ * @param options - 元数据生成选项
+ * @returns 生成的 JSON 文件
+ *
+ * @example
+ * ```typescript
+ * const result = generateMetadata(
+ *   [userResource, postResource],
+ *   {
+ *     outputFile: 'metadata.json',
+ *     includePermissions: true,
+ *     includeFeatures: true
+ *   }
+ * );
+ * ```
  */
 export function generateMetadata(
   resources: ResourceDefinition[],
@@ -84,7 +130,26 @@ export function generateMetadata(
 }
 
 /**
- * Generate TypeScript metadata file
+ * 生成 TypeScript 元数据文件
+ *
+ * 生成类型安全的 TypeScript 元数据文件，包含：
+ * - ResourceMetadata 接口定义
+ * - resourceMetadata 常量对象
+ * - 辅助函数（getResourceMetadata、getVisibleResources、getResourcesByGroup）
+ *
+ * @param resources - 资源定义数组
+ * @param options - 元数据生成选项
+ * @returns 生成的 TypeScript 文件
+ *
+ * @example
+ * 生成的代码：
+ * ```typescript
+ * export interface ResourceMetadata { ... }
+ * export const resourceMetadata: Record<string, ResourceMetadata> = { ... }
+ * export function getResourceMetadata(name: string): ResourceMetadata | undefined { ... }
+ * export function getVisibleResources(): ResourceMetadata[] { ... }
+ * export function getResourcesByGroup(group: string): ResourceMetadata[] { ... }
+ * ```
  */
 export function generateMetadataTS(
   resources: ResourceDefinition[],
@@ -98,6 +163,7 @@ export function generateMetadataTS(
     '',
     '/**',
     ' * Resource metadata type',
+    ' * 资源元数据类型',
     ' */',
     'export interface ResourceMetadata {',
     '  name: string;',
@@ -128,6 +194,7 @@ export function generateMetadataTS(
     '',
     '/**',
     ' * All resources metadata',
+    ' * 所有资源的元数据映射',
     ' */',
     'export const resourceMetadata: Record<string, ResourceMetadata> = {',
   ];
@@ -183,6 +250,7 @@ export function generateMetadataTS(
   lines.push('');
   lines.push('/**');
   lines.push(' * Get resource metadata by name');
+  lines.push(' * 根据名称获取资源元数据');
   lines.push(' */');
   lines.push('export function getResourceMetadata(name: string): ResourceMetadata | undefined {');
   lines.push('  return resourceMetadata[name];');
@@ -190,6 +258,7 @@ export function generateMetadataTS(
   lines.push('');
   lines.push('/**');
   lines.push(' * Get all visible resources');
+  lines.push(' * 获取所有可见资源（未隐藏的资源）');
   lines.push(' */');
   lines.push('export function getVisibleResources(): ResourceMetadata[] {');
   lines.push('  return Object.values(resourceMetadata).filter(r => !r.hidden);');
@@ -197,6 +266,7 @@ export function generateMetadataTS(
   lines.push('');
   lines.push('/**');
   lines.push(' * Get resources by group');
+  lines.push(' * 根据分组获取资源');
   lines.push(' */');
   lines.push('export function getResourcesByGroup(group: string): ResourceMetadata[] {');
   lines.push('  return Object.values(resourceMetadata).filter(r => r.group === group);');
@@ -211,7 +281,13 @@ export function generateMetadataTS(
 }
 
 /**
- * Extract fields from Zod schema
+ * 从 Zod Schema 中提取字段信息
+ *
+ * 解析 Zod Schema 定义，提取字段名、类型和是否必填等信息。
+ * 支持嵌套对象、数组、枚举等复杂类型。
+ *
+ * @param schema - Zod Schema 对象
+ * @returns 提取的字段信息数组
  */
 function extractFields(schema: any): Array<{ name: string; type: string; required: boolean }> {
   const fields: Array<{ name: string; type: string; required: boolean }> = [];
@@ -235,7 +311,24 @@ function extractFields(schema: any): Array<{ name: string; type: string; require
 }
 
 /**
- * Get Zod type name
+ * 获取 Zod 类型的名称
+ *
+ * 将 Zod 类型转换为简化的字符串类型名称。
+ * 支持基本类型、数组、对象、枚举、记录等。
+ *
+ * @param schema - Zod Schema 对象
+ * @returns 类型名称字符串
+ *
+ * 类型映射：
+ * - ZodString → string
+ * - ZodNumber → number
+ * - ZodBoolean → boolean
+ * - ZodDate → date
+ * - ZodArray → array<T>
+ * - ZodObject → object
+ * - ZodEnum → enum
+ * - ZodRecord → record
+ * - 其他 → unknown
  */
 function getZodTypeName(schema: any): string {
   const typeName = schema._def.typeName;
@@ -267,7 +360,12 @@ function getZodTypeName(schema: any): string {
 }
 
 /**
- * Check if Zod type is optional
+ * 检查 Zod 类型是否为可选
+ *
+ * 判断给定的 Zod Schema 是否被 Optional、Nullable 或 Default 包装。
+ *
+ * @param schema - Zod Schema 对象
+ * @returns 是否为可选类型
  */
 function isOptional(schema: any): boolean {
   const typeName = schema._def.typeName;

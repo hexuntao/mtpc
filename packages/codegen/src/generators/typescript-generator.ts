@@ -3,7 +3,31 @@ import { toPascalCase } from '@mtpc/shared';
 import type { GeneratedFile, TypeScriptOptions } from '../types.js';
 
 /**
- * Generate TypeScript types from resources
+ * 从资源定义生成 TypeScript 类型
+ *
+ * 根据资源定义生成类型安全的 TypeScript 代码，包括：
+ * - Zod Schema 定义（可选）
+ * - 实体类型（Entity Types）
+ * - 创建输入类型（Create Input Types）
+ * - 更新输入类型（Update Input Types）
+ * - 统一的类型导出
+ *
+ * @param resources - 资源定义数组
+ * @param options - TypeScript 生成选项
+ * @returns 生成的 TypeScript 类型文件
+ *
+ * @example
+ * ```typescript
+ * const result = generateTypeScriptTypes(
+ *   [userResource, postResource],
+ *   {
+ *     outputFile: 'types.ts',
+ *     includeZodSchemas: true,
+ *     includeEntityTypes: true,
+ *     includeInputTypes: true
+ *   }
+ * );
+ * ```
  */
 export function generateTypeScriptTypes(
   resources: ResourceDefinition[],
@@ -32,6 +56,7 @@ export function generateTypeScriptTypes(
     if (includeZodSchemas) {
       lines.push(`/**`);
       lines.push(` * ${typeName} schema`);
+      lines.push(` * ${typeName} 的 Zod Schema 定义`);
       lines.push(` */`);
       lines.push(`export const ${typeName}Schema = ${zodSchemaToString(resource.schema)};`);
       lines.push('');
@@ -40,6 +65,7 @@ export function generateTypeScriptTypes(
     if (includeEntityTypes) {
       lines.push(`/**`);
       lines.push(` * ${typeName} entity type`);
+      lines.push(` * ${typeName} 实体类型`);
       lines.push(` */`);
 
       if (includeZodSchemas) {
@@ -53,6 +79,7 @@ export function generateTypeScriptTypes(
     if (includeInputTypes) {
       lines.push(`/**`);
       lines.push(` * ${typeName} create input`);
+      lines.push(` * ${typeName} 创建输入类型`);
       lines.push(` */`);
 
       if (includeZodSchemas) {
@@ -69,6 +96,7 @@ export function generateTypeScriptTypes(
 
       lines.push(`/**`);
       lines.push(` * ${typeName} update input`);
+      lines.push(` * ${typeName} 更新输入类型（所有字段可选）`);
       lines.push(` */`);
 
       if (includeZodSchemas) {
@@ -87,9 +115,11 @@ export function generateTypeScriptTypes(
 
   // Generate unified exports
   lines.push('// ============== Unified Exports ==============');
+  lines.push('// ============== 统一导出 ==============');
   lines.push('');
   lines.push('/**');
   lines.push(' * All entity types');
+  lines.push(' * 所有实体类型的映射');
   lines.push(' */');
   lines.push('export type EntityTypes = {');
 
@@ -103,6 +133,7 @@ export function generateTypeScriptTypes(
 
   lines.push('/**');
   lines.push(' * Entity type by name');
+  lines.push(' * 根据资源名称获取实体类型');
   lines.push(' */');
   lines.push('export type EntityType<T extends keyof EntityTypes> = EntityTypes[T];');
   lines.push('');
@@ -115,7 +146,20 @@ export function generateTypeScriptTypes(
 }
 
 /**
- * Convert Zod schema to string representation
+ * 将 Zod Schema 转换为字符串表示
+ *
+ * 递归遍历 Zod Schema 结构，生成对应的 Zod 构建代码字符串。
+ * 支持各种 Zod 类型，包括对象、字符串、数字、数组、可选等。
+ *
+ * @param schema - Zod Schema 对象
+ * @param indent - 缩进级别
+ * @returns Zod Schema 字符串表示
+ *
+ * @example
+ * ```typescript
+ * zodSchemaToString(z.object({ name: z.string().min(1) }))
+ * // 返回: "z.object({\n  name: z.string().min(1),\n})"
+ * ```
  */
 function zodSchemaToString(schema: AnyZodSchema, indent: number = 0): string {
   const typeName = schema._def.typeName;
@@ -217,7 +261,20 @@ function zodSchemaToString(schema: AnyZodSchema, indent: number = 0): string {
 }
 
 /**
- * Convert Zod schema to TypeScript interface
+ * 将 Zod Schema 转换为 TypeScript 接口
+ *
+ * 生成纯 TypeScript 接口定义，不依赖 Zod 类型推断。
+ * 可选择生成部分类型（所有字段可选），用于更新操作。
+ *
+ * @param schema - Zod Schema 对象
+ * @param partial - 是否生成部分类型（所有字段可选）
+ * @returns TypeScript 接口字符串
+ *
+ * @example
+ * ```typescript
+ * zodSchemaToInterface(z.object({ name: z.string() }))
+ * // 返回: "{\n  name: string;\n}"
+ * ```
  */
 function zodSchemaToInterface(schema: AnyZodSchema, partial: boolean = false): string {
   if (schema._def.typeName !== 'ZodObject') {
@@ -238,7 +295,12 @@ function zodSchemaToInterface(schema: AnyZodSchema, partial: boolean = false): s
 }
 
 /**
- * Convert Zod type to TypeScript type
+ * 将 Zod 类型转换为 TypeScript 类型
+ *
+ * 递归转换 Zod 类型定义到对应的 TypeScript 类型字符串。
+ *
+ * @param schema - Zod Schema 对象
+ * @returns TypeScript 类型字符串
  */
 function zodTypeToTypeScript(schema: AnyZodSchema): string {
   const typeName = schema._def.typeName;
@@ -272,16 +334,39 @@ function zodTypeToTypeScript(schema: AnyZodSchema): string {
 }
 
 /**
- * Check if Zod type is optional
+ * 检查 Zod 类型是否为可选
+ *
+ * 判断给定的 Zod Schema 是否被 Optional 或 Nullable 包装。
+ *
+ * @param schema - Zod Schema 对象
+ * @returns 是否为可选类型
  */
 function isOptional(schema: AnyZodSchema): boolean {
   return schema._def.typeName === 'ZodOptional' || schema._def.typeName === 'ZodNullable';
 }
 
 /**
- * Generate index file for types
+ * 生成类型索引文件
+ *
+ * 创建一个统一的导出索引文件，导出所有类型相关的文件。
+ * 生成的 index.ts 会重新导出：
+ * - types.ts（类型定义）
+ * - permissions.ts（权限常量）
+ * - permission-types.ts（权限类型）
+ * - metadata.ts（元数据）
+ *
+ * @returns 生成的索引文件
+ *
+ * @example
+ * 生成的 index.ts：
+ * ```typescript
+ * export * from './types.js';
+ * export * from './permissions.js';
+ * export * from './permission-types.js';
+ * export * from './metadata.js';
+ * ```
  */
-export function generateTypesIndex(resources: ResourceDefinition[]): GeneratedFile {
+export function generateTypesIndex(): GeneratedFile {
   const lines: string[] = [
     '// Auto-generated by @mtpc/codegen',
     '// Do not edit manually',

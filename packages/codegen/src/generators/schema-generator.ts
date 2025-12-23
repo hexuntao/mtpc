@@ -3,7 +3,27 @@ import { toSnakeCase } from '@mtpc/shared';
 import type { GeneratedFile, SchemaOptions } from '../types.js';
 
 /**
- * Generate Drizzle schema file
+ * 生成 Drizzle ORM 数据库 Schema 文件
+ *
+ * 根据资源定义生成 Drizzle ORM 的表结构定义，包括：
+ * - 主键和租户字段
+ * - 资源字段映射
+ * - 时间戳字段（可选）
+ * - 审计字段（如果启用）
+ * - 软删除字段（如果启用）
+ * - 租户索引
+ *
+ * @param resources - 资源定义数组
+ * @param options - Schema 生成选项
+ * @returns 生成的 Drizzle Schema 文件
+ *
+ * @example
+ * ```typescript
+ * const result = generateDrizzleSchema(
+ *   [userResource, postResource],
+ *   { outputFile: 'schema.ts', tenantColumn: 'tenant_id', timestamps: true }
+ * );
+ * ```
  */
 export function generateDrizzleSchema(
   resources: ResourceDefinition[],
@@ -35,6 +55,7 @@ export function generateDrizzleSchema(
 
     lines.push(`/**`);
     lines.push(` * ${resource.metadata.displayName ?? resource.name} table`);
+    lines.push(` * ${resource.metadata.displayName ?? resource.name} 数据表`);
     lines.push(` */`);
     lines.push(`export const ${varName} = pgTable('${tableName}', {`);
 
@@ -49,7 +70,6 @@ export function generateDrizzleSchema(
     for (const field of fields) {
       if (field.name === 'id' || field.name === 'tenantId') continue;
 
-      const columnName = toSnakeCase(field.name);
       const columnDef = fieldToColumn(field);
       lines.push(`  ${field.name}: ${columnDef},`);
     }
@@ -85,6 +105,7 @@ export function generateDrizzleSchema(
   // Export all tables
   lines.push('/**');
   lines.push(' * All tables');
+  lines.push(' * 所有表的聚合导出');
   lines.push(' */');
   lines.push('export const tables = {');
 
@@ -103,7 +124,13 @@ export function generateDrizzleSchema(
 }
 
 /**
- * Extract fields from schema
+ * 从 Zod Schema 中提取字段信息
+ *
+ * 解析 Zod Schema 定义，提取字段名、类型、是否必填、
+ * 最大长度和是否为 UUID 等元数据信息。
+ *
+ * @param schema - Zod Schema 对象
+ * @returns 提取的字段信息数组
  */
 function extractSchemaFields(schema: any): Array<{
   name: string;
@@ -143,7 +170,13 @@ function extractSchemaFields(schema: any): Array<{
 }
 
 /**
- * Unwrap optional/nullable/default
+ * 解包 Zod 类型的包装器
+ *
+ * 移除 ZodOptional、ZodNullable、ZodDefault 等包装器，
+ * 返回内部的原始类型。
+ *
+ * @param schema - Zod Schema 对象
+ * @returns 解包后的 Schema
  */
 function unwrap(schema: any): any {
   const typeName = schema._def.typeName;
@@ -156,7 +189,12 @@ function unwrap(schema: any): any {
 }
 
 /**
- * Check if optional
+ * 检查 Zod 类型是否为可选
+ *
+ * 判断给定的 Zod Schema 是否被 Optional 或 Nullable 包装。
+ *
+ * @param schema - Zod Schema 对象
+ * @returns 是否为可选类型
  */
 function isOptional(schema: any): boolean {
   const typeName = schema._def.typeName;
@@ -164,7 +202,21 @@ function isOptional(schema: any): boolean {
 }
 
 /**
- * Convert field to Drizzle column definition
+ * 将字段转换为 Drizzle 列定义
+ *
+ * 根据 Zod 类型和字段属性，生成对应的 Drizzle 列定义字符串。
+ *
+ * 支持的类型映射：
+ * - ZodString (uuid) → uuid()
+ * - ZodString (maxLength <= 255) → varchar()
+ * - ZodString → text()
+ * - ZodNumber → integer()
+ * - ZodBoolean → boolean()
+ * - ZodDate → timestamp()
+ * - ZodArray/ZodObject/ZodRecord → jsonb()
+ *
+ * @param field - 字段信息
+ * @returns Drizzle 列定义字符串
  */
 function fieldToColumn(field: {
   name: string;
@@ -217,7 +269,26 @@ function fieldToColumn(field: {
 }
 
 /**
- * Generate SQL schema (for migrations)
+ * 生成 SQL Schema（用于数据库迁移）
+ *
+ * 生成纯 SQL 的 CREATE TABLE 语句，可用于数据库迁移脚本。
+ *
+ * @param resources - 资源定义数组
+ * @param options - Schema 生成选项
+ * @returns 生成的 SQL 文件
+ *
+ * @example
+ * 生成的 SQL：
+ * ```sql
+ * CREATE TABLE IF NOT EXISTS users (
+ *   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ *   tenant_id UUID NOT NULL,
+ *   name TEXT NOT NULL,
+ *   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+ *   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+ * );
+ * CREATE INDEX IF NOT EXISTS users_tenant_idx ON users(tenant_id);
+ * ```
  */
 export function generateSQLSchema(
   resources: ResourceDefinition[],
@@ -274,7 +345,21 @@ export function generateSQLSchema(
 }
 
 /**
- * Convert field to SQL type
+ * 将字段类型转换为 SQL 类型
+ *
+ * 根据 Zod 类型和字段属性，生成对应的 PostgreSQL 数据类型。
+ *
+ * 类型映射：
+ * - ZodString (uuid) → UUID
+ * - ZodString (maxLength) → VARCHAR(n)
+ * - ZodString → TEXT
+ * - ZodNumber → INTEGER
+ * - ZodBoolean → BOOLEAN
+ * - ZodDate → TIMESTAMP WITH TIME ZONE
+ * - ZodArray/ZodObject/ZodRecord → JSONB
+ *
+ * @param field - 字段信息
+ * @returns SQL 数据类型字符串
  */
 function fieldToSQLType(field: { type: string; maxLength?: number; isUuid?: boolean }): string {
   switch (field.type) {
