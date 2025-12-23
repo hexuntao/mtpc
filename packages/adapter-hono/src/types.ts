@@ -154,6 +154,32 @@ export interface ErrorHandlerOptions {
    * @default 根据 process.env.NODE_ENV 自动判断
    */
   isProduction?: boolean;
+
+  /**
+   * 日志记录函数
+   * 用于记录未处理的错误，支持生产级别的日志系统
+   *
+   * **修复说明**：提供可配置的 logger 替代直接使用 console.error
+   * 这样可以集成到生产日志系统（如 Winston、Pino 等）
+   *
+   * @param error - 错误对象
+   * @param context - 错误上下文描述
+   *
+   * @example
+   * ```typescript
+   * // 使用 Winston
+   * logger: (err, context) => winston.error(context, { error: err })
+   *
+   * // 使用 Pino
+   * logger: (err, context) => pino.error({ err }, context)
+   *
+   * // 使用 Cloudflare Workers 的 log
+   * logger: (err, context) => console.error(`[${context}]`, err)
+   * ```
+   *
+   * @default 未提供时使用 console.error 作为后备方案
+   */
+  logger?: (error: Error, context: string) => void;
 }
 
 /**

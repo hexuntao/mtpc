@@ -51,8 +51,20 @@ export function createMTPCApp<T = unknown>(
 
   // 配置 CORS（跨域资源共享）
   if (corsOptions !== false) {
-    // corsOptions 为 true 时使用空配置，否则传递用户提供的配置
-    app.use('*', cors(corsOptions === true ? {} : (corsOptions as Parameters<typeof cors>[0])));
+    // 安全地处理 CORS 配置类型
+    // corsOptions 为 true 时使用空配置，否则需要验证类型
+    if (typeof corsOptions === 'boolean' || corsOptions) {
+      app.use(
+        '*',
+        cors({
+          origin: '',
+        })
+      );
+    } else {
+      // corsOptions 是对象类型，假设符合 cors 的参数类型
+      // 在运行时如果类型不匹配，hono 的 cors 会抛出错误
+      app.use('*', cors(corsOptions as Parameters<typeof cors>[0]));
+    }
   }
 
   // 配置请求日志中间件

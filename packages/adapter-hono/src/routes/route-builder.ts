@@ -8,8 +8,13 @@ import type { ApiResponse, MTPCEnv } from '../types.js';
 /**
  * 路由定义结构
  * 用于存储路由的元信息
+ *
+ * **使用 type 而非 interface 的原因**：
+ * - 这是数据结构定义，不是类契约
+ * - type 支持 union、tuple、条件类型等更多特性
+ * - 更符合 TypeScript 最佳实践
  */
-interface RouteDefinition {
+type RouteDefinition = {
   /** 路由名称（用于标识） */
   name: string;
   /** HTTP 方法 */
@@ -20,17 +25,17 @@ interface RouteDefinition {
   handler: (c: Context<MTPCEnv>, ctx: MTPCContext) => Promise<unknown>;
   /** 所需权限（null 表示无需权限检查） */
   permission: string | null;
-}
+};
 
 /**
  * 动作配置选项
  */
-interface ActionOptions {
+type ActionOptions = {
   /** 权限码（默认使用 resourceName:actionName 格式） */
   permission?: string;
   /** 路由路径（默认使用 /:actionName 格式） */
   path?: string;
-}
+};
 
 /**
  * 路由构建器类
@@ -190,6 +195,38 @@ export class RouteBuilder {
       this.app.use('*', mw);
     }
 
+    /**
+     * 注册路由的辅助函数
+     * **类型修复说明**：使用局部类型断言绕过 Hono 复杂的可变参数类型系统
+     *
+     * Hono 的路由方法期望精确的元组类型，但动态构建的 handlers 数组无法满足这一要求。
+     * 将类型断言限制在此局部函数内，不影响 build() 的返回类型。
+     */
+    const registerRoute = (
+      app: Hono<MTPCEnv>,
+      method: string,
+      path: string,
+      handlers: MiddlewareHandler<MTPCEnv>[]
+    ): void => {
+      switch (method) {
+        case 'get':
+          (app.get as any)(path, ...handlers);
+          break;
+        case 'post':
+          (app.post as any)(path, ...handlers);
+          break;
+        case 'put':
+          (app.put as any)(path, ...handlers);
+          break;
+        case 'delete':
+          (app.delete as any)(path, ...handlers);
+          break;
+        case 'patch':
+          (app.patch as any)(path, ...handlers);
+          break;
+      }
+    };
+
     // 步骤2：注册所有路由
     for (const route of this.routes) {
       // 构建中间件链：权限检查（可选）+ 路由处理
@@ -218,24 +255,8 @@ export class RouteBuilder {
 
       handlers.push(routeHandler);
 
-      // 根据 HTTP 方法注册路由
-      switch (route.method) {
-        case 'get':
-          this.app.get(route.path, ...handlers);
-          break;
-        case 'post':
-          this.app.post(route.path, ...handlers);
-          break;
-        case 'put':
-          this.app.put(route.path, ...handlers);
-          break;
-        case 'delete':
-          this.app.delete(route.path, ...handlers);
-          break;
-        case 'patch':
-          this.app.patch(route.path, ...handlers);
-          break;
-      }
+      // 根据 HTTP 方法注册路由（使用辅助函数处理类型问题）
+      registerRoute(this.app, route.method, route.path, handlers);
     }
 
     return this.app;

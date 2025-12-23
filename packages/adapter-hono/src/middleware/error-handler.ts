@@ -20,7 +20,7 @@ import type { ApiResponse, ErrorHandlerOptions } from '../types.js';
  * @param err - MTPC 错误对象
  * @returns HTTP 状态码
  */
-function getStatusCode(err: MTPCError): number {
+function getStatusCode(err: MTPCError) {
   if (err instanceof PermissionDeniedError) {
     return 403;
   }
@@ -58,8 +58,9 @@ function getStatusCode(err: MTPCError): number {
  * MTPC 统一错误处理器
  * 处理所有 MTPC 相关错误并返回标准化的 API 错误响应
  *
- * **修复说明**：使用 isProduction 配置替代直接访问 process.env
- * 这样可以支持非 Node.js 运行环境（如 Cloudflare Workers、Deno 等）
+ * **修复说明**：
+ * - 使用 isProduction 配置替代直接访问 process.env，支持非 Node.js 运行环境
+ * - 使用可配置的 logger 替代 console.error，支持生产级日志系统
  *
  * @param options - 错误处理器配置选项
  * @returns Hono 错误处理函数
@@ -69,6 +70,7 @@ function getStatusCode(err: MTPCError): number {
  * app.onError(mtpcErrorHandler({
  *   isProduction: true,
  *   includeStack: false,
+ *   logger: (err, context) => winston.error(context, { error: err }),
  *   onError: async (err, c) => {
  *     await logError(err);
  *   }
@@ -81,6 +83,7 @@ export function mtpcErrorHandler(options: ErrorHandlerOptions = {}): ErrorHandle
     includeStack = false,
     isProduction = typeof process !== 'undefined' && process.env?.NODE_ENV === 'production',
     onError,
+    logger,
   } = options;
 
   return async (err: Error, c: Context): Promise<Response> => {
@@ -114,7 +117,9 @@ export function mtpcErrorHandler(options: ErrorHandlerOptions = {}): ErrorHandle
     // 处理 Zod 验证错误
     // ZodError 有特定的结构，需要单独处理以提供友好的验证错误信息
     if (err.name === 'ZodError') {
-      const zodErr = err as { issues: Array<{ path: (string | number)[]; message: string }> };
+      const zodErr = err as unknown as {
+        issues: Array<{ path: (string | number)[]; message: string }>;
+      };
       return c.json(
         {
           success: false,
@@ -130,7 +135,12 @@ export function mtpcErrorHandler(options: ErrorHandlerOptions = {}): ErrorHandle
 
     // 处理未预期的通用错误
     // 生产环境隐藏错误详情，防止信息泄露
-    console.error('Unhandled error:', err);
+    // **修复说明**：使用可配置的 logger，未提供时回退到 console.error
+    if (logger) {
+      logger(err, 'Unhandled error');
+    } else {
+      console.error('Unhandled error:', err);
+    }
 
     const response: ApiResponse = {
       success: false,

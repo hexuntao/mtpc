@@ -1,5 +1,6 @@
 import { zValidator } from '@hono/zod-validator';
-import type { MTPCContext, PaginatedResult, QueryOptions, ResourceDefinition } from '@mtpc/core';
+import type { PaginatedResult, QueryOptions, ResourceDefinition } from '@mtpc/core';
+import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { getMTPCContext } from '../context/mtpc-context.js';
 import { requirePermission } from '../middleware/permission.js';
@@ -10,6 +11,15 @@ import type {
   MTPCEnv,
   ResourceRouteOptions,
 } from '../types.js';
+
+/**
+ * API 错误消息常量
+ * 统一管理错误消息，方便国际化
+ */
+const ERROR_MESSAGES = {
+  /** 资源不存在 */
+  NOT_FOUND: '资源不存在',
+} as const;
 
 /**
  * 解析查询参数为查询选项
@@ -132,7 +142,7 @@ export function createResourceRoutes<T>(
         return c.json(
           {
             success: false,
-            error: { code: 'NOT_FOUND', message: 'Resource not found' },
+            error: { code: 'NOT_FOUND', message: ERROR_MESSAGES.NOT_FOUND },
           } satisfies ApiResponse,
           404
         );
@@ -149,12 +159,15 @@ export function createResourceRoutes<T>(
     const updateHandler = handlers.update;
 
     // 统一的更新处理函数（PUT 和 PATCH 共用）
-    const handleUpdate = async (
-      c: Parameters<typeof app.put>[1] extends (c: infer C) => unknown ? C : never
-    ) => {
+    // **类型修复说明**：直接使用 Context<MTPCEnv> 替代复杂的类型推导
+    // 原来的 Parameters<typeof app.put>[1] 推导失败，因为 TypeScript 无法正确处理 Hono 的重载
+    // 使用 Context<MTPCEnv> 是安全的，因为 MTPCEnv 已包含完整的 Variables 类型
+    const handleUpdate = async (c: Context<MTPCEnv>) => {
       const ctx = getMTPCContext(c);
       const id = c.req.param('id');
-      const data = c.req.valid('json'); // 获取验证后的数据
+      // zValidator 中间件会注入验证后的数据，但简化 Context 类型后需要使用 as any 绕过类型检查
+      // 运行时行为完全正常，数据仍由 Zod schema 验证
+      const data = (c as any).req.valid('json');
 
       const result = await updateHandler(ctx, id, data);
 
@@ -162,7 +175,7 @@ export function createResourceRoutes<T>(
         return c.json(
           {
             success: false,
-            error: { code: 'NOT_FOUND', message: 'Resource not found' },
+            error: { code: 'NOT_FOUND', message: ERROR_MESSAGES.NOT_FOUND },
           } satisfies ApiResponse,
           404
         );
@@ -203,7 +216,7 @@ export function createResourceRoutes<T>(
         return c.json(
           {
             success: false,
-            error: { code: 'NOT_FOUND', message: 'Resource not found' },
+            error: { code: 'NOT_FOUND', message: ERROR_MESSAGES.NOT_FOUND },
           } satisfies ApiResponse,
           404
         );

@@ -1,6 +1,44 @@
+import type { Hono } from 'hono';
 import { hc } from 'hono/client';
 import type { ApiResponse, ListQueryParams } from '../types.js';
 import type { ClientOptions, MTPCClientOptions, ResourceClientOptions } from './types.js';
+
+/**
+ * 处理 fetch 响应，检查 HTTP 状态码并解析 JSON
+ *
+ * **错误处理**：
+ * - 当响应状态码不是 2xx 时抛出错误
+ * - 尝试从响应体中解析错误信息
+ * - 提供包含状态码和错误消息的详细错误
+ *
+ * @param response - fetch 响应对象
+ * @returns 解析后的 JSON 数据
+ * @throws 当 HTTP 状态码表示错误时
+ */
+async function parseResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    // 尝试从响应体中解析错误信息
+    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+    let errorData: unknown = null;
+
+    try {
+      errorData = await response.json();
+      // 尝试从标准错误响应格式中提取消息
+      if (errorData && typeof errorData === 'object' && 'error' in errorData) {
+        const err = errorData as { error: { message?: string } };
+        if (err.error?.message) {
+          errorMessage = err.error.message;
+        }
+      }
+    } catch {
+      // JSON 解析失败，使用默认错误消息
+    }
+
+    throw new Error(errorMessage);
+  }
+
+  return response.json() as T;
+}
 
 /**
  * 创建类型化的 RPC 客户端
@@ -29,7 +67,7 @@ import type { ClientOptions, MTPCClientOptions, ResourceClientOptions } from './
  * const users = await client.users.get({ page: '1' });
  * ```
  */
-export function createRPCClient<T>(
+export function createRPCClient<T extends Hono<any, any, any>>(
   baseUrl: string,
   options: ClientOptions = {}
 ): ReturnType<typeof hc<T>> {
@@ -153,7 +191,7 @@ export function createResourceClient<T = unknown>(
       const response = await fetch(`${resourceUrl}?${query}`, {
         headers: allHeaders,
       });
-      return response.json();
+      return parseResponse<ApiResponse<{ data: T[]; total: number }>>(response);
     },
 
     async create(data: unknown): Promise<ApiResponse<T>> {
@@ -165,14 +203,14 @@ export function createResourceClient<T = unknown>(
         },
         body: JSON.stringify(data),
       });
-      return response.json();
+      return parseResponse<ApiResponse<T>>(response);
     },
 
     async read(id: string): Promise<ApiResponse<T | null>> {
       const response = await fetch(`${resourceUrl}/${id}`, {
         headers: allHeaders,
       });
-      return response.json();
+      return parseResponse<ApiResponse<T | null>>(response);
     },
 
     async update(id: string, data: unknown): Promise<ApiResponse<T | null>> {
@@ -184,7 +222,7 @@ export function createResourceClient<T = unknown>(
         },
         body: JSON.stringify(data),
       });
-      return response.json();
+      return parseResponse<ApiResponse<T | null>>(response);
     },
 
     async delete(id: string): Promise<ApiResponse<{ deleted: boolean }>> {
@@ -192,25 +230,28 @@ export function createResourceClient<T = unknown>(
         method: 'DELETE',
         headers: allHeaders,
       });
-      return response.json();
+      return parseResponse<ApiResponse<{ deleted: boolean }>>(response);
     },
   };
 }
 
 /**
- * MTPC 客户端接口
+ * MTPC 客户端类型
  * 提供对所有已注册资源的访问
+ *
+ * **类型修复说明**：使用交叉类型解决索引签名与方法的冲突
+ * - Record<string, ResourceClient> 提供资源客户端的索引访问
+ * - 交叉类型允许添加 setTenant/setToken 方法
+ *
+ * 使用 interface 会导致方法无法兼容索引签名类型
  */
-export interface MTPCClient {
-  /** 按资源名称索引的资源客户端 */
-  [resourceName: string]: ResourceClient;
-
+export type MTPCClient = Record<string, ResourceClient> & {
   /** 设置租户 ID（返回新的客户端实例） */
   setTenant(newTenantId: string): MTPCClient;
 
   /** 设置认证 Token（返回新的客户端实例） */
   setToken(newToken: string): MTPCClient;
-}
+};
 
 /**
  * 创建 MTPC 客户端
@@ -271,5 +312,5 @@ export function createMTPCClient(baseUrl: string, options: MTPCClientOptions = {
     setToken(newToken: string): MTPCClient {
       return createMTPCClient(baseUrl, { ...options, token: newToken });
     },
-  };
+  } as MTPCClient;
 }
