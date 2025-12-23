@@ -1,10 +1,10 @@
+import { createPermissionCode, DEFAULT_ACTIONS } from '@mtpc/shared';
 import type {
-  PermissionDefinition,
   Permission,
-  ResourceFeatures,
+  PermissionDefinition,
   PermissionScope,
+  ResourceFeatures,
 } from '../types/index.js';
-import { DEFAULT_ACTIONS, createPermissionCode } from '@mtpc/shared';
 
 /**
  * Generate permissions based on resource features
@@ -119,12 +119,12 @@ export function generatePermissionCodes<T extends string>(
   actions: string[]
 ): Record<string, string> {
   const codes: Record<string, string> = {};
-  
+
   for (const action of actions) {
     const key = `${resourceName.toUpperCase()}_${action.toUpperCase()}`;
     codes[key] = createPermissionCode(resourceName, action);
   }
-  
+
   return codes;
 }
 
@@ -135,7 +135,7 @@ export function generateAllPermissionCodes(
   resources: Array<{ name: string; permissions: PermissionDefinition[] }>
 ): Record<string, string> {
   const codes: Record<string, string> = {};
-  
+
   for (const resource of resources) {
     const resourceCodes = generatePermissionCodes(
       resource.name,
@@ -143,6 +143,6 @@ export function generateAllPermissionCodes(
     );
     Object.assign(codes, resourceCodes);
   }
-  
+
   return codes;
 }

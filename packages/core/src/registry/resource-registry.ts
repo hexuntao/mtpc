@@ -1,6 +1,6 @@
-import type { ResourceDefinition } from '../types/index.js';
-import { ResourceNotFoundError, ResourceAlreadyExistsError } from '@mtpc/shared';
+import { ResourceAlreadyExistsError, ResourceNotFoundError } from '@mtpc/shared';
 import { validateResourceDefinition } from '../resource/validator.js';
+import type { ResourceDefinition } from '../types/index.js';
 
 /**
  * Resource registry
@@ -46,7 +46,7 @@ export class ResourceRegistry {
    */
   getOrThrow(name: string): ResourceDefinition {
     const resource = this.resources.get(name);
-    
+
     if (!resource) {
       throw new ResourceNotFoundError(name);
     }
@@ -130,9 +130,7 @@ export class ResourceRegistry {
   /**
    * For each resource
    */
-  forEach(
-    callback: (resource: ResourceDefinition, name: string) => void
-  ): void {
+  forEach(callback: (resource: ResourceDefinition, name: string) => void): void {
     this.resources.forEach((resource, name) => callback(resource, name));
   }
 }

@@ -1,13 +1,11 @@
+import { InvalidResourceDefinitionError, ValidationError } from '@mtpc/shared';
 import { z } from 'zod';
-import type { ResourceDefinition, AnyZodSchema } from '../types/index.js';
-import { ValidationError, InvalidResourceDefinitionError } from '@mtpc/shared';
+import type { AnyZodSchema, ResourceDefinition } from '../types/index.js';
 
 /**
  * Validate resource definition
  */
-export function validateResourceDefinition(
-  resource: ResourceDefinition
-): void {
+export function validateResourceDefinition(resource: ResourceDefinition): void {
   // Validate name
   if (!resource.name || typeof resource.name !== 'string') {
     throw new InvalidResourceDefinitionError(
@@ -55,16 +53,13 @@ export function validateResourceDefinition(
 /**
  * Validate data against resource schema
  */
-export function validateData<T extends AnyZodSchema>(
-  schema: T,
-  data: unknown
-): z.infer<T> {
+export function validateData<T extends AnyZodSchema>(schema: T, data: unknown): z.infer<T> {
   const result = schema.safeParse(data);
-  
+
   if (!result.success) {
     throw new ValidationError(result.error);
   }
-  
+
   return result.data;
 }
 
@@ -96,10 +91,10 @@ export function safeValidate<T extends AnyZodSchema>(
   data: unknown
 ): { success: true; data: z.infer<T> } | { success: false; error: z.ZodError } {
   const result = schema.safeParse(data);
-  
+
   if (result.success) {
     return { success: true, data: result.data };
   }
-  
+
   return { success: false, error: result.error };
 }

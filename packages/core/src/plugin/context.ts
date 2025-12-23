@@ -1,12 +1,12 @@
+import type { GlobalHooksManager } from '../hooks/global.js';
+import type { UnifiedRegistry } from '../registry/unified-registry.js';
 import type {
-  PluginContext,
-  ResourceDefinition,
-  PolicyDefinition,
   GlobalHooks,
+  PluginContext,
+  PolicyDefinition,
+  ResourceDefinition,
   ResourceHooks,
 } from '../types/index.js';
-import { UnifiedRegistry } from '../registry/unified-registry.js';
-import { GlobalHooksManager } from '../hooks/global.js';
 
 /**
  * Create plugin context
@@ -44,7 +44,7 @@ export function createPluginContext(
 
     extendResourceHooks<T>(resourceName: string, hooks: Partial<ResourceHooks<T>>): void {
       const resource = registry.resources.get(resourceName);
-      
+
       if (!resource) {
         throw new Error(`Resource not found: ${resourceName}`);
       }

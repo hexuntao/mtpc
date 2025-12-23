@@ -1,10 +1,10 @@
 import type {
-  PolicyDefinition,
   CompiledPolicy,
+  PolicyDefinition,
+  PolicyEffect,
+  PolicyEngine,
   PolicyEvaluationContext,
   PolicyEvaluationResult,
-  PolicyEngine,
-  PolicyEffect,
 } from '../types/index.js';
 import { compilePolicy, getPriorityValue } from './compiler.js';
 
@@ -26,7 +26,7 @@ export class DefaultPolicyEngine implements PolicyEngine {
     }
 
     const evaluationPath: string[] = [];
-    
+
     // Get applicable policies for tenant
     const applicablePolicies = this.getApplicablePolicies(context.tenant.id);
 
@@ -39,11 +39,13 @@ export class DefaultPolicyEngine implements PolicyEngine {
 
       for (let i = 0; i < policy.rules.length; i++) {
         const rule = policy.rules[i];
-        
+
         // Check if rule applies to this permission
-        if (!rule.permissions.has(context.permission.code) &&
-            !rule.permissions.has('*') &&
-            !rule.permissions.has(`${context.permission.resource}:*`)) {
+        if (
+          !rule.permissions.has(context.permission.code) &&
+          !rule.permissions.has('*') &&
+          !rule.permissions.has(`${context.permission.resource}:*`)
+        ) {
           continue;
         }
 
@@ -56,7 +58,7 @@ export class DefaultPolicyEngine implements PolicyEngine {
 
         for (const condition of rule.conditions) {
           const result = await rule.evaluate(context);
-          
+
           if (result) {
             conditionsPassed.push(condition);
           } else {
@@ -119,11 +121,11 @@ export class DefaultPolicyEngine implements PolicyEngine {
    */
   listPolicies(tenantId?: string): PolicyDefinition[] {
     const policies = Array.from(this.policies.values());
-    
+
     if (tenantId) {
       return policies.filter(p => !p.tenantId || p.tenantId === tenantId);
     }
-    
+
     return policies;
   }
 
@@ -138,17 +140,16 @@ export class DefaultPolicyEngine implements PolicyEngine {
    * Get applicable policies for tenant
    */
   private getApplicablePolicies(tenantId: string): CompiledPolicy[] {
-    return this.sortedPolicies.filter(
-      p => !p.tenantId || p.tenantId === tenantId
-    );
+    return this.sortedPolicies.filter(p => !p.tenantId || p.tenantId === tenantId);
   }
 
   /**
    * Sort policies by priority
    */
   private sortPolicies(): void {
-    this.sortedPolicies = Array.from(this.compiledPolicies.values())
-      .sort((a, b) => b.priority - a.priority);
+    this.sortedPolicies = Array.from(this.compiledPolicies.values()).sort(
+      (a, b) => b.priority - a.priority
+    );
     this.needsSort = false;
   }
 

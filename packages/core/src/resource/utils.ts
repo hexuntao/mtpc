@@ -10,11 +10,11 @@ export function hasFeature(
   if (feature in resource.features) {
     return resource.features[feature as keyof ResourceFeatures] as boolean;
   }
-  
+
   if (feature in resource.features.advanced) {
     return resource.features.advanced[feature as keyof ResourceFeatures['advanced']];
   }
-  
+
   return false;
 }
 
@@ -35,10 +35,7 @@ export function getResourceActions(resource: ResourceDefinition): string[] {
 /**
  * Check if resource supports action
  */
-export function supportsAction(
-  resource: ResourceDefinition,
-  action: string
-): boolean {
+export function supportsAction(resource: ResourceDefinition, action: string): boolean {
   return resource.permissions.some(p => p.action === action);
 }
 
@@ -47,11 +44,11 @@ export function supportsAction(
  */
 export function getResourceFields(resource: ResourceDefinition): string[] {
   const schema = resource.schema;
-  
+
   if (schema._def.typeName === 'ZodObject') {
     return Object.keys((schema as any).shape);
   }
-  
+
   return [];
 }
 
@@ -72,22 +69,13 @@ export function extendResource<T extends ResourceDefinition>(
         ...extension.features?.advanced,
       },
     },
-    permissions: [
-      ...base.permissions,
-      ...(extension.permissions ?? []),
-    ],
+    permissions: [...base.permissions, ...(extension.permissions ?? [])],
     hooks: mergeHooks(base.hooks, extension.hooks ?? {}),
-    relations: [
-      ...base.relations,
-      ...(extension.relations ?? []),
-    ],
+    relations: [...base.relations, ...(extension.relations ?? [])],
     metadata: {
       ...base.metadata,
       ...extension.metadata,
-      tags: [
-        ...(base.metadata.tags ?? []),
-        ...(extension.metadata?.tags ?? []),
-      ],
+      tags: [...(base.metadata.tags ?? []), ...(extension.metadata?.tags ?? [])],
     },
   } as T;
 }

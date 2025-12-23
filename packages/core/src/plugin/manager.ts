@@ -1,8 +1,8 @@
 import type {
+  PluginContext,
   PluginDefinition,
   PluginInstance,
   PluginManager,
-  PluginContext,
 } from '../types/index.js';
 
 /**
@@ -54,13 +54,13 @@ export class DefaultPluginManager implements PluginManager {
    */
   async install(pluginName: string): Promise<void> {
     const plugin = this.plugins.get(pluginName);
-    
+
     if (!plugin) {
       throw new Error(`Plugin not found: ${pluginName}`);
     }
 
     const instance = this.instances.get(pluginName)!;
-    
+
     if (instance.installed) {
       return;
     }
@@ -81,7 +81,7 @@ export class DefaultPluginManager implements PluginManager {
 
     // Trigger onInit
     await plugin.onInit?.(this.context);
-    
+
     this.instances.set(pluginName, {
       ...instance,
       installed: true,
@@ -95,7 +95,7 @@ export class DefaultPluginManager implements PluginManager {
   async installAll(): Promise<void> {
     // Sort by dependencies
     const sorted = this.sortByDependencies();
-    
+
     for (const pluginName of sorted) {
       await this.install(pluginName);
     }
@@ -106,13 +106,13 @@ export class DefaultPluginManager implements PluginManager {
    */
   async uninstall(pluginName: string): Promise<void> {
     const plugin = this.plugins.get(pluginName);
-    
+
     if (!plugin) {
       return;
     }
 
     const instance = this.instances.get(pluginName)!;
-    
+
     if (!instance.installed) {
       return;
     }

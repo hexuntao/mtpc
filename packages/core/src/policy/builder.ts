@@ -1,9 +1,9 @@
 import type {
-  PolicyDefinition,
-  PolicyRule,
   PolicyCondition,
+  PolicyDefinition,
   PolicyEffect,
   PolicyPriority,
+  PolicyRule,
 } from '../types/index.js';
 
 /**
@@ -263,11 +263,7 @@ export function allowPolicy(
 /**
  * Quick deny policy
  */
-export function denyPolicy(
-  id: string,
-  permissions: string[],
-  tenantId?: string
-): PolicyDefinition {
+export function denyPolicy(id: string, permissions: string[], tenantId?: string): PolicyDefinition {
   return policy(id)
     .deny(...permissions)
     .priority('critical')

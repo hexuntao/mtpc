@@ -1,6 +1,6 @@
-import type { TenantContext } from './tenant.js';
-import type { SubjectContext, RequestContext } from './context.js';
+import type { RequestContext, SubjectContext } from './context.js';
 import type { Permission } from './permission.js';
+import type { TenantContext } from './tenant.js';
 
 /**
  * Policy effect
@@ -15,11 +15,11 @@ export type PolicyPriority = 'low' | 'normal' | 'high' | 'critical';
 /**
  * Policy condition type
  */
-export type PolicyConditionType = 
-  | 'field'      // Field comparison
-  | 'time'       // Time-based
-  | 'ip'         // IP-based
-  | 'custom';    // Custom function
+export type PolicyConditionType =
+  | 'field' // Field comparison
+  | 'time' // Time-based
+  | 'ip' // IP-based
+  | 'custom'; // Custom function
 
 /**
  * Policy condition

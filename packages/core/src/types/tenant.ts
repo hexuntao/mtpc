@@ -42,17 +42,15 @@ export type TenantResolver<TRequest = unknown> = (
 /**
  * Tenant validator - validates tenant context
  */
-export type TenantValidator = (
-  tenant: TenantContext
-) => Promise<boolean> | boolean;
+export type TenantValidator = (tenant: TenantContext) => Promise<boolean> | boolean;
 
 /**
  * Tenant isolation level
  */
-export type TenantIsolationLevel = 
-  | 'none'      // No isolation
-  | 'soft'      // Logical isolation (tenantId column)
-  | 'hard';     // Physical isolation (separate schema/db)
+export type TenantIsolationLevel =
+  | 'none' // No isolation
+  | 'soft' // Logical isolation (tenantId column)
+  | 'hard'; // Physical isolation (separate schema/db)
 
 /**
  * Tenant isolation config

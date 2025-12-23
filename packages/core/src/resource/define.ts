@@ -1,11 +1,7 @@
 import { z } from 'zod';
-import type {
-  ResourceDefinition,
-  ResourceDefinitionInput,
-  AnyZodSchema,
-} from '../types/index.js';
-import { createResourceFeatures, createEmptyHooks } from '../types/index.js';
 import { generatePermissions } from '../permission/generate.js';
+import type { AnyZodSchema, ResourceDefinition, ResourceDefinitionInput } from '../types/index.js';
+import { createEmptyHooks, createResourceFeatures } from '../types/index.js';
 
 /**
  * Define a new resource
@@ -21,24 +17,20 @@ export function defineResource<
   input: ResourceDefinitionInput<TName, TSchema, TCreateSchema, TUpdateSchema>
 ): ResourceDefinition<TName, TSchema, TCreateSchema, TUpdateSchema> {
   const features = createResourceFeatures(input.features);
-  
+
   // Generate create schema if not provided
   const createSchema = (input.createSchema ?? input.schema) as TCreateSchema;
-  
+
   // Generate update schema if not provided (partial of main schema)
-  const updateSchema = (input.updateSchema ?? 
-    (input.schema instanceof z.ZodObject 
-      ? input.schema.partial() 
-      : input.schema)) as TUpdateSchema;
+  const updateSchema = (input.updateSchema ??
+    (input.schema instanceof z.ZodObject ? input.schema.partial() : input.schema)) as TUpdateSchema;
 
   // Generate default permissions based on features
   const basePermissions = generatePermissions(input.name, features);
   const customPermissions = input.permissions ?? [];
-  
+
   // Merge permissions, custom ones take precedence
-  const permissionMap = new Map(
-    basePermissions.map(p => [p.action, p])
-  );
+  const permissionMap = new Map(basePermissions.map(p => [p.action, p]));
   for (const p of customPermissions) {
     permissionMap.set(p.action, p);
   }
@@ -86,8 +78,12 @@ function pluralizeDisplayName(name: string): string {
   if (displayName.endsWith('y')) {
     return displayName.slice(0, -1) + 'ies';
   }
-  if (displayName.endsWith('s') || displayName.endsWith('x') || 
-      displayName.endsWith('ch') || displayName.endsWith('sh')) {
+  if (
+    displayName.endsWith('s') ||
+    displayName.endsWith('x') ||
+    displayName.endsWith('ch') ||
+    displayName.endsWith('sh')
+  ) {
     return displayName + 'es';
   }
   return displayName + 's';

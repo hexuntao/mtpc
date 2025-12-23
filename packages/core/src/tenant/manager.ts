@@ -1,5 +1,5 @@
-import type { TenantContext, TenantInfo, TenantConfig } from '../types/index.js';
-import { TenantNotFoundError, InvalidTenantError } from '@mtpc/shared';
+import { InvalidTenantError, TenantNotFoundError } from '@mtpc/shared';
+import type { TenantConfig, TenantContext, TenantInfo } from '../types/index.js';
 import { createTenantContext, validateTenantContext } from './context.js';
 
 /**
@@ -45,7 +45,7 @@ export class InMemoryTenantStore implements TenantStore {
 
   async update(id: string, info: Partial<TenantInfo>): Promise<TenantInfo> {
     const existing = this.tenants.get(id);
-    
+
     if (!existing) {
       throw new TenantNotFoundError(id);
     }
@@ -99,7 +99,7 @@ export class TenantManager {
 
     // Fetch from store
     const tenant = await this.store.get(id);
-    
+
     if (tenant) {
       this.cache.set(id, {
         tenant,
@@ -115,7 +115,7 @@ export class TenantManager {
    */
   async getTenantOrThrow(id: string): Promise<TenantInfo> {
     const tenant = await this.getTenant(id);
-    
+
     if (!tenant) {
       throw new TenantNotFoundError(id);
     }
@@ -153,9 +153,7 @@ export class TenantManager {
   /**
    * Create tenant
    */
-  async createTenant(
-    info: Omit<TenantInfo, 'createdAt' | 'updatedAt'>
-  ): Promise<TenantInfo> {
+  async createTenant(info: Omit<TenantInfo, 'createdAt' | 'updatedAt'>): Promise<TenantInfo> {
     const tenant = await this.store.create(info);
     this.invalidateCache(tenant.id);
     return tenant;
@@ -164,10 +162,7 @@ export class TenantManager {
   /**
    * Update tenant
    */
-  async updateTenant(
-    id: string,
-    info: Partial<TenantInfo>
-  ): Promise<TenantInfo> {
+  async updateTenant(id: string, info: Partial<TenantInfo>): Promise<TenantInfo> {
     const tenant = await this.store.update(id, info);
     this.invalidateCache(id);
     return tenant;
@@ -199,8 +194,6 @@ export class TenantManager {
 /**
  * Create a tenant manager with in-memory store
  */
-export function createTenantManager(
-  options?: { cacheTtl?: number }
-): TenantManager {
+export function createTenantManager(options?: { cacheTtl?: number }): TenantManager {
   return new TenantManager(new InMemoryTenantStore(), options);
 }

@@ -1,14 +1,14 @@
 import { z } from 'zod';
 import type {
+  AnyZodSchema,
+  InferSchema,
+  PermissionDefinition,
   ResourceDefinition,
   ResourceDefinitionInput,
-  AnyZodSchema,
-  PermissionDefinition,
-  ResourceRelationDefinition,
-  ResourceMetadata,
-  ResourceHooks,
   ResourceFeatures,
-  InferSchema,
+  ResourceHooks,
+  ResourceMetadata,
+  ResourceRelationDefinition,
 } from '../types/index.js';
 import { defineResource } from './define.js';
 

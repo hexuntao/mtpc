@@ -1,10 +1,5 @@
-import type {
-  TenantContext,
-  TenantConfig,
-  TenantInfo,
-  TenantStatus,
-} from '../types/index.js';
-import { MissingTenantContextError, InvalidTenantError } from '@mtpc/shared';
+import { InvalidTenantError, MissingTenantContextError } from '@mtpc/shared';
+import type { TenantConfig, TenantContext, TenantInfo, TenantStatus } from '../types/index.js';
 
 /**
  * Create a tenant context
@@ -83,44 +78,41 @@ export class TenantContextHolder {
   private static context: TenantContext | null = null;
 
   static set(tenant: TenantContext): void {
-    this.context = tenant;
+    TenantContextHolder.context = tenant;
   }
 
   static get(): TenantContext | null {
-    return this.context;
+    return TenantContextHolder.context;
   }
 
   static getOrThrow(): TenantContext {
-    if (!this.context) {
+    if (!TenantContextHolder.context) {
       throw new MissingTenantContextError();
     }
-    return this.context;
+    return TenantContextHolder.context;
   }
 
   static clear(): void {
-    this.context = null;
+    TenantContextHolder.context = null;
   }
 
   static run<T>(tenant: TenantContext, fn: () => T): T {
-    const previous = this.context;
-    this.context = tenant;
+    const previous = TenantContextHolder.context;
+    TenantContextHolder.context = tenant;
     try {
       return fn();
     } finally {
-      this.context = previous;
+      TenantContextHolder.context = previous;
     }
   }
 
-  static async runAsync<T>(
-    tenant: TenantContext,
-    fn: () => Promise<T>
-  ): Promise<T> {
-    const previous = this.context;
-    this.context = tenant;
+  static async runAsync<T>(tenant: TenantContext, fn: () => Promise<T>): Promise<T> {
+    const previous = TenantContextHolder.context;
+    TenantContextHolder.context = tenant;
     try {
       return await fn();
     } finally {
-      this.context = previous;
+      TenantContextHolder.context = previous;
     }
   }
 }

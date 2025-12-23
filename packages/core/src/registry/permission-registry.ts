@@ -1,6 +1,6 @@
-import type { Permission, PermissionDefinition } from '../types/index.js';
 import { PermissionNotFoundError } from '@mtpc/shared';
 import { compilePermission } from '../permission/generate.js';
+import type { Permission, PermissionDefinition } from '../types/index.js';
 
 /**
  * Permission registry
@@ -25,7 +25,7 @@ export class PermissionRegistry {
       this.permissions.set(permission.code, permission);
     } else {
       this.permissions.set(permission.code, permission);
-      
+
       // Update resource index
       let resourcePerms = this.byResource.get(resourceName);
       if (!resourcePerms) {
@@ -41,10 +41,7 @@ export class PermissionRegistry {
   /**
    * Register multiple permissions
    */
-  registerMany(
-    resourceName: string,
-    definitions: PermissionDefinition[]
-  ): Permission[] {
+  registerMany(resourceName: string, definitions: PermissionDefinition[]): Permission[] {
     return definitions.map(def => this.register(resourceName, def));
   }
 
@@ -60,7 +57,7 @@ export class PermissionRegistry {
    */
   getOrThrow(code: string): Permission {
     const permission = this.permissions.get(code);
-    
+
     if (!permission) {
       throw new PermissionNotFoundError(code);
     }
@@ -94,7 +91,7 @@ export class PermissionRegistry {
    */
   getByResource(resourceName: string): Permission[] {
     const codes = this.byResource.get(resourceName);
-    
+
     if (!codes) {
       return [];
     }
@@ -156,7 +153,7 @@ export class PermissionRegistry {
    */
   toCodesObject(): Record<string, string> {
     const result: Record<string, string> = {};
-    
+
     for (const permission of this.permissions.values()) {
       const key = `${permission.resource.toUpperCase()}_${permission.action.toUpperCase()}`;
       result[key] = permission.code;

@@ -1,10 +1,10 @@
 import type {
-  PolicyDefinition,
   CompiledPolicy,
   CompiledPolicyRule,
   PolicyCondition,
-  PolicyPriority,
+  PolicyDefinition,
   PolicyEvaluationContext,
+  PolicyPriority,
 } from '../types/index.js';
 import { evaluateCondition } from './conditions.js';
 
@@ -82,9 +82,7 @@ function createRuleEvaluator(
  * Compile multiple policies
  */
 export function compilePolicies(policies: PolicyDefinition[]): CompiledPolicy[] {
-  return policies
-    .map(compilePolicy)
-    .sort((a, b) => b.priority - a.priority);
+  return policies.map(compilePolicy).sort((a, b) => b.priority - a.priority);
 }
 
 /**
@@ -95,7 +93,7 @@ export function mergePolicies(
   options: { id: string; name: string }
 ): PolicyDefinition {
   const allRules = policies.flatMap(p => p.rules);
-  
+
   // Find highest priority
   let maxPriority: PolicyPriority = 'low';
   for (const policy of policies) {

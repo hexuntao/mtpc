@@ -1,5 +1,5 @@
-import type { TenantContext } from './tenant.js';
 import type { SubjectContext } from './context.js';
+import type { TenantContext } from './tenant.js';
 
 /**
  * Default CRUD actions
@@ -69,7 +69,7 @@ export interface Permission {
  */
 export type PermissionCode<
   TResource extends string = string,
-  TAction extends string = string
+  TAction extends string = string,
 > = `${TResource}:${TAction}`;
 
 /**

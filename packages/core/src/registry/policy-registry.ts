@@ -1,5 +1,5 @@
-import type { PolicyDefinition, CompiledPolicy } from '../types/index.js';
 import { compilePolicy } from '../policy/compiler.js';
+import type { CompiledPolicy, PolicyDefinition } from '../types/index.js';
 
 /**
  * Policy registry
@@ -15,7 +15,7 @@ export class PolicyRegistry {
    */
   register(policy: PolicyDefinition): CompiledPolicy {
     this.policies.set(policy.id, policy);
-    
+
     const compiled = compilePolicy(policy);
     this.compiledPolicies.set(policy.id, compiled);
 
@@ -46,7 +46,7 @@ export class PolicyRegistry {
    */
   unregister(policyId: string): void {
     const policy = this.policies.get(policyId);
-    
+
     if (!policy) {
       return;
     }
@@ -103,7 +103,7 @@ export class PolicyRegistry {
   getForTenant(tenantId: string): PolicyDefinition[] {
     const tenantPolicyIds = this.byTenant.get(tenantId) ?? new Set();
     const allIds = new Set([...this.globalPolicies, ...tenantPolicyIds]);
-    
+
     return Array.from(allIds)
       .map(id => this.policies.get(id)!)
       .filter(Boolean)
@@ -116,7 +116,7 @@ export class PolicyRegistry {
   getCompiledForTenant(tenantId: string): CompiledPolicy[] {
     const tenantPolicyIds = this.byTenant.get(tenantId) ?? new Set();
     const allIds = new Set([...this.globalPolicies, ...tenantPolicyIds]);
-    
+
     return Array.from(allIds)
       .map(id => this.compiledPolicies.get(id)!)
       .filter(Boolean)
@@ -155,7 +155,7 @@ export class PolicyRegistry {
    */
   update(policyId: string, updates: Partial<PolicyDefinition>): CompiledPolicy | undefined {
     const existing = this.policies.get(policyId);
-    
+
     if (!existing) {
       return undefined;
     }

@@ -1,4 +1,4 @@
-import type { GlobalHooks, MTPCContext, HookResult } from '../types/index.js';
+import type { GlobalHooks, HookResult, MTPCContext } from '../types/index.js';
 
 /**
  * Global hooks manager
@@ -14,7 +14,11 @@ export class GlobalHooksManager {
    * Add before any hook
    */
   addBeforeAny(
-    hook: (context: MTPCContext, operation: string, resourceName: string) => Promise<HookResult> | HookResult
+    hook: (
+      context: MTPCContext,
+      operation: string,
+      resourceName: string
+    ) => Promise<HookResult> | HookResult
   ): void {
     this.hooks.beforeAny = [...(this.hooks.beforeAny ?? []), hook];
   }
@@ -23,7 +27,12 @@ export class GlobalHooksManager {
    * Add after any hook
    */
   addAfterAny(
-    hook: (context: MTPCContext, operation: string, resourceName: string, result: unknown) => Promise<void> | void
+    hook: (
+      context: MTPCContext,
+      operation: string,
+      resourceName: string,
+      result: unknown
+    ) => Promise<void> | void
   ): void {
     this.hooks.afterAny = [...(this.hooks.afterAny ?? []), hook];
   }
@@ -32,7 +41,12 @@ export class GlobalHooksManager {
    * Add error hook
    */
   addOnError(
-    hook: (context: MTPCContext, operation: string, resourceName: string, error: Error) => Promise<void> | void
+    hook: (
+      context: MTPCContext,
+      operation: string,
+      resourceName: string,
+      error: Error
+    ) => Promise<void> | void
   ): void {
     this.hooks.onError = [...(this.hooks.onError ?? []), hook];
   }
@@ -47,7 +61,7 @@ export class GlobalHooksManager {
   ): Promise<HookResult> {
     for (const hook of this.hooks.beforeAny ?? []) {
       const result = await hook(context, operation, resourceName);
-      
+
       if (!result.proceed) {
         return result;
       }

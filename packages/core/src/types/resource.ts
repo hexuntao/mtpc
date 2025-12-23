@@ -1,8 +1,9 @@
 import type { z } from 'zod';
+
 import type { AnyZodSchema, InferSchema } from './common.js';
-import type { PermissionDefinition } from './permission.js';
-import type { ResourceHooks } from './hooks.js';
 import type { ResourceFeatures } from './features.js';
+import type { ResourceHooks } from './hooks.js';
+import type { PermissionDefinition } from './permission.js';
 
 /**
  * Resource field definition
@@ -91,7 +92,7 @@ export interface ResourceDefinition<
 /**
  * Resource type helper - extract entity type from definition
  */
-export type ResourceEntity<T extends ResourceDefinition> = 
+export type ResourceEntity<T extends ResourceDefinition> =
   T extends ResourceDefinition<string, infer S, AnyZodSchema, AnyZodSchema>
     ? InferSchema<S>
     : never;
@@ -120,6 +121,5 @@ export type ResourceMap = Map<string, ResourceDefinition>;
 /**
  * Extract resource names from a map
  */
-export type ResourceNames<T extends ResourceMap> = T extends Map<infer K, ResourceDefinition>
-  ? K
-  : never;
+export type ResourceNames<T extends ResourceMap> =
+  T extends Map<infer K, ResourceDefinition> ? K : never;

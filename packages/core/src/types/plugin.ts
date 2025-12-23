@@ -1,6 +1,6 @@
-import type { ResourceDefinition } from './resource.js';
-import type { PolicyDefinition } from './policy.js';
 import type { GlobalHooks, ResourceHooks } from './hooks.js';
+import type { PolicyDefinition } from './policy.js';
+import type { ResourceDefinition } from './resource.js';
 
 /**
  * Plugin metadata

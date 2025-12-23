@@ -1,24 +1,19 @@
+import { createPermissionCode, PermissionDeniedError, parsePermissionCode } from '@mtpc/shared';
 import type {
+  BatchPermissionCheckResult,
   Permission,
   PermissionCheckContext,
   PermissionCheckResult,
-  BatchPermissionCheckResult,
   PermissionSet,
 } from '../types/index.js';
-import { PermissionDeniedError, createPermissionCode, parsePermissionCode } from '@mtpc/shared';
 
 /**
  * Permission checker class
  */
 export class PermissionChecker {
-  private permissionResolver: (
-    tenantId: string,
-    subjectId: string
-  ) => Promise<Set<string>>;
+  private permissionResolver: (tenantId: string, subjectId: string) => Promise<Set<string>>;
 
-  constructor(
-    resolver: (tenantId: string, subjectId: string) => Promise<Set<string>>
-  ) {
+  constructor(resolver: (tenantId: string, subjectId: string) => Promise<Set<string>>) {
     this.permissionResolver = resolver;
   }
 
@@ -40,8 +35,10 @@ export class PermissionChecker {
     }
 
     // Check direct permissions on subject
-    if (context.subject.permissions?.includes(permissionCode) ||
-        context.subject.permissions?.includes('*')) {
+    if (
+      context.subject.permissions?.includes(permissionCode) ||
+      context.subject.permissions?.includes('*')
+    ) {
       return {
         allowed: true,
         permission: permissionCode,
@@ -51,10 +48,7 @@ export class PermissionChecker {
     }
 
     // Resolve permissions from external source
-    const permissions = await this.permissionResolver(
-      context.tenant.id,
-      context.subject.id
-    );
+    const permissions = await this.permissionResolver(context.tenant.id, context.subject.id);
 
     // Check wildcard
     if (permissions.has('*')) {
@@ -101,7 +95,7 @@ export class PermissionChecker {
    */
   async checkOrThrow(context: PermissionCheckContext): Promise<void> {
     const result = await this.check(context);
-    
+
     if (!result.allowed) {
       throw new PermissionDeniedError(result.permission, {
         reason: result.reason,
@@ -114,11 +108,9 @@ export class PermissionChecker {
   /**
    * Check multiple permissions
    */
-  async checkMany(
-    contexts: PermissionCheckContext[]
-  ): Promise<BatchPermissionCheckResult> {
+  async checkMany(contexts: PermissionCheckContext[]): Promise<BatchPermissionCheckResult> {
     const results = new Map<string, PermissionCheckResult>();
-    
+
     for (const context of contexts) {
       const code = createPermissionCode(context.resource, context.action);
       const result = await this.check(context);

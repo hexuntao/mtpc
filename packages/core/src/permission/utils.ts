@@ -1,5 +1,5 @@
-import type { Permission, PermissionDefinition } from '../types/index.js';
 import { PERMISSION_SEPARATOR, PERMISSION_WILDCARD } from '@mtpc/shared';
+import type { Permission, PermissionDefinition } from '../types/index.js';
 
 /**
  * Check if permission code is valid
@@ -10,13 +10,13 @@ export function isValidPermissionCode(code: string): boolean {
   }
 
   const parts = code.split(PERMISSION_SEPARATOR);
-  
+
   if (parts.length !== 2) {
     return false;
   }
 
   const [resource, action] = parts;
-  
+
   return (
     resource.length > 0 &&
     action.length > 0 &&
@@ -59,10 +59,7 @@ export function matchesPattern(code: string, pattern: string): boolean {
 /**
  * Expand permission patterns to concrete permissions
  */
-export function expandPatterns(
-  patterns: string[],
-  allPermissions: string[]
-): Set<string> {
+export function expandPatterns(patterns: string[], allPermissions: string[]): Set<string> {
   const expanded = new Set<string>();
 
   for (const pattern of patterns) {
@@ -90,9 +87,7 @@ export function expandPatterns(
 /**
  * Group permissions by resource
  */
-export function groupByResource(
-  permissions: Permission[]
-): Map<string, Permission[]> {
+export function groupByResource(permissions: Permission[]): Map<string, Permission[]> {
   const grouped = new Map<string, Permission[]>();
 
   for (const permission of permissions) {
@@ -120,20 +115,14 @@ export function getUniqueResources(permissions: Permission[]): string[] {
 /**
  * Filter permissions by resource
  */
-export function filterByResource(
-  permissions: Permission[],
-  resource: string
-): Permission[] {
+export function filterByResource(permissions: Permission[], resource: string): Permission[] {
   return permissions.filter(p => p.resource === resource);
 }
 
 /**
  * Filter permissions by action
  */
-export function filterByAction(
-  permissions: Permission[],
-  action: string
-): Permission[] {
+export function filterByAction(permissions: Permission[], action: string): Permission[] {
   return permissions.filter(p => p.action === action);
 }
 
@@ -155,10 +144,7 @@ export function mergePermissionSets(...sets: Set<string>[]): Set<string> {
 /**
  * Subtract permission sets
  */
-export function subtractPermissionSets(
-  base: Set<string>,
-  toRemove: Set<string>
-): Set<string> {
+export function subtractPermissionSets(base: Set<string>, toRemove: Set<string>): Set<string> {
   const result = new Set<string>();
 
   for (const permission of base) {

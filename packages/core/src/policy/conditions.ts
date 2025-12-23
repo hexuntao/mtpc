@@ -1,9 +1,9 @@
+import { getByPath } from '@mtpc/shared';
 import type {
   PolicyCondition,
   PolicyConditionType,
   PolicyEvaluationContext,
 } from '../types/index.js';
-import { getByPath } from '@mtpc/shared';
 
 /**
  * Evaluate a single condition
@@ -47,10 +47,7 @@ function evaluateFieldCondition(
 /**
  * Resolve field value from context
  */
-function resolveFieldValue(
-  field: string,
-  context: PolicyEvaluationContext
-): unknown {
+function resolveFieldValue(field: string, context: PolicyEvaluationContext): unknown {
   // Support dotted paths like "subject.roles", "resource.status"
   const [source, ...pathParts] = field.split('.');
   const path = pathParts.join('.');
@@ -87,11 +84,7 @@ function resolveFieldValue(
 /**
  * Compare values based on operator
  */
-function compareValues(
-  actual: unknown,
-  operator: string,
-  expected: unknown
-): boolean {
+function compareValues(actual: unknown, operator: string, expected: unknown): boolean {
   switch (operator) {
     case 'eq':
       return actual === expected;
@@ -189,7 +182,7 @@ function evaluateIpCondition(
   context: PolicyEvaluationContext
 ): boolean {
   const clientIp = context.request.ip;
-  
+
   if (!clientIp || !condition.value) {
     return false;
   }
@@ -230,7 +223,7 @@ function matchIp(ip: string, pattern: string): boolean {
   // Wildcard
   if (pattern.includes('*')) {
     const regex = new RegExp(
-      '^' + pattern.replace(/./g, '\.').replace(/*/g, '\d+') + '$'
+      '^' + pattern.replace(/./g, '.').replace(/*/g, '\d+') + '$'
     );
     return regex.test(ip);
   }

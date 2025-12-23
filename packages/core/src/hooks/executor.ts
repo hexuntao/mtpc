@@ -1,9 +1,9 @@
 import type {
-  ResourceHooks,
-  MTPCContext,
-  HookResult,
-  QueryOptions,
   FilterCondition,
+  HookResult,
+  MTPCContext,
+  QueryOptions,
+  ResourceHooks,
 } from '../types/index.js';
 
 /**
@@ -19,19 +19,16 @@ export class HookExecutor<T = unknown> {
   /**
    * Execute before create hooks
    */
-  async executeBeforeCreate(
-    context: MTPCContext,
-    data: T
-  ): Promise<HookResult<T>> {
+  async executeBeforeCreate(context: MTPCContext, data: T): Promise<HookResult<T>> {
     let currentData = data;
 
     for (const hook of this.hooks.beforeCreate ?? []) {
       const result = await hook(context, currentData);
-      
+
       if (!result.proceed) {
         return result;
       }
-      
+
       if (result.data !== undefined) {
         currentData = result.data;
       }
@@ -43,11 +40,7 @@ export class HookExecutor<T = unknown> {
   /**
    * Execute after create hooks
    */
-  async executeAfterCreate(
-    context: MTPCContext,
-    data: T,
-    created: T
-  ): Promise<void> {
+  async executeAfterCreate(context: MTPCContext, data: T, created: T): Promise<void> {
     for (const hook of this.hooks.afterCreate ?? []) {
       await hook(context, data, created);
     }
@@ -56,19 +49,16 @@ export class HookExecutor<T = unknown> {
   /**
    * Execute before read hooks
    */
-  async executeBeforeRead(
-    context: MTPCContext,
-    id: string
-  ): Promise<HookResult<string>> {
+  async executeBeforeRead(context: MTPCContext, id: string): Promise<HookResult<string>> {
     let currentId = id;
 
     for (const hook of this.hooks.beforeRead ?? []) {
       const result = await hook(context, currentId);
-      
+
       if (!result.proceed) {
         return result;
       }
-      
+
       if (result.data !== undefined) {
         currentId = result.data;
       }
@@ -80,11 +70,7 @@ export class HookExecutor<T = unknown> {
   /**
    * Execute after read hooks
    */
-  async executeAfterRead(
-    context: MTPCContext,
-    id: string,
-    data: T | null
-  ): Promise<T | null> {
+  async executeAfterRead(context: MTPCContext, id: string, data: T | null): Promise<T | null> {
     let currentData = data;
 
     for (const hook of this.hooks.afterRead ?? []) {
@@ -106,11 +92,11 @@ export class HookExecutor<T = unknown> {
 
     for (const hook of this.hooks.beforeUpdate ?? []) {
       const result = await hook(context, id, currentData);
-      
+
       if (!result.proceed) {
         return result;
       }
-      
+
       if (result.data !== undefined) {
         currentData = result.data;
       }
@@ -136,19 +122,16 @@ export class HookExecutor<T = unknown> {
   /**
    * Execute before delete hooks
    */
-  async executeBeforeDelete(
-    context: MTPCContext,
-    id: string
-  ): Promise<HookResult<string>> {
+  async executeBeforeDelete(context: MTPCContext, id: string): Promise<HookResult<string>> {
     let currentId = id;
 
     for (const hook of this.hooks.beforeDelete ?? []) {
       const result = await hook(context, currentId);
-      
+
       if (!result.proceed) {
         return result;
       }
-      
+
       if (result.data !== undefined) {
         currentId = result.data;
       }
@@ -160,11 +143,7 @@ export class HookExecutor<T = unknown> {
   /**
    * Execute after delete hooks
    */
-  async executeAfterDelete(
-    context: MTPCContext,
-    id: string,
-    deleted: T
-  ): Promise<void> {
+  async executeAfterDelete(context: MTPCContext, id: string, deleted: T): Promise<void> {
     for (const hook of this.hooks.afterDelete ?? []) {
       await hook(context, id, deleted);
     }
@@ -181,11 +160,11 @@ export class HookExecutor<T = unknown> {
 
     for (const hook of this.hooks.beforeList ?? []) {
       const result = await hook(context, currentOptions);
-      
+
       if (!result.proceed) {
         return result;
       }
-      
+
       if (result.data !== undefined) {
         currentOptions = result.data;
       }
@@ -197,11 +176,7 @@ export class HookExecutor<T = unknown> {
   /**
    * Execute after list hooks
    */
-  async executeAfterList(
-    context: MTPCContext,
-    options: QueryOptions,
-    results: T[]
-  ): Promise<T[]> {
+  async executeAfterList(context: MTPCContext, options: QueryOptions, results: T[]): Promise<T[]> {
     let currentResults = results;
 
     for (const hook of this.hooks.afterList ?? []) {

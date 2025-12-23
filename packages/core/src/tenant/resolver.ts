@@ -1,5 +1,5 @@
-import type { TenantContext, TenantResolver } from '../types/index.js';
 import { DEFAULT_TENANT_HEADER } from '@mtpc/shared';
+import type { TenantContext, TenantResolver } from '../types/index.js';
 import { createTenantContext } from './context.js';
 
 /**
@@ -8,10 +8,9 @@ import { createTenantContext } from './context.js';
 export function createHeaderResolver(
   headerName: string = DEFAULT_TENANT_HEADER
 ): TenantResolver<{ headers: Record<string, string | undefined> }> {
-  return (request) => {
-    const tenantId = request.headers[headerName] ?? 
-                     request.headers[headerName.toLowerCase()];
-    
+  return request => {
+    const tenantId = request.headers[headerName] ?? request.headers[headerName.toLowerCase()];
+
     if (!tenantId) {
       return null;
     }
@@ -23,18 +22,16 @@ export function createHeaderResolver(
 /**
  * Create a subdomain-based tenant resolver
  */
-export function createSubdomainResolver(
-  baseDomain: string
-): TenantResolver<{ hostname: string }> {
-  return (request) => {
+export function createSubdomainResolver(baseDomain: string): TenantResolver<{ hostname: string }> {
+  return request => {
     const { hostname } = request;
-    
+
     if (!hostname.endsWith(baseDomain)) {
       return null;
     }
 
     const subdomain = hostname.slice(0, -(baseDomain.length + 1));
-    
+
     if (!subdomain || subdomain.includes('.')) {
       return null;
     }
@@ -46,19 +43,17 @@ export function createSubdomainResolver(
 /**
  * Create a path-based tenant resolver
  */
-export function createPathResolver(
-  prefix: string = '/tenant/'
-): TenantResolver<{ path: string }> {
-  return (request) => {
+export function createPathResolver(prefix: string = '/tenant/'): TenantResolver<{ path: string }> {
+  return request => {
     const { path } = request;
-    
+
     if (!path.startsWith(prefix)) {
       return null;
     }
 
     const remaining = path.slice(prefix.length);
     const tenantId = remaining.split('/')[0];
-    
+
     if (!tenantId) {
       return null;
     }
@@ -73,9 +68,9 @@ export function createPathResolver(
 export function createQueryResolver(
   paramName: string = 'tenant'
 ): TenantResolver<{ query: Record<string, string | undefined> }> {
-  return (request) => {
+  return request => {
     const tenantId = request.query[paramName];
-    
+
     if (!tenantId) {
       return null;
     }
@@ -87,10 +82,8 @@ export function createQueryResolver(
 /**
  * Create a composite resolver that tries multiple strategies
  */
-export function createCompositeResolver<T>(
-  ...resolvers: TenantResolver<T>[]
-): TenantResolver<T> {
-  return async (request) => {
+export function createCompositeResolver<T>(...resolvers: TenantResolver<T>[]): TenantResolver<T> {
+  return async request => {
     for (const resolver of resolvers) {
       const tenant = await resolver(request);
       if (tenant) {
@@ -108,7 +101,7 @@ export function createResolverWithFallback<T>(
   resolver: TenantResolver<T>,
   fallback: TenantContext
 ): TenantResolver<T> {
-  return async (request) => {
+  return async request => {
     const tenant = await resolver(request);
     return tenant ?? fallback;
   };
@@ -121,9 +114,9 @@ export function createValidatingResolver<T>(
   resolver: TenantResolver<T>,
   validator: (tenant: TenantContext) => Promise<boolean> | boolean
 ): TenantResolver<T> {
-  return async (request) => {
+  return async request => {
     const tenant = await resolver(request);
-    
+
     if (!tenant) {
       return null;
     }

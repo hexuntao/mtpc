@@ -1,13 +1,13 @@
 import type {
-  ResourceDefinition,
-  Permission,
-  PolicyDefinition,
   CompiledPolicy,
+  Permission,
   PermissionDefinition,
+  PolicyDefinition,
+  ResourceDefinition,
 } from '../types/index.js';
-import { ResourceRegistry } from './resource-registry.js';
 import { PermissionRegistry } from './permission-registry.js';
 import { PolicyRegistry } from './policy-registry.js';
+import { ResourceRegistry } from './resource-registry.js';
 
 /**
  * Unified registry that manages all MTPC registries
@@ -71,12 +71,14 @@ export class UnifiedRegistry {
   /**
    * Get resource with its permissions
    */
-  getResourceWithPermissions(name: string): {
-    resource: ResourceDefinition;
-    permissions: Permission[];
-  } | undefined {
+  getResourceWithPermissions(name: string):
+    | {
+        resource: ResourceDefinition;
+        permissions: Permission[];
+      }
+    | undefined {
     const resource = this.resources.get(name);
-    
+
     if (!resource) {
       return undefined;
     }

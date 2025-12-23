@@ -1,24 +1,24 @@
+import { createGlobalHooksManager, type GlobalHooksManager } from './hooks/global.js';
+import { PermissionChecker } from './permission/checker.js';
+import { createPluginContext } from './plugin/context.js';
+import { DefaultPluginManager } from './plugin/manager.js';
+import { DefaultPolicyEngine } from './policy/engine.js';
+import { createUnifiedRegistry, type UnifiedRegistry } from './registry/unified-registry.js';
+import { createTenantManager, type TenantManager } from './tenant/manager.js';
+import { ANONYMOUS_SUBJECT, createContext } from './types/context.js';
 import type {
-  ResourceDefinition,
-  PolicyDefinition,
-  PluginDefinition,
-  TenantContext,
-  SubjectContext,
   MTPCContext,
+  MultiTenantOptions,
   PermissionCheckContext,
   PermissionCheckResult,
+  PluginDefinition,
+  PolicyDefinition,
   PolicyEvaluationContext,
   PolicyEvaluationResult,
-  MultiTenantOptions,
+  ResourceDefinition,
+  SubjectContext,
+  TenantContext,
 } from './types/index.js';
-import { UnifiedRegistry, createUnifiedRegistry } from './registry/unified-registry.js';
-import { DefaultPolicyEngine } from './policy/engine.js';
-import { PermissionChecker, createSimpleChecker } from './permission/checker.js';
-import { GlobalHooksManager, createGlobalHooksManager } from './hooks/global.js';
-import { DefaultPluginManager } from './plugin/manager.js';
-import { createPluginContext } from './plugin/context.js';
-import { TenantManager, createTenantManager, InMemoryTenantStore } from './tenant/manager.js';
-import { createContext, ANONYMOUS_SUBJECT } from './types/context.js';
 
 /**
  * MTPC configuration options
@@ -30,7 +30,7 @@ export interface MTPCOptions {
 
 /**
  * MTPC - Multi-Tenant Permission Core
- * 
+ *
  * Main entry point for the MTPC library.
  * This class coordinates all MTPC subsystems.
  */
@@ -41,7 +41,7 @@ export class MTPC {
   readonly globalHooks: GlobalHooksManager;
   readonly plugins: DefaultPluginManager;
   readonly tenants: TenantManager;
-  
+
   private options: MTPCOptions;
   private initialized = false;
 
@@ -123,10 +123,7 @@ export class MTPC {
   /**
    * Create context for a request
    */
-  createContext(
-    tenant: TenantContext,
-    subject?: SubjectContext
-  ): MTPCContext {
+  createContext(tenant: TenantContext, subject?: SubjectContext): MTPCContext {
     return createContext({
       tenant,
       subject: subject ?? ANONYMOUS_SUBJECT,
@@ -136,9 +133,7 @@ export class MTPC {
   /**
    * Check permission
    */
-  async checkPermission(
-    context: PermissionCheckContext
-  ): Promise<PermissionCheckResult> {
+  async checkPermission(context: PermissionCheckContext): Promise<PermissionCheckResult> {
     return this.permissionChecker.check(context);
   }
 
@@ -152,9 +147,7 @@ export class MTPC {
   /**
    * Evaluate policy
    */
-  async evaluatePolicy(
-    context: PolicyEvaluationContext
-  ): Promise<PolicyEvaluationResult> {
+  async evaluatePolicy(context: PolicyEvaluationContext): Promise<PolicyEvaluationResult> {
     return this.policyEngine.evaluate(context);
   }
 
@@ -196,9 +189,9 @@ export class MTPC {
     // Get all permissions from policies for this tenant/subject
     // This is a simplified implementation
     const permissions = new Set<string>();
-    
+
     const policies = this.registry.policies.getForTenant(tenantId);
-    
+
     for (const policy of policies) {
       for (const rule of policy.rules) {
         if (rule.effect === 'allow') {
@@ -230,7 +223,7 @@ export class MTPC {
     plugins: number;
   } {
     const registrySummary = this.registry.getSummary();
-    
+
     return {
       initialized: this.initialized,
       ...registrySummary,

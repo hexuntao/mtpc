@@ -76,9 +76,7 @@ export const READ_ONLY_FEATURES: ResourceFeatures = {
 /**
  * Create resource features from partial input
  */
-export function createResourceFeatures(
-  input?: Partial<ResourceFeatures>
-): ResourceFeatures {
+export function createResourceFeatures(input?: Partial<ResourceFeatures>): ResourceFeatures {
   if (!input) {
     return { ...DEFAULT_RESOURCE_FEATURES };
   }
@@ -101,12 +99,12 @@ export function createResourceFeatures(
  */
 export function getEnabledActions(features: ResourceFeatures): string[] {
   const actions: string[] = [];
-  
+
   if (features.create) actions.push('create');
   if (features.read) actions.push('read');
   if (features.update) actions.push('update');
   if (features.delete) actions.push('delete');
   if (features.list) actions.push('list');
-  
+
   return actions;
 }

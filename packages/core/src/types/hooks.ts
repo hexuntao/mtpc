@@ -126,9 +126,23 @@ export interface ResourceHooks<T = unknown> {
  * Global hooks - applied to all resources
  */
 export interface GlobalHooks {
-  beforeAny?: ((context: MTPCContext, operation: string, resourceName: string) => Promise<HookResult> | HookResult)[];
-  afterAny?: ((context: MTPCContext, operation: string, resourceName: string, result: unknown) => Promise<void> | void)[];
-  onError?: ((context: MTPCContext, operation: string, resourceName: string, error: Error) => Promise<void> | void)[];
+  beforeAny?: ((
+    context: MTPCContext,
+    operation: string,
+    resourceName: string
+  ) => Promise<HookResult> | HookResult)[];
+  afterAny?: ((
+    context: MTPCContext,
+    operation: string,
+    resourceName: string,
+    result: unknown
+  ) => Promise<void> | void)[];
+  onError?: ((
+    context: MTPCContext,
+    operation: string,
+    resourceName: string,
+    error: Error
+  ) => Promise<void> | void)[];
 }
 
 /**
