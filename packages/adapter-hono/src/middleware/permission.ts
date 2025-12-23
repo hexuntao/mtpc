@@ -1,13 +1,19 @@
+import type { MTPC } from '@mtpc/core';
 import { createPermissionCode, PermissionDeniedError, parsePermissionCode } from '@mtpc/shared';
+import type { MiddlewareHandler } from 'hono';
 import { createMiddleware } from 'hono/factory';
-import { getMTPCContext, getSubject, getTenant } from '../context/mtpc-context.js';
+import { getSubject, getTenant } from '../context/mtpc-context.js';
+import type { DynamicPermissionResolver, MTPCEnv } from '../types.js';
 
 /**
  * Permission check middleware
  */
-export const requirePermission = (resourceOrCode, action) => {
-  return createMiddleware(async (c, next) => {
-    const mtpc = c.get('mtpc');
+export function requirePermission(
+  resourceOrCode: string,
+  action?: string
+): MiddlewareHandler<MTPCEnv> {
+  return createMiddleware<MTPCEnv>(async (c, next) => {
+    const mtpc = c.get('mtpc') as MTPC;
 
     if (!mtpc) {
       throw new Error('MTPC not initialized. Use mtpcMiddleware first.');
@@ -17,8 +23,8 @@ export const requirePermission = (resourceOrCode, action) => {
     const subject = getSubject(c);
 
     // Parse permission code or construct from resource/action
-    let resource;
-    let permAction;
+    let resource: string;
+    let permAction: string;
 
     if (action) {
       resource = resourceOrCode;
@@ -47,14 +53,14 @@ export const requirePermission = (resourceOrCode, action) => {
 
     await next();
   });
-};
+}
 
 /**
  * Require any of the specified permissions
  */
-export const requireAnyPermission = (...permissionCodes) => {
-  return createMiddleware(async (c, next) => {
-    const mtpc = c.get('mtpc');
+export function requireAnyPermission(...permissionCodes: string[]): MiddlewareHandler<MTPCEnv> {
+  return createMiddleware<MTPCEnv>(async (c, next) => {
+    const mtpc = c.get('mtpc') as MTPC;
 
     if (!mtpc) {
       throw new Error('MTPC not initialized. Use mtpcMiddleware first.');
@@ -87,14 +93,14 @@ export const requireAnyPermission = (...permissionCodes) => {
       reason: 'None of the required permissions granted',
     });
   });
-};
+}
 
 /**
  * Require all of the specified permissions
  */
-export const requireAllPermissions = (...permissionCodes) => {
-  return createMiddleware(async (c, next) => {
-    const mtpc = c.get('mtpc');
+export function requireAllPermissions(...permissionCodes: string[]): MiddlewareHandler<MTPCEnv> {
+  return createMiddleware<MTPCEnv>(async (c, next) => {
+    const mtpc = c.get('mtpc') as MTPC;
 
     if (!mtpc) {
       throw new Error('MTPC not initialized. Use mtpcMiddleware first.');
@@ -124,14 +130,17 @@ export const requireAllPermissions = (...permissionCodes) => {
 
     await next();
   });
-};
+}
 
 /**
  * Permission check with resource ID
  */
-export const requireResourcePermission = (resource, action) => {
-  return createMiddleware(async (c, next) => {
-    const mtpc = c.get('mtpc');
+export function requireResourcePermission(
+  resource: string,
+  action: string
+): MiddlewareHandler<MTPCEnv> {
+  return createMiddleware<MTPCEnv>(async (c, next) => {
+    const mtpc = c.get('mtpc') as MTPC;
 
     if (!mtpc) {
       throw new Error('MTPC not initialized. Use mtpcMiddleware first.');
@@ -158,14 +167,16 @@ export const requireResourcePermission = (resource, action) => {
 
     await next();
   });
-};
+}
 
 /**
  * Dynamic permission check based on request
  */
-export const dynamicPermissionCheck = resolver => {
-  return createMiddleware(async (c, next) => {
-    const mtpc = c.get('mtpc');
+export function dynamicPermissionCheck(
+  resolver: DynamicPermissionResolver
+): MiddlewareHandler<MTPCEnv> {
+  return createMiddleware<MTPCEnv>(async (c, next) => {
+    const mtpc = c.get('mtpc') as MTPC;
 
     if (!mtpc) {
       throw new Error('MTPC not initialized. Use mtpcMiddleware first.');
@@ -192,4 +203,4 @@ export const dynamicPermissionCheck = resolver => {
 
     await next();
   });
-};
+}

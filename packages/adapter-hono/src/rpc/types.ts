@@ -1,32 +1,6 @@
 import type { AnyZodSchema, InferSchema, PaginatedResult, ResourceDefinition } from '@mtpc/core';
 import type { z } from 'zod';
-
-/**
- * API response wrapper
- */
-export type ApiResponse<T> =
-  | {
-      success: true;
-      data: T;
-    }
-  | {
-      success: false;
-      error: {
-        code: string;
-        message: string;
-        details?: unknown;
-      };
-    };
-
-/**
- * List query params
- */
-export interface ListQueryParams {
-  page?: number;
-  pageSize?: number;
-  sort?: string;
-  filter?: string;
-}
+import type { ApiResponse, ListQueryParams } from '../types.js';
 
 /**
  * Infer CRUD routes type from resource
@@ -68,3 +42,27 @@ export interface RPCRouteDef<TInput = unknown, TOutput = unknown> {
 export type InferRPCClient<TRoutes extends Record<string, RPCRouteDef>> = {
   [K in keyof TRoutes]: (input: TRoutes[K]['input']) => Promise<TRoutes[K]['output']>;
 };
+
+/**
+ * Client options
+ */
+export interface ClientOptions {
+  headers?: Record<string, string>;
+  fetch?: typeof fetch;
+}
+
+/**
+ * Resource client options
+ */
+export interface ResourceClientOptions {
+  tenantId?: string;
+  token?: string;
+  headers?: Record<string, string>;
+}
+
+/**
+ * MTPC client options
+ */
+export interface MTPCClientOptions extends ResourceClientOptions {
+  resources?: string[];
+}

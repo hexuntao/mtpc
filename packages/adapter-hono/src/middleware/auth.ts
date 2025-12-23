@@ -1,15 +1,19 @@
+import type { SubjectContext } from '@mtpc/core';
 import { ANONYMOUS_SUBJECT } from '@mtpc/core';
+import type { MiddlewareHandler } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { setSubject } from '../context/mtpc-context.js';
-
-/**
- * Auth middleware options
- */
+import type {
+  ApiKeyAuthOptions,
+  AuthMiddlewareOptions,
+  BearerAuthOptions,
+  MTPCEnv,
+} from '../types.js';
 
 /**
  * Simple auth middleware that extracts subject from header
  */
-export const authMiddleware = (options = {}) => {
+export function authMiddleware(options: AuthMiddlewareOptions = {}): MiddlewareHandler<MTPCEnv> {
   const {
     headerName = 'x-subject-id',
     roleHeaderName = 'x-subject-roles',
@@ -17,7 +21,7 @@ export const authMiddleware = (options = {}) => {
     resolver,
   } = options;
 
-  return createMiddleware(async (c, next) => {
+  return createMiddleware<MTPCEnv>(async (c, next) => {
     // Use custom resolver if provided
     if (resolver) {
       const subject = await resolver(c);
@@ -50,7 +54,7 @@ export const authMiddleware = (options = {}) => {
     const rolesHeader = c.req.header(roleHeaderName);
     const roles = rolesHeader ? rolesHeader.split(',').map(r => r.trim()) : [];
 
-    const subject = {
+    const subject: SubjectContext = {
       id: subjectId,
       type: 'user',
       roles,
@@ -60,15 +64,15 @@ export const authMiddleware = (options = {}) => {
     setSubject(c, subject);
     await next();
   });
-};
+}
 
 /**
  * Bearer token auth middleware
  */
-export const bearerAuthMiddleware = options => {
+export function bearerAuthMiddleware(options: BearerAuthOptions): MiddlewareHandler<MTPCEnv> {
   const { verifyToken, required = true } = options;
 
-  return createMiddleware(async (c, next) => {
+  return createMiddleware<MTPCEnv>(async (c, next) => {
     const authHeader = c.req.header('authorization');
 
     if (!authHeader?.startsWith('Bearer ')) {
@@ -95,15 +99,15 @@ export const bearerAuthMiddleware = options => {
       await next();
     }
   });
-};
+}
 
 /**
  * API key auth middleware
  */
-export const apiKeyAuthMiddleware = options => {
+export function apiKeyAuthMiddleware(options: ApiKeyAuthOptions): MiddlewareHandler<MTPCEnv> {
   const { headerName = 'x-api-key', verifyApiKey, required = true } = options;
 
-  return createMiddleware(async (c, next) => {
+  return createMiddleware<MTPCEnv>(async (c, next) => {
     const apiKey = c.req.header(headerName);
 
     if (!apiKey) {
@@ -128,4 +132,4 @@ export const apiKeyAuthMiddleware = options => {
       await next();
     }
   });
-};
+}

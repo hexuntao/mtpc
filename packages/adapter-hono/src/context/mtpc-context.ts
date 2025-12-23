@@ -1,7 +1,7 @@
 import type { MTPCContext, SubjectContext, TenantContext } from '@mtpc/core';
 import { ANONYMOUS_SUBJECT, createContext } from '@mtpc/core';
 import type { Context } from 'hono';
-import type { MTPCEnv } from './variables.js';
+import type { MTPCEnv } from '../types.js';
 
 /**
  * Get tenant from Hono context
@@ -68,10 +68,13 @@ function updateMTPCContext(c: Context<MTPCEnv>): void {
 /**
  * Get client IP from request
  */
-function getClientIp(c: Context): string | undefined {
-  return (
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? undefined
-  );
+function getClientIp(c: Context<MTPCEnv>): string | undefined {
+  const forwarded = c.req.header('x-forwarded-for');
+  if (forwarded) {
+    const first = forwarded.split(',')[0];
+    return first?.trim();
+  }
+  return c.req.header('x-real-ip') ?? undefined;
 }
 
 /**

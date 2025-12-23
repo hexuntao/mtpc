@@ -1,51 +1,67 @@
 import { hc } from 'hono/client';
+import type { ApiResponse, ListQueryParams } from '../types.js';
+import type { ClientOptions, MTPCClientOptions, ResourceClientOptions } from './types.js';
 
 /**
  * Create typed RPC client
  */
-export function createRPCClient(baseUrl, options = {}) {
+export function createRPCClient<T>(
+  baseUrl: string,
+  options: ClientOptions = {}
+): ReturnType<typeof hc<T>> {
   const { headers = {}, fetch: customFetch } = options;
 
-  const client = hc(baseUrl, {
+  return hc<T>(baseUrl, {
     headers,
     fetch: customFetch,
   });
+}
 
-  return client;
+/**
+ * Resource client interface
+ */
+export interface ResourceClient<T = unknown> {
+  list(params?: ListQueryParams): Promise<ApiResponse<{ data: T[]; total: number }>>;
+  create(data: unknown): Promise<ApiResponse<T>>;
+  read(id: string): Promise<ApiResponse<T | null>>;
+  update(id: string, data: unknown): Promise<ApiResponse<T | null>>;
+  delete(id: string): Promise<ApiResponse<{ deleted: boolean }>>;
 }
 
 /**
  * Create resource client
  */
-export function createResourceClient(baseUrl, resourceName, options = {}) {
+export function createResourceClient<T = unknown>(
+  baseUrl: string,
+  resourceName: string,
+  options: ResourceClientOptions = {}
+): ResourceClient<T> {
   const { tenantId, token, headers = {} } = options;
 
-  const allHeaders = {
+  const allHeaders: Record<string, string> = {
     ...headers,
     ...(tenantId ? { 'x-tenant-id': tenantId } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
-  const client = createRPCClient(`${baseUrl}/${resourceName}`, {
-    headers: allHeaders,
-  });
+  const resourceUrl = `${baseUrl}/${resourceName}`;
 
   return {
-    async list(params = {}) {
+    async list(params: ListQueryParams = {}): Promise<ApiResponse<{ data: T[]; total: number }>> {
       const query = new URLSearchParams();
-      if (params.page) query.set('page', String(params.page));
-      if (params.pageSize) query.set('pageSize', String(params.pageSize));
+      if (params.page) query.set('page', params.page);
+      if (params.pageSize) query.set('pageSize', params.pageSize);
       if (params.sort) query.set('sort', params.sort);
       if (params.filter) query.set('filter', params.filter);
 
-      const response = await fetch(`${baseUrl}/${resourceName}?${query}`, {
+      const response = await fetch(`${resourceUrl}?${query}`, {
         headers: allHeaders,
       });
       return response.json();
     },
 
-    async create(data) {
-      const response = await fetch(`${baseUrl}/${resourceName}`, {
+    async create(data: unknown): Promise<ApiResponse<T>> {
+      const response = await fetch(resourceUrl, {
         method: 'POST',
         headers: {
           ...allHeaders,
@@ -56,15 +72,15 @@ export function createResourceClient(baseUrl, resourceName, options = {}) {
       return response.json();
     },
 
-    async read(id) {
-      const response = await fetch(`${baseUrl}/${resourceName}/${id}`, {
+    async read(id: string): Promise<ApiResponse<T | null>> {
+      const response = await fetch(`${resourceUrl}/${id}`, {
         headers: allHeaders,
       });
       return response.json();
     },
 
-    async update(id, data) {
-      const response = await fetch(`${baseUrl}/${resourceName}/${id}`, {
+    async update(id: string, data: unknown): Promise<ApiResponse<T | null>> {
+      const response = await fetch(`${resourceUrl}/${id}`, {
         method: 'PUT',
         headers: {
           ...allHeaders,
@@ -75,8 +91,8 @@ export function createResourceClient(baseUrl, resourceName, options = {}) {
       return response.json();
     },
 
-    async delete(id) {
-      const response = await fetch(`${baseUrl}/${resourceName}/${id}`, {
+    async delete(id: string): Promise<ApiResponse<{ deleted: boolean }>> {
+      const response = await fetch(`${resourceUrl}/${id}`, {
         method: 'DELETE',
         headers: allHeaders,
       });
@@ -86,12 +102,21 @@ export function createResourceClient(baseUrl, resourceName, options = {}) {
 }
 
 /**
+ * MTPC client type
+ */
+export interface MTPCClient {
+  [resourceName: string]: ResourceClient;
+  setTenant(newTenantId: string): MTPCClient;
+  setToken(newToken: string): MTPCClient;
+}
+
+/**
  * Create MTPC client with all resources
  */
-export function createMTPCClient(baseUrl, options = {}) {
+export function createMTPCClient(baseUrl: string, options: MTPCClientOptions = {}): MTPCClient {
   const { resources = [], tenantId, token } = options;
 
-  const clients = {};
+  const clients: Record<string, ResourceClient> = {};
 
   for (const resourceName of resources) {
     clients[resourceName] = createResourceClient(baseUrl, resourceName, {
@@ -102,10 +127,10 @@ export function createMTPCClient(baseUrl, options = {}) {
 
   return {
     ...clients,
-    setTenant(newTenantId) {
+    setTenant(newTenantId: string): MTPCClient {
       return createMTPCClient(baseUrl, { ...options, tenantId: newTenantId });
     },
-    setToken(newToken) {
+    setToken(newToken: string): MTPCClient {
       return createMTPCClient(baseUrl, { ...options, token: newToken });
     },
   };

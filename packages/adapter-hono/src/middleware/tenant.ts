@@ -1,15 +1,19 @@
-import { createHeaderResolver, createTenantContext, validateTenantContext } from '@mtpc/core';
+import { createTenantContext, validateTenantContext } from '@mtpc/core';
 import { MissingTenantContextError } from '@mtpc/shared';
+import type { MiddlewareHandler } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { setTenant } from '../context/mtpc-context.js';
+import type { MTPCEnv, TenantMiddlewareOptions } from '../types.js';
 
 /**
- * Tenant resolution options
+ * Tenant resolution middleware
  */
-export const tenantMiddleware = (options = {}) => {
+export function tenantMiddleware(
+  options: TenantMiddlewareOptions = {}
+): MiddlewareHandler<MTPCEnv> {
   const { headerName = 'x-tenant-id', required = true, defaultTenantId, validate } = options;
 
-  return createMiddleware(async (c, next) => {
+  return createMiddleware<MTPCEnv>(async (c, next) => {
     // Try to resolve tenant from header
     const tenantId = c.req.header(headerName) ?? c.req.header(headerName.toLowerCase());
 
@@ -46,15 +50,17 @@ export const tenantMiddleware = (options = {}) => {
 
     await next();
   });
-};
+}
 
 /**
  * Tenant from path parameter middleware
  */
-export const tenantFromPathMiddleware = (options = {}) => {
+export function tenantFromPathMiddleware(
+  options: { paramName?: string; required?: boolean } = {}
+): MiddlewareHandler<MTPCEnv> {
   const { paramName = 'tenantId', required = true } = options;
 
-  return createMiddleware(async (c, next) => {
+  return createMiddleware<MTPCEnv>(async (c, next) => {
     const tenantId = c.req.param(paramName);
 
     if (!tenantId) {
@@ -70,15 +76,18 @@ export const tenantFromPathMiddleware = (options = {}) => {
 
     await next();
   });
-};
+}
 
 /**
  * Tenant from subdomain middleware
  */
-export const tenantFromSubdomainMiddleware = (options = {}) => {
+export function tenantFromSubdomainMiddleware(options: {
+  baseDomain: string;
+  required?: boolean;
+}): MiddlewareHandler<MTPCEnv> {
   const { baseDomain, required = true } = options;
 
-  return createMiddleware(async (c, next) => {
+  return createMiddleware<MTPCEnv>(async (c, next) => {
     const host = c.req.header('host') ?? '';
 
     if (!baseDomain || !host.endsWith(baseDomain)) {
@@ -103,4 +112,4 @@ export const tenantFromSubdomainMiddleware = (options = {}) => {
 
     await next();
   });
-};
+}

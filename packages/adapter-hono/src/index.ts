@@ -5,3 +5,4 @@ export * from './factory.js';
 export * from './middleware/index.js';
 export * from './routes/index.js';
 export * from './rpc/index.js';
+export * from './types.js';

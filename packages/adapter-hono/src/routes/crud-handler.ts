@@ -1,51 +1,48 @@
 import type { MTPCContext, PaginatedResult, QueryOptions, ResourceDefinition } from '@mtpc/core';
+import type { CRUDHandlers } from '../types.js';
 
 /**
- * CRUD handler interface
+ * Base entity type with common fields
  */
+interface BaseEntity {
+  id: string;
+  tenantId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy?: string;
+}
 
 /**
  * Abstract CRUD handler base class
  */
-export class BaseCRUDHandler {
-  constructor(resource) {
+export abstract class BaseCRUDHandler<T extends BaseEntity> implements CRUDHandlers<T> {
+  protected resource: ResourceDefinition;
+
+  constructor(resource: ResourceDefinition) {
     this.resource = resource;
   }
 
-  async list(ctx, options) {
-    throw new Error('list not implemented');
-  }
-
-  async create(ctx, data) {
-    throw new Error('create not implemented');
-  }
-
-  async read(ctx, id) {
-    throw new Error('read not implemented');
-  }
-
-  async update(ctx, id, data) {
-    throw new Error('update not implemented');
-  }
-
-  async delete(ctx, id) {
-    throw new Error('delete not implemented');
-  }
+  abstract list(ctx: MTPCContext, options: QueryOptions): Promise<PaginatedResult<T>>;
+  abstract create(ctx: MTPCContext, data: unknown): Promise<T>;
+  abstract read(ctx: MTPCContext, id: string): Promise<T | null>;
+  abstract update(ctx: MTPCContext, id: string, data: unknown): Promise<T | null>;
+  abstract delete(ctx: MTPCContext, id: string): Promise<boolean>;
 }
 
 /**
  * In-memory CRUD handler for testing
  */
-export class InMemoryCRUDHandler extends BaseCRUDHandler {
-  constructor(resource) {
+export class InMemoryCRUDHandler<T extends BaseEntity> extends BaseCRUDHandler<T> {
+  private store: Map<string, T> = new Map();
+  private idCounter = 0;
+
+  constructor(resource: ResourceDefinition) {
     super(resource);
-    this.store = new Map();
-    this.idCounter = 0;
   }
 
-  async list(ctx, options) {
-    const page = options.page ?? 1;
-    const pageSize = options.pageSize ?? 20;
+  async list(ctx: MTPCContext, options: QueryOptions): Promise<PaginatedResult<T>> {
+    const page = options.pagination?.page ?? 1;
+    const pageSize = options.pagination?.pageSize ?? 20;
 
     // Filter by tenant
     const items = Array.from(this.store.values()).filter(item => item.tenantId === ctx.tenant.id);
@@ -66,24 +63,24 @@ export class InMemoryCRUDHandler extends BaseCRUDHandler {
     };
   }
 
-  async create(ctx, data) {
+  async create(ctx: MTPCContext, data: unknown): Promise<T> {
     const id = String(++this.idCounter);
     const now = new Date();
 
     const record = {
-      ...data,
+      ...(data as Partial<T>),
       id,
       tenantId: ctx.tenant.id,
       createdAt: now,
       updatedAt: now,
       createdBy: ctx.subject.id,
-    };
+    } as T;
 
     this.store.set(id, record);
     return record;
   }
 
-  async read(ctx, id) {
+  async read(ctx: MTPCContext, id: string): Promise<T | null> {
     const record = this.store.get(id);
 
     if (!record || record.tenantId !== ctx.tenant.id) {
@@ -93,27 +90,26 @@ export class InMemoryCRUDHandler extends BaseCRUDHandler {
     return record;
   }
 
-  async update(ctx, id, data) {
+  async update(ctx: MTPCContext, id: string, data: unknown): Promise<T | null> {
     const existing = this.store.get(id);
 
     if (!existing || existing.tenantId !== ctx.tenant.id) {
       return null;
     }
 
-    const updated = {
+    const updated: T = {
       ...existing,
-      ...data,
+      ...(data as Partial<T>),
       id,
       tenantId: ctx.tenant.id,
       updatedAt: new Date(),
-      updatedBy: ctx.subject.id,
     };
 
     this.store.set(id, updated);
     return updated;
   }
 
-  async delete(ctx, id) {
+  async delete(ctx: MTPCContext, id: string): Promise<boolean> {
     const existing = this.store.get(id);
 
     if (!existing || existing.tenantId !== ctx.tenant.id) {
@@ -124,7 +120,7 @@ export class InMemoryCRUDHandler extends BaseCRUDHandler {
     return true;
   }
 
-  clear() {
+  clear(): void {
     this.store.clear();
     this.idCounter = 0;
   }
@@ -133,17 +129,19 @@ export class InMemoryCRUDHandler extends BaseCRUDHandler {
 /**
  * Create in-memory handler factory
  */
-export function createInMemoryHandlerFactory() {
-  const handlers = new Map();
+export function createInMemoryHandlerFactory(): <T extends BaseEntity>(
+  resource: ResourceDefinition
+) => InMemoryCRUDHandler<T> {
+  const handlers = new Map<string, InMemoryCRUDHandler<BaseEntity>>();
 
-  return resource => {
+  return <T extends BaseEntity>(resource: ResourceDefinition): InMemoryCRUDHandler<T> => {
     let handler = handlers.get(resource.name);
 
     if (!handler) {
-      handler = new InMemoryCRUDHandler(resource);
+      handler = new InMemoryCRUDHandler<BaseEntity>(resource);
       handlers.set(resource.name, handler);
     }
 
-    return handler;
+    return handler as InMemoryCRUDHandler<T>;
   };
 }
