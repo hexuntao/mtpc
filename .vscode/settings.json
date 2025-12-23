@@ -4,7 +4,8 @@
 
   "[javascript][typescript][javascriptreact][typescriptreact][json][css][scss][less]": {
     "editor.defaultFormatter": "biomejs.biome",
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "editor.wordWrapColumn": 100
   },
 
   "editor.codeActionsOnSave": {
@@ -12,6 +13,6 @@
     "source.organizeImports.biome": "explicit"
   },
 
-  // 禁用 Prettier（如果安装了）
-  "prettier.enable": false
+  // 覆盖用户设置，使用 Biome 替代 Prettier
+  // "prettier.enable": false
 }

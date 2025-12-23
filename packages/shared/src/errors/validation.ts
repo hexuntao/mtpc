@@ -11,7 +11,7 @@ export class ValidationError extends MTPCError {
   }>;
 
   constructor(zodError: ZodError) {
-    const issues = zodError.issues.map((issue) => ({
+    const issues = zodError.issues.map(issue => ({
       path: issue.path,
       message: issue.message,
     }));

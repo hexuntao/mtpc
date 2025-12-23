@@ -54,9 +54,7 @@ export function deepMerge<T extends Record<string, unknown>>(
 /**
  * Check if value is a plain object
  */
-export function isPlainObject(
-  value: unknown
-): value is Record<string, unknown> {
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -98,10 +96,7 @@ export function omit<T extends Record<string, unknown>, K extends keyof T>(
 /**
  * Get nested value from object by path
  */
-export function getByPath(
-  obj: Record<string, unknown>,
-  path: string | string[]
-): unknown {
+export function getByPath(obj: Record<string, unknown>, path: string | string[]): unknown {
   const keys = Array.isArray(path) ? path : path.split('.');
   let current: unknown = obj;
 

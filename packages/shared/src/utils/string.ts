@@ -40,7 +40,7 @@ export function toKebabCase(str: string): string {
 export function toCamelCase(str: string): string {
   return str
     .replace(/[-_\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''))
-    .replace(/^./, (c) => c.toLowerCase());
+    .replace(/^./, c => c.toLowerCase());
 }
 
 /**
@@ -65,7 +65,7 @@ export function toSnakeCase(str: string): string {
  * Pluralize a word (simple implementation)
  */
 export function pluralize(word: string): string {
-  if (word.endsWith('y') && !['ay', 'ey', 'iy', 'oy', 'uy'].some((v) => word.endsWith(v))) {
+  if (word.endsWith('y') && !['ay', 'ey', 'iy', 'oy', 'uy'].some(v => word.endsWith(v))) {
     return word.slice(0, -1) + 'ies';
   }
   if (word.endsWith('s') || word.endsWith('x') || word.endsWith('ch') || word.endsWith('sh')) {
