@@ -1,5 +1,5 @@
 import type { GlobalHooks, ResourceHooks } from './hooks.js';
-import type { PolicyDefinition } from './policy.js';
+import type { PolicyDefinition, PolicyEngine } from './policy.js';
 import type { ResourceDefinition } from './resource.js';
 
 /**
@@ -100,6 +100,10 @@ export interface PluginContext {
   getResource(name: string): ResourceDefinition | undefined;
   /** 获取策略定义（可选） */
   getPolicy(id: string): PolicyDefinition | undefined;
+  /** 策略引擎实例（可选） */
+  policyEngine?: PolicyEngine;
+  /** 权限解析器函数（可选） */
+  permissionResolver?: (tenantId: string, subjectId: string) => Promise<Set<string>>;
 }
 
 /**

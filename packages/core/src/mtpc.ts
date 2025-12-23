@@ -121,7 +121,12 @@ export class MTPC {
 
     // 步骤5: 创建插件上下文和插件管理器
     // 插件上下文提供插件与系统交互的接口
-    const pluginContext = createPluginContext(this.registry, this.globalHooks);
+    const pluginContext = createPluginContext(
+      this.registry,
+      this.globalHooks,
+      this.policyEngine,
+      this.options.defaultPermissionResolver ?? this.defaultPermissionResolver.bind(this)
+    );
     this.plugins = new DefaultPluginManager(pluginContext);
 
     // 步骤6: 创建权限检查器

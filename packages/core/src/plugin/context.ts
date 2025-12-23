@@ -4,6 +4,7 @@ import type {
   GlobalHooks,
   PluginContext,
   PolicyDefinition,
+  PolicyEngine,
   ResourceDefinition,
   ResourceHooks,
 } from '../types/index.js';
@@ -15,12 +16,14 @@ import type {
  *
  * @param registry 统一注册表，提供资源、策略等的注册和查询功能
  * @param globalHooks 全局钩子管理器，用于管理跨资源的全局钩子
+ * @param policyEngine 策略引擎实例（可选），用于策略评估
+ * @param permissionResolver 权限解析器函数（可选），用于解析主体权限
  * @returns 插件上下文对象，插件可以通过它访问核心功能
  *
  * @example
  * ```typescript
  * // 创建插件上下文
- * const context = createPluginContext(registry, globalHooks);
+ * const context = createPluginContext(registry, globalHooks, policyEngine, permissionResolver);
  *
  * // 插件可以使用上下文注册资源
  * context.registerResource({
@@ -39,7 +42,9 @@ import type {
  */
 export function createPluginContext(
   registry: UnifiedRegistry,
-  globalHooks: GlobalHooksManager
+  globalHooks: GlobalHooksManager,
+  policyEngine?: PolicyEngine,
+  permissionResolver?: (tenantId: string, subjectId: string) => Promise<Set<string>>
 ): PluginContext {
   // 输入验证
   if (!registry) {
@@ -314,5 +319,11 @@ export function createPluginContext(
 
       return registry.policies.get(id);
     },
+
+    /** 策略引擎实例 */
+    policyEngine,
+
+    /** 权限解析器函数 */
+    permissionResolver,
   };
 }
