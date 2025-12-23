@@ -14,5 +14,8 @@
   },
 
   // 覆盖用户设置，使用 Biome 替代 Prettier
-  // "prettier.enable": false
+  "prettier.enable": false,
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  }
 }

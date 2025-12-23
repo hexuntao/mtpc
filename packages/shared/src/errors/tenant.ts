@@ -15,10 +15,7 @@ export class TenantNotFoundError extends MTPCError {
  */
 export class MissingTenantContextError extends MTPCError {
   constructor() {
-    super(
-      'Tenant context is required but not provided',
-      'MISSING_TENANT_CONTEXT'
-    );
+    super('Tenant context is required but not provided', 'MISSING_TENANT_CONTEXT');
     this.name = 'MissingTenantContextError';
   }
 }
