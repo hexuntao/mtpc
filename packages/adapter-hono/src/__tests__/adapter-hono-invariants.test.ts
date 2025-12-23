@@ -9,19 +9,21 @@
  * ⚠️ 重要：这些测试验证 Adapter 层的架构承诺
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { Context } from 'hono';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock Hono 上下文
-function createMockContext(overrides: Partial<{
-  tenant: any;
-  subject: any;
-  mtpcContext: any;
-  headers: Record<string, string>;
-  path: string;
-  method: string;
-  param: (name: string) => string | undefined;
-}> = {}): Context {
+function createMockContext(
+  overrides: Partial<{
+    tenant: any;
+    subject: any;
+    mtpcContext: any;
+    headers: Record<string, string>;
+    path: string;
+    method: string;
+    param: (name: string) => string | undefined;
+  }> = {}
+): Context {
   const ctx = {
     get: (key: string) => {
       if (key === 'tenant') return overrides.tenant;
@@ -92,9 +94,12 @@ describe('TC-HONO-001: Tenant 解析失败时拒绝 [架构级测试 - Fail-safe
     await middleware(ctx, next);
 
     // 验证租户被设置为 default-tenant
-    expect(ctx.set).toHaveBeenCalledWith('tenant', expect.objectContaining({
-      id: 'default-tenant',
-    }));
+    expect(ctx.set).toHaveBeenCalledWith(
+      'tenant',
+      expect.objectContaining({
+        id: 'default-tenant',
+      })
+    );
     expect(next).toHaveBeenCalled();
   });
 
@@ -132,7 +137,7 @@ describe('TC-HONO-002: Core 权威性验证 [架构级测试 - Core Authority]',
       subject: { id: 'user-1', type: 'user' },
       headers: {},
     });
-    (ctx as any).get = function(key: string) {
+    (ctx as any).get = (key: string) => {
       if (key === 'mtpc') return mockMTPC;
       if (key === 'tenant') return { id: 'tenant-1' };
       if (key === 'subject') return { id: 'user-1', type: 'user' };
@@ -169,7 +174,7 @@ describe('TC-HONO-002: Core 权威性验证 [架构级测试 - Core Authority]',
       tenant: { id: 'tenant-1' },
       subject: { id: 'user-1', type: 'user' },
     });
-    (ctx as any).get = function(key: string) {
+    (ctx as any).get = (key: string) => {
       if (key === 'mtpc') return mockMTPC;
       if (key === 'tenant') return { id: 'tenant-1' };
       if (key === 'subject') return { id: 'user-1', type: 'user' };
@@ -190,7 +195,7 @@ describe('TC-HONO-002: Core 权威性验证 [架构级测试 - Core Authority]',
       tenant: { id: 'tenant-1' },
       subject: { id: 'user-1', type: 'user' },
     });
-    (ctx as any).get = function(key: string) {
+    (ctx as any).get = (key: string) => {
       if (key === 'mtpc') return undefined; // MTPC 未初始化
       return undefined;
     };
@@ -216,7 +221,7 @@ describe('TC-HONO-003: 权限码解析安全性 [语义级测试]', () => {
       tenant: { id: 'tenant-1' },
       subject: { id: 'user-1', type: 'user' },
     });
-    (ctx as any).get = function(key: string) {
+    (ctx as any).get = (key: string) => {
       if (key === 'mtpc') return mockMTPC;
       return undefined;
     };
@@ -244,7 +249,7 @@ describe('TC-HONO-003: 权限码解析安全性 [语义级测试]', () => {
       tenant: { id: 'tenant-1' },
       subject: { id: 'user-1', type: 'user' },
     });
-    (ctx as any).get = function(key: string) {
+    (ctx as any).get = (key: string) => {
       if (key === 'mtpc') return mockMTPC;
       return undefined;
     };
@@ -351,7 +356,7 @@ describe('TC-HONO-005: getTenant/getSubject 安全性 [架构级测试 - Fail-sa
       tenant: { id: 'tenant-1' },
       subject: { id: 'user-1', type: 'user' },
     });
-    (ctx as any).get = function(key: string) {
+    (ctx as any).get = (key: string) => {
       if (key === 'mtpc') return undefined;
       if (key === 'tenant') return { id: 'tenant-1' };
       if (key === 'subject') return { id: 'user-1', type: 'user' };
@@ -385,7 +390,7 @@ describe('组合测试：高风险场景演练', () => {
       tenant: { id: 'tenant-1' },
       subject: { id: 'hacker', type: 'user' },
     });
-    (ctx as any).get = function(key: string) {
+    (ctx as any).get = (key: string) => {
       if (key === 'mtpc') return mockMTPC;
       return undefined;
     };
@@ -417,7 +422,7 @@ describe('组合测试：高风险场景演练', () => {
     const ctx = createMockContext({
       headers: { 'x-tenant-id': 'tenant-1' },
     });
-    (ctx as any).get = function(key: string) {
+    (ctx as any).get = (key: string) => {
       if (key === 'mtpc') return mockMTPC;
       if (key === 'tenant') return { id: 'tenant-1' };
       if (key === 'subject') return { id: 'user-1', type: 'user' };
