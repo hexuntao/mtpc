@@ -12,8 +12,7 @@ import type { MTPCEnv, TenantMiddlewareOptions } from '../types.js';
  * **工作流程**：
  * 1. 从指定的请求头中获取租户 ID
  * 2. 如果没有租户 ID：
- *    - 如果配置了 defaultTenantId，使用默认值
- *    - 如果 required=true，抛出错误
+ *    - 如果 required=true，抛出 MissingTenantContextError（符合 Architecture.md）
  *    - 如果 required=false，跳过（允许公开 API）
  * 3. 创建租户上下文并验证
  * 4. 将租户上下文存储到 Hono 上下文中
@@ -23,14 +22,16 @@ import type { MTPCEnv, TenantMiddlewareOptions } from '../types.js';
  *
  * @example
  * ```typescript
- * // 基础用法
+ * // 多租户 API：必须提供租户
  * app.use('/api/*', tenantMiddleware());
+ *
+ * // 公开 API：不需要租户
+ * app.use('/api/public/*', tenantMiddleware({ required: false }));
  *
  * // 自定义配置
  * app.use('/api/*', tenantMiddleware({
  *   headerName: 'x-tenant-id',
  *   required: true,
- *   defaultTenantId: 'default',
  *   validate: async (tenant) => {
  *     const exists = await checkTenantExists(tenant.id);
  *     return exists;
@@ -43,6 +44,21 @@ export function tenantMiddleware(
 ): MiddlewareHandler<MTPCEnv> {
   const { headerName = 'x-tenant-id', required = true, defaultTenantId, validate } = options;
 
+  // ==========================================================================
+  // ⚠️ DEPRECATION WARNING
+  // ==========================================================================
+  // defaultTenantId 选项已废弃，将在下一个主版本中移除
+  // 原因：违背 Architecture.md 中 "Tenant Context 不可缺失" 的原则
+  // 迁移：使用 required=false 替代
+  if (defaultTenantId !== undefined) {
+    console.warn(
+      '[MTPC Deprecation Warning] defaultTenantId is deprecated and will be removed. ' +
+      'Use required: false instead. ' +
+      'See: https://github.com/mtpc/mtpc/blob/main/docs/architecture.md#tenant-context'
+    );
+  }
+  // ==========================================================================
+
   return createMiddleware<MTPCEnv>(async (c, next) => {
     // 尝试从请求头中获取租户 ID
     // 支持原始大小写和全小写两种格式
@@ -50,8 +66,10 @@ export function tenantMiddleware(
 
     if (!tenantId) {
       // 没有租户 ID 时的处理逻辑
+      // 按照 Architecture.md 原则：Tenant Context 不可缺失
 
-      // 如果配置了默认租户 ID，使用默认值
+      // 如果配置了 defaultTenantId（废弃选项），使用默认值
+      // 注意：此行为仅用于向后兼容，将在后续版本中移除
       if (defaultTenantId) {
         const tenant = createTenantContext(defaultTenantId);
         setTenant(c, tenant);
@@ -59,6 +77,7 @@ export function tenantMiddleware(
       }
 
       // 如果租户是必填的，抛出错误
+      // 这是符合 Architecture.md 的标准行为
       if (required) {
         throw new MissingTenantContextError();
       }

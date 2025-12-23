@@ -34,6 +34,8 @@ export interface MTPCEnv extends Env {
 
 /**
  * 租户中间件配置选项
+ *
+ * @see Architecture.md - "Tenant Context 不可缺失" 原则
  */
 export interface TenantMiddlewareOptions {
   /**
@@ -45,12 +47,49 @@ export interface TenantMiddlewareOptions {
   /**
    * 是否必须提供租户信息
    * @default true
+   *
+   * @description
+   * - true: 请求必须包含租户信息，否则抛出 MissingTenantContextError
+   * - false: 允许不包含租户信息的请求（公开 API 场景）
+   *
+   * @example
+   * ```typescript
+   * // 多租户 API：必须提供租户
+   * tenantMiddleware({ required: true })
+   *
+   * // 公开 API：不需要租户
+   * tenantMiddleware({ required: false })
+   * ```
    */
   required?: boolean;
 
   /**
-   * 默认租户 ID
-   * 当请求头中没有租户信息时使用
+   * @deprecated
+   *
+   * 已移除此选项，原因如下：
+   *
+   * 1. **违背 Fail-safe 原则**：缺失 Tenant 时静默使用默认值，可能导致数据泄漏
+   * 2. **配置优先级混乱**：`defaultTenantId` 和 `required` 存在逻辑冲突
+   * 3. **语义不一致**：同一 API 在有/无 header 时使用不同租户
+   *
+   * **迁移指南**：
+   *
+   * 单租户模式（原来使用 defaultTenantId）：
+   * ```typescript
+   * // Before (deprecated)
+   * tenantMiddleware({ defaultTenantId: 'default' })
+   *
+   * // After (recommended)
+   * tenantMiddleware({ required: false })
+   * ```
+   *
+   * 多租户模式：
+   * ```typescript
+   * // 显式声明租户必填
+   * tenantMiddleware({ required: true })
+   * ```
+   *
+   * @see Architecture.md - "Tenant Context 不可缺失"
    */
   defaultTenantId?: string;
 

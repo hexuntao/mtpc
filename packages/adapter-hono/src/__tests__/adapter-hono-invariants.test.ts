@@ -80,8 +80,10 @@ describe('TC-HONO-001: Tenant 解析失败时拒绝 [架构级测试 - Fail-safe
     expect(next).toHaveBeenCalled();
   });
 
-  it('should use defaultTenantId when provided and no header', async () => {
+  it('should show deprecation warning when defaultTenantId is used', async () => {
     const { tenantMiddleware } = await import('../middleware/tenant.js');
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const middleware = tenantMiddleware({
       defaultTenantId: 'default-tenant',
@@ -93,14 +95,15 @@ describe('TC-HONO-001: Tenant 解析失败时拒绝 [架构级测试 - Fail-safe
 
     await middleware(ctx, next);
 
-    // 验证租户被设置为 default-tenant
-    expect(ctx.set).toHaveBeenCalledWith(
-      'tenant',
-      expect.objectContaining({
-        id: 'default-tenant',
-      })
+    // 验证废弃警告被触发
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[MTPC Deprecation Warning]')
     );
-    expect(next).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('defaultTenantId is deprecated')
+    );
+
+    warnSpy.mockRestore();
   });
 
   it('should reject invalid tenant ID format', async () => {
