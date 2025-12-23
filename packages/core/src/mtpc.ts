@@ -21,49 +21,140 @@ import type {
 } from './types/index.js';
 
 /**
- * MTPC configuration options
+ * MTPC 配置选项
+ * 用于初始化多租户权限核心实例的配置参数
  */
 export interface MTPCOptions {
+  /**
+   * 多租户配置选项
+   * 包括租户隔离级别、解析器等设置
+   */
   multiTenant?: MultiTenantOptions;
+
+  /**
+   * 默认权限解析器
+   * 用于将 (tenantId, subjectId) 映射为权限集合
+   * 如果未提供，将使用内置的基于策略的解析器
+   *
+   * @param tenantId 租户ID
+   * @param subjectId 主体ID（用户、服务等）
+   * @returns 权限代码集合，如 ['user:read', 'user:write']
+   */
   defaultPermissionResolver?: (tenantId: string, subjectId: string) => Promise<Set<string>>;
 }
 
 /**
- * MTPC - Multi-Tenant Permission Core
+ * MTPC - Multi-Tenant Permission Core (多租户权限核心)
  *
- * Main entry point for the MTPC library.
- * This class coordinates all MTPC subsystems.
+ * 这是 MTPC 库的**主入口类**，负责协调所有子系统：
+ * - 注册表系统 (Registry): 统一管理资源、权限、策略
+ * - 策略引擎 (PolicyEngine): 评估权限策略
+ * - 权限检查器 (PermissionChecker): 执行权限校验
+ * - 插件系统 (PluginManager): 管理插件生命周期
+ * - 钩子系统 (GlobalHooksManager): 处理横切关注点
+ * - 租户管理 (TenantManager): 多租户上下文管理
+ *
+ * **核心设计理念**：
+ * 1. **组合优于继承**: 通过组合各个子系统扩展功能
+ * 2. **单一职责**: 每个子系统专注自己的职责
+ * 3. **开放封闭**: 对扩展开放（插件），对修改封闭（冻结机制）
+ * 4. **依赖倒置**: 依赖抽象而非具体实现
  */
 export class MTPC {
+  // ========== 只读子系统引用（暴露给外部使用）==========
+
+  /** 注册表系统 - 统一管理所有注册信息（资源、权限、策略） */
   readonly registry: UnifiedRegistry;
+
+  /** 策略引擎 - 负责评估权限策略条件 */
   readonly policyEngine: DefaultPolicyEngine;
+
+  /** 权限检查器 - 执行具体的权限校验逻辑 */
   readonly permissionChecker: PermissionChecker;
+
+  /** 全局钩子管理器 - 管理横切关注点（审计、监控等） */
   readonly globalHooks: GlobalHooksManager;
+
+  /** 插件管理器 - 负责插件的注册、安装、生命周期管理 */
   readonly plugins: DefaultPluginManager;
+
+  /** 租户管理器 - 多租户上下文管理、缓存、存储抽象 */
   readonly tenants: TenantManager;
 
+  // ========== 私有属性 ==========
+
+  /** 存储初始化配置选项 */
   private options: MTPCOptions;
+
+  /** 标记 MTPC 实例是否已初始化（防止重复初始化） */
   private initialized = false;
 
+  /**
+   * 构造函数
+   * 初始化所有子系统并建立依赖关系
+   *
+   * **初始化顺序**（重要）：
+   * 1. 创建注册表系统
+   * 2. 创建策略引擎
+   * 3. 创建全局钩子管理器
+   * 4. 创建租户管理器
+   * 5. 创建插件上下文和插件管理器
+   * 6. 创建权限检查器（注入权限解析器）
+   *
+   * @param options MTPC 配置选项
+   */
   constructor(options: MTPCOptions = {}) {
     this.options = options;
+
+    // 步骤1: 创建统一注册表（所有资源的单一事实源）
     this.registry = createUnifiedRegistry();
+
+    // 步骤2: 创建策略引擎（负责权限策略评估）
     this.policyEngine = new DefaultPolicyEngine();
+
+    // 步骤3: 创建全局钩子管理器（横切关注点）
     this.globalHooks = createGlobalHooksManager();
+
+    // 步骤4: 创建租户管理器（多租户支持）
     this.tenants = createTenantManager();
 
-    // Create plugin manager with context
+    // 步骤5: 创建插件上下文和插件管理器
+    // 插件上下文提供插件与系统交互的接口
     const pluginContext = createPluginContext(this.registry, this.globalHooks);
     this.plugins = new DefaultPluginManager(pluginContext);
 
-    // Create permission checker
+    // 步骤6: 创建权限检查器
+    // 注入权限解析器：用户提供的或默认的基于策略的解析器
     this.permissionChecker = new PermissionChecker(
       options.defaultPermissionResolver ?? this.defaultPermissionResolver.bind(this)
     );
   }
 
+  // ========== 资源注册方法 ==========
+
   /**
-   * Register a resource
+   * 注册单个资源
+   * 这是 MTPC 的核心 API 之一，定义了系统中的权限控制对象
+   *
+   * **资源注册流程**：
+   * 1. 验证资源定义的完整性和有效性
+   * 2. 将资源添加到注册表
+   * 3. 自动生成该资源对应的权限（CRUD + 自定义权限）
+   * 4. 冻结注册表后不可再修改
+   *
+   * **示例**：
+   * ```typescript
+   * const userResource = defineResource({
+   *   name: 'user',
+   *   schema: z.object({ id: z.string(), name: z.string() }),
+   *   features: { create: true, read: true, update: true, delete: true }
+   * });
+   * mtpc.registerResource(userResource);
+   * // 自动生成权限: user:create, user:read, user:update, user:delete
+   * ```
+   *
+   * @param resource 资源定义
+   * @returns 返回 this 支持链式调用
    */
   registerResource(resource: ResourceDefinition): this {
     this.registry.registerResource(resource);
@@ -71,15 +162,50 @@ export class MTPC {
   }
 
   /**
-   * Register multiple resources
+   * 批量注册多个资源
+   * 内部调用 registerResource 逐个注册
+   *
+   * @param resources 资源定义数组
+   * @returns 返回 this 支持链式调用
    */
   registerResources(resources: ResourceDefinition[]): this {
     this.registry.registerResources(resources);
     return this;
   }
 
+  // ========== 策略注册方法 ==========
+
   /**
-   * Register a policy
+   * 注册权限策略
+   * 策略定义了**何时**允许或拒绝权限
+   *
+   * **策略注册流程**：
+   * 1. 验证策略定义的完整性
+   * 2. 编译策略（转换为高效的运行时格式）
+   * 3. 添加到注册表
+   * 4. 添加到策略引擎
+   *
+   * **示例策略**：
+   * ```typescript
+   * mtpc.registerPolicy({
+   *   id: 'only-business-hours',
+   *   name: '仅工作时间访问',
+   *   rules: [{
+   *     permissions: ['*'], // 所有权限
+   *     effect: 'allow',
+   *     conditions: [{
+   *       type: 'time',
+   *       operator: 'between',
+   *       value: { start: '09:00', end: '18:00' }
+   *     }]
+   *   }],
+   *   priority: 'high',
+   *   enabled: true
+   * });
+   * ```
+   *
+   * @param policy 策略定义
+   * @returns 返回 this 支持链式调用
    */
   registerPolicy(policy: PolicyDefinition): this {
     this.registry.registerPolicy(policy);
@@ -88,7 +214,11 @@ export class MTPC {
   }
 
   /**
-   * Register multiple policies
+   * 批量注册多个策略
+   * 内部调用 registerPolicy 逐个注册
+   *
+   * @param policies 策略定义数组
+   * @returns 返回 this 支持链式调用
    */
   registerPolicies(policies: PolicyDefinition[]): this {
     for (const policy of policies) {
@@ -97,31 +227,125 @@ export class MTPC {
     return this;
   }
 
+  // ========== 插件系统方法 ==========
+
   /**
-   * Register a plugin
+   * 注册插件
+   * 插件是扩展 MTPC 功能的主要方式
+   *
+   * **插件能力**：
+   * - 注册自定义资源
+   * - 注册自定义策略
+   * - 添加全局钩子
+   * - 扩展资源钩子
+   * - 提供外部服务集成
+   *
+   * **插件生命周期**：
+   * 1. register - 注册插件（此时不执行）
+   * 2. init - 初始化阶段（安装插件）
+   * 3. 运行期 - 插件功能生效
+   * 4. destroy - 销毁阶段（可选）
+   *
+   * **示例插件**：
+   * ```typescript
+   * const auditPlugin: PluginDefinition = {
+   *   name: 'audit-log',
+   *   version: '1.0.0',
+   *   install(ctx) {
+   *     ctx.registerGlobalHooks({
+   *       afterAny: async (ctx, op, resource, result) => {
+   *         await logAuditTrail(ctx, op, resource, result);
+   *       }
+   *     });
+   *   }
+   * };
+   * mtpc.use(auditPlugin);
+   * ```
+   *
+   * @param plugin 插件定义
+   * @returns 返回 this 支持链式调用
    */
   use(plugin: PluginDefinition): this {
     this.plugins.register(plugin);
     return this;
   }
 
+  // ========== 初始化方法 ==========
+
   /**
-   * Initialize MTPC (install all plugins)
+   * 初始化 MTPC 实例
+   * 这是**必须**调用的方法，用于完成系统启动
+   *
+   * **初始化流程**：
+   * 1. 检查是否已初始化（防重复）
+   * 2. 安装所有注册的插件（按依赖顺序）
+   * 3. 冻结注册表（确保运行时不可变）
+   * 4. 标记为已初始化
+   *
+   * **重要**：初始化完成后，注册表将被冻结，此时无法再注册新资源、策略或插件
+   * 这是为了确保运行时的稳定性和一致性
+   *
+   * **使用建议**：
+   * - 在应用启动时调用
+   * - 只调用一次
+   * - 在调用前完成所有资源、策略、插件的注册
+   *
+   * @returns 返回 this 支持链式调用
    */
   async init(): Promise<this> {
+    // 防重复初始化
     if (this.initialized) {
       return this;
     }
 
+    // 安装所有插件（拓扑排序，确保依赖先安装）
     await this.plugins.installAll();
+
+    // 冻结注册表（运行时安全措施）
     this.registry.freeze();
+
+    // 标记为已初始化
     this.initialized = true;
 
     return this;
   }
 
+  // ========== 上下文创建方法 ==========
+
   /**
-   * Create context for a request
+   * 创建请求上下文
+   * 用于权限检查和策略评估的上下文封装
+   *
+   * **上下文组成**：
+   * - tenant: 租户上下文（多租户隔离）
+   * - subject: 主体上下文（谁在执行操作）
+   * - request: 请求上下文（时间、IP、路径等）
+   *
+   * **使用场景**：
+   * - HTTP 请求处理
+   * - 消息队列处理
+   * - 定时任务执行
+   * - 内部服务调用
+   *
+   * **示例**：
+   * ```typescript
+   * // HTTP 中间件中
+   * const mtpcContext = mtpc.createContext(
+   *   tenantContext,
+   *   { id: userId, type: 'user', roles: ['admin'] }
+   * );
+   *
+   * // 权限检查
+   * const result = await mtpc.checkPermission({
+   *   ...mtpcContext,
+   *   resource: 'user',
+   *   action: 'delete'
+   * });
+   * ```
+   *
+   * @param tenant 租户上下文
+   * @param subject 主体上下文（可选，默认为匿名用户）
+   * @returns 完整的 MTPC 上下文
    */
   createContext(tenant: TenantContext, subject?: SubjectContext): MTPCContext {
     return createContext({
@@ -130,68 +354,171 @@ export class MTPC {
     });
   }
 
+  // ========== 权限检查方法 ==========
+
   /**
-   * Check permission
+   * 检查权限（返回结果）
+   * 核心权限检查 API，返回详细的检查结果
+   *
+   * **检查流程**：
+   * 1. 解析权限代码（resource:action）
+   * 2. 系统主体直接允许
+   * 3. 主体直接权限检查
+   * 4. 调用权限解析器获取权限集合
+   * 5. 通配符权限检查 (*, resource:*)
+   * 6. 具体权限匹配
+   * 7. 默认拒绝
+   *
+   * **返回结果包含**：
+   * - allowed: 是否允许
+   * - permission: 检查的权限代码
+   * - reason: 允许/拒绝的原因
+   * - evaluationTime: 评估耗时（毫秒）
+   *
+   * @param context 权限检查上下文
+   * @returns 权限检查结果
    */
   async checkPermission(context: PermissionCheckContext): Promise<PermissionCheckResult> {
     return this.permissionChecker.check(context);
   }
 
   /**
-   * Check permission and throw if denied
+   * 检查权限（拒绝时抛出异常）
+   * 便捷方法，权限不足时直接抛出 PermissionDeniedError
+   *
+   * **使用场景**：
+   * - HTTP 中间件（快速失败）
+   * - 业务逻辑中（清晰的权限控制点）
+   *
+   * **示例**：
+   * ```typescript
+   * // 业务逻辑中
+   * await mtpc.requirePermission({
+   *   ...context,
+   *   resource: 'order',
+   *   action: 'delete'
+   * });
+   *
+   * // 后续代码只有在权限通过时才执行
+   * await deleteOrder(orderId);
+   * ```
+   *
+   * @param context 权限检查上下文
+   * @returns 无返回值，权限不足时抛出异常
+   * @throws PermissionDeniedError 权限不足时
    */
   async requirePermission(context: PermissionCheckContext): Promise<void> {
     return this.permissionChecker.checkOrThrow(context);
   }
 
+  // ========== 策略评估方法 ==========
+
   /**
-   * Evaluate policy
+   * 评估策略
+   * 直接调用策略引擎进行条件评估
+   *
+   * **与 checkPermission 的区别**：
+   * - checkPermission: 完整的权限检查流程（包括权限解析）
+   * - evaluatePolicy: 仅评估策略条件（不包含权限解析）
+   *
+   * **使用场景**：
+   * - 调试策略问题
+   * - 策略解释功能
+   * - 策略覆盖率测试
+   * - 自定义权限检查逻辑
+   *
+   * @param context 策略评估上下文
+   * @returns 策略评估结果
    */
   async evaluatePolicy(context: PolicyEvaluationContext): Promise<PolicyEvaluationResult> {
     return this.policyEngine.evaluate(context);
   }
 
+  // ========== 元数据查询方法 ==========
+
   /**
-   * Get all permission codes
+   * 获取所有权限代码
+   * 返回对象形式，键为权限代码，值为权限描述
+   *
+   * **用途**：
+   * - 生成权限管理界面
+   * - API 文档生成
+   * - 权限矩阵展示
+   *
+   * @returns 权限代码对象，如 { 'user:create': '创建用户', 'user:read': '查看用户' }
    */
   getPermissionCodes(): Record<string, string> {
     return this.registry.getPermissionCodesObject();
   }
 
   /**
-   * Get all resource names
+   * 获取所有资源名称
+   * 返回已注册资源的名称列表
+   *
+   * @returns 资源名称数组，如 ['user', 'order', 'product']
    */
   getResourceNames(): string[] {
     return this.registry.resources.names();
   }
 
   /**
-   * Get resource by name
+   * 根据名称获取资源定义
+   * 用于动态资源访问和反射
+   *
+   * @param name 资源名称
+   * @returns 资源定义或 undefined（如果不存在）
    */
   getResource(name: string): ResourceDefinition | undefined {
     return this.registry.resources.get(name);
   }
 
   /**
-   * Export metadata for UI
+   * 导出元数据供 UI 使用
+   * 包含资源信息、权限、特性等，用于生成管理界面
+   *
+   * **包含内容**：
+   * - 资源列表（名称、显示名称）
+   * - 每个资源的权限列表
+   * - 资源特性（CRUD 能力）
+   * - 资源元数据（图标、分组等）
+   *
+   * @returns 元数据对象
    */
   exportMetadata(): ReturnType<UnifiedRegistry['exportMetadata']> {
     return this.registry.exportMetadata();
   }
 
+  // ========== 私有方法 ==========
+
   /**
-   * Default permission resolver (uses policies)
+   * 默认权限解析器
+   * 当用户未提供自定义权限解析器时使用
+   *
+   * **实现逻辑**（简化版）：
+   * 1. 获取租户的所有策略
+   * 2. 遍历策略的所有规则
+   * 3. 收集所有 allow 规则的权限
+   * 4. 返回权限集合
+   *
+   * **注意**：这是**简化实现**，实际项目中应该：
+   * - 考虑策略条件是否满足
+   * - 支持复杂的权限继承
+   * - 集成外部权限系统（RBAC、ABAC等）
+   *
+   * @param tenantId 租户ID
+   * @param subjectId 主体ID
+   * @returns 权限代码集合
    */
   private async defaultPermissionResolver(
     tenantId: string,
     subjectId: string
   ): Promise<Set<string>> {
-    // Get all permissions from policies for this tenant/subject
-    // This is a simplified implementation
     const permissions = new Set<string>();
 
+    // 获取租户的所有策略
     const policies = this.registry.policies.getForTenant(tenantId);
 
+    // 遍历策略规则，收集允许的权限
     for (const policy of policies) {
       for (const rule of policy.rules) {
         if (rule.effect === 'allow') {
@@ -205,15 +532,36 @@ export class MTPC {
     return permissions;
   }
 
+  // ========== 状态查询方法 ==========
+
   /**
-   * Check if initialized
+   * 检查是否已初始化
+   * 用于确保在正确的时机调用 init()
+   *
+   * @returns 是否已初始化
    */
   isInitialized(): boolean {
     return this.initialized;
   }
 
   /**
-   * Get summary
+   * 获取系统摘要信息
+   * 用于监控、日志、调试
+   *
+   * **包含信息**：
+   * - initialized: 是否已初始化
+   * - resources: 注册的资源数量
+   * - permissions: 注册的权限数量
+   * - policies: 注册的策略数量
+   * - plugins: 安装的插件数量
+   *
+   * **使用场景**：
+   * - 健康检查端点
+   * - 启动日志
+   * - 监控指标
+   * - 调试信息
+   *
+   * @returns 系统摘要信息
    */
   getSummary(): {
     initialized: boolean;
@@ -233,19 +581,63 @@ export class MTPC {
 }
 
 /**
- * Create MTPC instance
+ * 创建 MTPC 实例
+ * 工厂函数，便于创建和配置 MTPC 实例
+ *
+ * **推荐用法**：
+ * - 每个应用创建独立的 MTPC 实例
+ * - 根据环境传递不同配置
+ * - 在应用启动时创建并初始化
+ *
+ * **示例**：
+ * ```typescript
+ * const mtpc = createMTPC({
+ *   defaultPermissionResolver: async (tenantId, subjectId) => {
+ *     // 从数据库或外部服务加载权限
+ *     return await loadPermissionsFromDB(tenantId, subjectId);
+ *   }
+ * });
+ *
+ * // 注册资源、策略、插件
+ * mtpc.registerResources([...]);
+ * mtpc.registerPolicies([...]);
+ * mtpc.use(auditPlugin);
+ *
+ * // 初始化
+ * await mtpc.init();
+ * ```
+ *
+ * @param options MTPC 配置选项
+ * @returns MTPC 实例
  */
 export function createMTPC(options?: MTPCOptions): MTPC {
   return new MTPC(options);
 }
 
+// ========== 默认实例管理 ==========
+
 /**
- * Default MTPC instance
+ * 默认 MTPC 实例
+ * 单例模式，避免重复创建实例
+ * **注意**：仅用于简单场景，生产环境建议显式创建实例
  */
 let defaultInstance: MTPC | null = null;
 
 /**
- * Get or create default MTPC instance
+ * 获取或创建默认 MTPC 实例
+ * 线程安全（JS 是单线程）
+ *
+ * **使用建议**：
+ * - 小型项目或原型
+ * - 测试环境
+ * - 简单脚本工具
+ *
+ * **不推荐**：
+ * - 多实例场景
+ * - 不同配置需求
+ * - 微服务架构
+ *
+ * @returns 默认 MTPC 实例
  */
 export function getDefaultMTPC(): MTPC {
   if (!defaultInstance) {
@@ -255,7 +647,15 @@ export function getDefaultMTPC(): MTPC {
 }
 
 /**
- * Reset default instance (for testing)
+ * 重置默认实例
+ * **仅用于测试**，避免测试间的状态污染
+ *
+ * @example
+ * ```typescript
+ * beforeEach(() => {
+ *   resetDefaultMTPC(); // 清理之前的实例
+ * });
+ * ```
  */
 export function resetDefaultMTPC(): void {
   defaultInstance = null;
