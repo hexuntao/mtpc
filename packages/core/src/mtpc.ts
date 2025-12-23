@@ -15,6 +15,7 @@ import type {
   PolicyDefinition,
   PolicyEvaluationContext,
   PolicyEvaluationResult,
+  PolicyRule,
   ResourceDefinition,
   SubjectContext,
   TenantContext,
@@ -126,7 +127,7 @@ export class MTPC {
     // 步骤6: 创建权限检查器
     // 注入权限解析器：用户提供的或默认的基于策略的解析器
     this.permissionChecker = new PermissionChecker(
-      options.defaultPermissionResolver ?? this.defaultPermissionResolver.bind(this)
+      this.options.defaultPermissionResolver ?? this.defaultPermissionResolver.bind(this)
     );
   }
 
@@ -497,11 +498,17 @@ export class MTPC {
    * **实现逻辑**（简化版）：
    * 1. 获取租户的所有策略
    * 2. 遍历策略的所有规则
-   * 3. 收集所有 allow 规则的权限
-   * 4. 返回权限集合
+   * 3. 检查规则是否适用于当前主体（通过 subjectId）
+   * 4. 收集所有适用且允许的权限
+   * 5. 返回权限集合
+   *
+   * **主体匹配逻辑**：
+   * - 如果规则的 conditions 中包含 `subject.id` 字段条件，检查是否匹配当前 subjectId
+   * - 如果没有 subject 相关条件，则认为规则适用于所有主体
+   * - 支持通配符 `*` 表示所有主体
    *
    * **注意**：这是**简化实现**，实际项目中应该：
-   * - 考虑策略条件是否满足
+   * - 完整评估所有条件类型（field、time、ip、custom）
    * - 支持复杂的权限继承
    * - 集成外部权限系统（RBAC、ABAC等）
    *
@@ -521,15 +528,64 @@ export class MTPC {
     // 遍历策略规则，收集允许的权限
     for (const policy of policies) {
       for (const rule of policy.rules) {
-        if (rule.effect === 'allow') {
-          for (const perm of rule.permissions) {
-            permissions.add(perm);
-          }
+        // 只处理允许效果的规则
+        if (rule.effect !== 'allow') {
+          continue;
+        }
+
+        // 检查规则是否适用于当前主体
+        if (!this.ruleAppliesToSubject(rule, subjectId)) {
+          continue;
+        }
+
+        // 收集权限
+        for (const perm of rule.permissions) {
+          permissions.add(perm);
         }
       }
     }
 
     return permissions;
+  }
+
+  /**
+   * 检查规则是否适用于指定主体
+   *
+   * @param rule 策略规则
+   * @param subjectId 主体ID
+   * @returns 是否适用于该主体
+   */
+  private ruleAppliesToSubject(rule: PolicyRule, subjectId: string): boolean {
+    // 如果没有条件，规则适用于所有主体
+    if (!rule.conditions || rule.conditions.length === 0) {
+      return true;
+    }
+
+    // 检查是否有 subject.id 相关的条件
+    for (const condition of rule.conditions) {
+      if (condition.type === 'field' && condition.field === 'subject.id') {
+        // 检查条件值
+        if (condition.operator === 'eq' && condition.value === subjectId) {
+          return true;
+        }
+        if (
+          condition.operator === 'in' &&
+          Array.isArray(condition.value) &&
+          condition.value.includes(subjectId)
+        ) {
+          return true;
+        }
+        // 通配符匹配
+        if (condition.value === '*') {
+          return true;
+        }
+        // 如果有 subject.id 条件但不匹配，则规则不适用
+        return false;
+      }
+    }
+
+    // 没有 subject 相关条件，适用于所有主体
+    return true;
   }
 
   // ========== 状态查询方法 ==========

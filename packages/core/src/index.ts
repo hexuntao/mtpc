@@ -1,4 +1,4 @@
-// @mtpc/core - Multi-Tenant Permission Core
+// @mtpc/core - 多租户权限核心
 
 export * from './hooks/index.js';
 export * from './mtpc.js';
