@@ -1,18 +1,21 @@
-import type { MTPC, MTPCContext, SubjectContext, TenantContext } from '@mtpc/core';
+/**
+ * 此文件已废弃，类型定义已统一迁移至 types.ts
+ * 请从 '../types.js' 导入 MTPCVariables 和 MTPCEnv
+ *
+ * @deprecated 此文件仅用于向后兼容，请直接从 types.ts 导入
+ * @internal
+ */
+
+import type { MTPCEnv as CoreMTPCEnv, MTPCVariables as CoreMTPCVariables } from '../types.js';
 
 /**
- * Hono context variables for MTPC
+ * @deprecated 请从 types.ts 导入
+ * @internal
  */
-export interface MTPCVariables {
-  tenant: TenantContext;
-  subject: SubjectContext;
-  mtpcContext: MTPCContext;
-  mtpc: MTPC;
-}
+export type MTPCVariables = CoreMTPCVariables;
 
 /**
- * Extended Hono env with MTPC variables
+ * @deprecated 请从 types.ts 导入
+ * @internal
  */
-export interface MTPCEnv {
-  Variables: MTPCVariables;
-}
+export type MTPCEnv = CoreMTPCEnv;

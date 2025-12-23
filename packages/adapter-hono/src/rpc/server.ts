@@ -12,7 +12,14 @@ import { requirePermission } from '../middleware/permission.js';
 import type { ApiResponse, CRUDHandlers, ListQueryParams, MTPCEnv } from '../types.js';
 
 /**
- * Parse query params
+ * 解析查询参数
+ *
+ * **支持的查询参数**：
+ * - page: 页码（从 1 开始）
+ * - pageSize: 每页数量
+ *
+ * @param query - URL 查询参数对象
+ * @returns 解析后的查询选项
  */
 function parseQueryParams(query: ListQueryParams): QueryOptions {
   return {
@@ -24,7 +31,41 @@ function parseQueryParams(query: ListQueryParams): QueryOptions {
 }
 
 /**
- * Create RPC routes for resources
+ * 创建 RPC 风格的资源路由
+ *
+ * **RPC 风格 vs REST 风格**：
+ * - REST: 路径包含资源名，如 /users/:id
+ * - RPC: 路径更扁平，如 /users（操作通过 HTTP 方法区分）
+ *
+ * **生成的路由结构**：
+ * ```
+ * /{resourceName}          - GET (列表), POST (创建)
+ * /{resourceName}/:id      - GET (读取), PUT (更新), PATCH (部分更新), DELETE (删除)
+ * ```
+ *
+ * **特点**：
+ * - 每个路由都进行权限检查
+ * - 使用 Zod 进行请求体验证
+ * - 返回标准化的 API 响应格式
+ * - 支持根据资源定义动态生成路由
+ *
+ * @template T - 资源实体类型
+ * @param mtpc - MTPC 实例
+ * @param handlerFactory - CRUD 处理器工厂函数
+ * @returns 包含所有资源 RPC 路由的 Hono 应用实例
+ *
+ * @example
+ * ```typescript
+ * const rpcRoutes = createRPCRoutes<User>(mtpc, (resource) => {
+ *   if (resource.name === 'users') {
+ *     return new UserCRUDHandler(db);
+ *   }
+ *   return new DefaultCRUDHandler(db);
+ * });
+ *
+ * app.route('/rpc', rpcRoutes);
+ * // 生成路由: /rpc/users, /rpc/users/:id, /rpc/orders, /rpc/orders/:id, ...
+ * ```
  */
 export function createRPCRoutes<T>(
   mtpc: MTPC,
@@ -32,11 +73,14 @@ export function createRPCRoutes<T>(
 ): Hono<MTPCEnv> {
   const app = new Hono<MTPCEnv>();
 
+  // 遍历所有已注册的资源
   for (const resource of mtpc.registry.resources.list()) {
     const handlers = handlerFactory(resource);
     const basePath = `/${resource.name}`;
 
-    // List endpoint
+    // ==================== 列表端点 ====================
+    // GET /{resourceName}
+    // 返回分页的资源列表
     if (resource.features.list && handlers.list) {
       const listHandler = handlers.list;
       app.get(basePath, requirePermission(resource.name, 'list'), async c => {
@@ -50,7 +94,9 @@ export function createRPCRoutes<T>(
       });
     }
 
-    // Create endpoint
+    // ==================== 创建端点 ====================
+    // POST /{resourceName}
+    // 创建新资源，使用 createSchema 验证请求体
     if (resource.features.create && handlers.create) {
       const createHandler = handlers.create;
       app.post(
@@ -68,7 +114,9 @@ export function createRPCRoutes<T>(
       );
     }
 
-    // Read endpoint
+    // ==================== 读取端点 ====================
+    // GET /{resourceName}/:id
+    // 获取单个资源
     if (resource.features.read && handlers.read) {
       const readHandler = handlers.read;
       app.get(`${basePath}/:id`, requirePermission(resource.name, 'read'), async c => {
@@ -91,10 +139,13 @@ export function createRPCRoutes<T>(
       });
     }
 
-    // Update endpoint
+    // ==================== 更新端点 ====================
+    // PUT /{resourceName}/:id 和 PATCH /{resourceName}/:id
+    // 更新资源，使用 updateSchema 验证请求体
     if (resource.features.update && handlers.update) {
       const updateHandler = handlers.update;
 
+      // 统一的更新处理函数（PUT 和 PATCH 共用）
       const handleUpdate = async (
         c: Parameters<typeof app.put>[1] extends (c: infer C) => unknown ? C : never
       ) => {
@@ -117,6 +168,7 @@ export function createRPCRoutes<T>(
         return c.json({ success: true, data: result } satisfies ApiResponse<T>);
       };
 
+      // PUT：完整更新
       app.put(
         `${basePath}/:id`,
         requirePermission(resource.name, 'update'),
@@ -124,6 +176,7 @@ export function createRPCRoutes<T>(
         handleUpdate
       );
 
+      // PATCH：部分更新
       app.patch(
         `${basePath}/:id`,
         requirePermission(resource.name, 'update'),
@@ -132,7 +185,9 @@ export function createRPCRoutes<T>(
       );
     }
 
-    // Delete endpoint
+    // ==================== 删除端点 ====================
+    // DELETE /{resourceName}/:id
+    // 删除资源
     if (resource.features.delete && handlers.delete) {
       const deleteHandler = handlers.delete;
       app.delete(`${basePath}/:id`, requirePermission(resource.name, 'delete'), async c => {
@@ -162,7 +217,26 @@ export function createRPCRoutes<T>(
 }
 
 /**
- * Create typed RPC app
+ * 创建类型化的 RPC 应用
+ * 在 createRPCRoutes 基础上，将路由挂载到 /api 路径
+ *
+ * @template T - 资源实体类型
+ * @param mtpc - MTPC 实例
+ * @param handlerFactory - CRUD 处理器工厂函数
+ * @returns Hono 应用实例
+ *
+ * @example
+ * ```typescript
+ * const app = createTypedRPCApp<User>(mtpc, (resource) => {
+ *   return createDatabaseHandler(resource, db);
+ * });
+ *
+ * // 生成的路由示例:
+ * // /api/users - GET/POST
+ * // /api/users/:id - GET/PUT/PATCH/DELETE
+ * // /api/orders - GET/POST
+ * // /api/orders/:id - GET/PUT/PATCH/DELETE
+ * ```
  */
 export function createTypedRPCApp<T>(
   mtpc: MTPC,
@@ -171,6 +245,7 @@ export function createTypedRPCApp<T>(
   const app = new Hono<MTPCEnv>();
   const routes = createRPCRoutes(mtpc, handlerFactory);
 
+  // 将所有资源路由挂载到 /api 路径下
   app.route('/api', routes);
 
   return app;
