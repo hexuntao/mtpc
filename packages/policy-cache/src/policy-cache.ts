@@ -1,27 +1,37 @@
-import type { CompiledPolicy, SubjectContext, TenantContext } from '@mtpc/core';
 import { type CacheManager, createCacheManager } from './cache/cache-manager.js';
 import type { CacheStats, PermissionCacheEntry, PolicyCacheOptions } from './types.js';
 
 /**
- * Policy cache for MTPC
+ * MTPC 策略缓存类
+ * 用于缓存和管理权限信息，提高权限检查的性能
  */
 export class PolicyCache {
+  /** 缓存管理器实例 */
   private cacheManager: CacheManager;
+  /** 权限加载器，用于从数据源加载权限 */
   private permissionLoader?: (tenantId: string, subjectId: string) => Promise<Set<string>>;
 
+  /**
+   * 创建策略缓存实例
+   * @param options 策略缓存选项
+   */
   constructor(options: PolicyCacheOptions = {}) {
     this.cacheManager = createCacheManager(options);
   }
 
   /**
-   * Set permission loader
+   * 设置权限加载器
+   * @param loader 权限加载器函数
    */
   setPermissionLoader(loader: (tenantId: string, subjectId: string) => Promise<Set<string>>): void {
     this.permissionLoader = loader;
   }
 
   /**
-   * Get cached permissions for subject
+   * 获取主体的缓存权限
+   * @param tenantId 租户ID
+   * @param subjectId 主体ID
+   * @returns 权限集合或null（如果缓存不存在或已过期）
    */
   async getPermissions(tenantId: string, subjectId: string): Promise<Set<string> | null> {
     const key = `permissions:${tenantId}:${subjectId}`;
@@ -31,7 +41,7 @@ export class PolicyCache {
       return null;
     }
 
-    // Check expiration
+    // 检查缓存是否过期
     if (entry.expiresAt < Date.now()) {
       await this.cacheManager.delete(key);
       return null;
@@ -41,7 +51,12 @@ export class PolicyCache {
   }
 
   /**
-   * Set cached permissions
+   * 设置主体的缓存权限
+   * @param tenantId 租户ID
+   * @param subjectId 主体ID
+   * @param permissions 权限集合
+   * @param roles 角色列表（可选）
+   * @param ttl 生存时间（毫秒，可选）
    */
   async setPermissions(
     tenantId: string,
@@ -57,14 +72,19 @@ export class PolicyCache {
       permissions,
       roles,
       computedAt: now,
-      expiresAt: now + (ttl ?? 60000),
+      expiresAt: now + (ttl ?? 60000), // 默认TTL为60秒
     };
 
     await this.cacheManager.set(key, entry, ttl);
   }
 
   /**
-   * Get or load permissions
+   * 获取或加载主体的权限
+   * 如果缓存存在则直接返回，否则调用权限加载器加载并缓存
+   * @param tenantId 租户ID
+   * @param subjectId 主体ID
+   * @param ttl 生存时间（毫秒，可选）
+   * @returns 权限集合
    */
   async getOrLoadPermissions(
     tenantId: string,
@@ -88,7 +108,9 @@ export class PolicyCache {
   }
 
   /**
-   * Invalidate subject permissions
+   * 使主体的权限缓存失效
+   * @param tenantId 租户ID
+   * @param subjectId 主体ID
    */
   async invalidateSubject(tenantId: string, subjectId: string): Promise<void> {
     const key = `permissions:${tenantId}:${subjectId}`;
@@ -96,28 +118,32 @@ export class PolicyCache {
   }
 
   /**
-   * Invalidate all permissions for tenant
+   * 使租户的所有权限缓存失效
+   * @param tenantId 租户ID
+   * @returns 失效的缓存条目数
    */
   async invalidateTenant(tenantId: string): Promise<number> {
     return this.cacheManager.invalidateTenant(tenantId);
   }
 
   /**
-   * Clear all cache
+   * 清除所有缓存
    */
   async clear(): Promise<void> {
     await this.cacheManager.clear();
   }
 
   /**
-   * Get cache statistics
+   * 获取缓存统计信息
+   * @returns 缓存统计信息
    */
   getStats(): CacheStats {
     return this.cacheManager.getStats();
   }
 
   /**
-   * Create permission resolver for MTPC
+   * 创建MTPC的权限解析器
+   * @returns 权限解析器函数
    */
   createPermissionResolver(): (tenantId: string, subjectId: string) => Promise<Set<string>> {
     return (tenantId, subjectId) => this.getOrLoadPermissions(tenantId, subjectId);
@@ -125,7 +151,9 @@ export class PolicyCache {
 }
 
 /**
- * Create policy cache
+ * 创建策略缓存实例
+ * @param options 策略缓存选项
+ * @returns 策略缓存实例
  */
 export function createPolicyCache(options?: PolicyCacheOptions): PolicyCache {
   return new PolicyCache(options);
