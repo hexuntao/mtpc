@@ -2,35 +2,59 @@ import { sql } from 'drizzle-orm';
 import type { DrizzleDB } from '../types.js';
 
 /**
- * Migration record
+ * 数据库迁移系统
+ * 管理数据库 schema 版本和迁移执行
+ *
+ * **功能**：
+ * - 迁移注册和执行
+ * - 迁移历史记录
+ * - 回滚支持
+ * - MTPC 系统表迁移
+ */
+
+/**
+ * 迁移记录
+ * 存储在迁移表中的记录结构
  */
 interface MigrationRecord {
+  /** 迁移 ID */
   id: string;
+  /** 迁移名称 */
   name: string;
+  /** 执行时间 */
   executedAt: Date;
 }
 
 /**
- * Migration function type
+ * 迁移函数类型
+ * 执行迁移操作的函数
  */
 type MigrationFn = (db: DrizzleDB) => Promise<void>;
 
 /**
- * Migration definition
+ * 迁移定义
  */
 interface Migration {
+  /** 唯一标识符 */
   id: string;
+  /** 迁移名称 */
   name: string;
+  /** 升级函数 */
   up: MigrationFn;
+  /** 降级函数（可选） */
   down?: MigrationFn;
 }
 
 /**
- * Migration runner
+ * 迁移运行器
+ * 管理和执行数据库迁移
  */
 export class MigrationRunner {
+  /** 数据库实例 */
   private db: DrizzleDB;
+  /** 注册的迁移列表 */
   private migrations: Migration[] = [];
+  /** 迁移记录表名 */
   private tableName: string;
 
   constructor(db: DrizzleDB, options: { tableName?: string } = {}) {
@@ -39,7 +63,10 @@ export class MigrationRunner {
   }
 
   /**
-   * Register migration
+   * 注册单个迁移
+   *
+   * @param migration - 迁移定义
+   * @returns this，支持链式调用
    */
   register(migration: Migration): this {
     this.migrations.push(migration);
@@ -47,7 +74,10 @@ export class MigrationRunner {
   }
 
   /**
-   * Register multiple migrations
+   * 批量注册迁移
+   *
+   * @param migrations - 迁移定义数组
+   * @returns this，支持链式调用
    */
   registerMany(migrations: Migration[]): this {
     this.migrations.push(...migrations);
@@ -55,7 +85,8 @@ export class MigrationRunner {
   }
 
   /**
-   * Initialize migrations table
+   * 初始化迁移表
+   * 创建用于记录迁移历史的表
    */
   async init(): Promise<void> {
     await this.db.execute(
@@ -70,17 +101,21 @@ export class MigrationRunner {
   }
 
   /**
-   * Get executed migrations
+   * 获取已执行的迁移列表
+   *
+   * @returns 迁移记录数组
    */
   async getExecuted(): Promise<MigrationRecord[]> {
     const result = await this.db.execute(
       sql.raw(`SELECT * FROM ${this.tableName} ORDER BY executed_at`)
     );
-    return result as MigrationRecord[];
+    return result as unknown as MigrationRecord[];
   }
 
   /**
-   * Get pending migrations
+   * 获取待执行的迁移列表
+   *
+   * @returns 未执行的迁移数组
    */
   async getPending(): Promise<Migration[]> {
     const executed = await this.getExecuted();
@@ -89,7 +124,9 @@ export class MigrationRunner {
   }
 
   /**
-   * Run pending migrations
+   * 执行所有待执行的迁移
+   *
+   * @returns 执行的迁移 ID 数组
    */
   async migrate(): Promise<string[]> {
     await this.init();
@@ -119,7 +156,11 @@ export class MigrationRunner {
   }
 
   /**
-   * Rollback last migration
+   * 回滚最后一次迁移
+   *
+   * @returns 回滚的迁移 ID，如果没有可回滚的迁移则返回 null
+   *
+   * @throws {Error} 如果迁移不支持回滚
    */
   async rollback(): Promise<string | null> {
     await this.init();
@@ -154,12 +195,13 @@ export class MigrationRunner {
   }
 
   /**
-   * Reset all migrations
+   * 重置所有迁移
+   * 回滚所有已执行的迁移
    */
   async reset(): Promise<void> {
     const executed = await this.getExecuted();
 
-    // Rollback in reverse order
+    // 按相反顺序回滚
     for (let i = executed.length - 1; i >= 0; i--) {
       await this.rollback();
     }
@@ -167,7 +209,11 @@ export class MigrationRunner {
 }
 
 /**
- * Create migration runner
+ * 创建迁移运行器
+ *
+ * @param db - 数据库实例
+ * @param options - 可选配置
+ * @returns 迁移运行器实例
  */
 export function createMigrationRunner(
   db: DrizzleDB,
@@ -177,7 +223,15 @@ export function createMigrationRunner(
 }
 
 /**
- * Create MTPC system tables migration
+ * 创建 MTPC 系统表迁移
+ * 初始化 MTPC 框架所需的系统表
+ *
+ * **创建的表**：
+ * - `tenants` - 租户表
+ * - `permission_assignments` - 权限分配表
+ * - `audit_logs` - 审计日志表
+ *
+ * @returns 迁移定义
  */
 export function createSystemTablesMigration(): Migration {
   return {

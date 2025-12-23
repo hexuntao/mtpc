@@ -5,7 +5,14 @@ import type { DrizzleDB } from '../types.js';
 import { BaseRepository } from './base-repository.js';
 
 /**
- * Tenant-aware repository with additional features
+ * 租户仓储类
+ * 扩展基础仓储，提供租户相关的批量操作和软删除功能
+ *
+ * **功能**：
+ * - 所有租户数据的查询
+ * - 批量创建、更新、删除
+ * - 软删除恢复
+ * - 包含已删除数据的查询
  */
 export class TenantRepository<T extends Record<string, unknown>> extends BaseRepository<T> {
   constructor(db: DrizzleDB, table: PgTable, tableName: string) {
@@ -13,7 +20,10 @@ export class TenantRepository<T extends Record<string, unknown>> extends BaseRep
   }
 
   /**
-   * Find all for tenant (no pagination)
+   * 查询租户的所有数据（无分页）
+   *
+   * @param ctx - MTPC 上下文
+   * @returns 所有记录
    */
   async findAllForTenant(ctx: MTPCContext): Promise<T[]> {
     const tableAny = this.table as any;
@@ -27,7 +37,11 @@ export class TenantRepository<T extends Record<string, unknown>> extends BaseRep
   }
 
   /**
-   * Bulk create
+   * 批量创建记录
+   *
+   * @param ctx - MTPC 上下文
+   * @param items - 记录数据数组
+   * @returns 创建的记录数组
    */
   async createMany(ctx: MTPCContext, items: Partial<T>[]): Promise<T[]> {
     const now = new Date();
@@ -49,7 +63,12 @@ export class TenantRepository<T extends Record<string, unknown>> extends BaseRep
   }
 
   /**
-   * Bulk update
+   * 批量更新记录
+   *
+   * @param ctx - MTPC 上下文
+   * @param ids - 记录 ID 数组
+   * @param data - 更新数据
+   * @returns 更新的记录数量
    */
   async updateMany(ctx: MTPCContext, ids: string[], data: Partial<T>): Promise<number> {
     const tableAny = this.table as any;
@@ -70,7 +89,11 @@ export class TenantRepository<T extends Record<string, unknown>> extends BaseRep
   }
 
   /**
-   * Bulk delete
+   * 批量删除记录（硬删除）
+   *
+   * @param ctx - MTPC 上下文
+   * @param ids - 记录 ID 数组
+   * @returns 删除的记录数量
    */
   async deleteMany(ctx: MTPCContext, ids: string[]): Promise<number> {
     const tableAny = this.table as any;
@@ -84,7 +107,11 @@ export class TenantRepository<T extends Record<string, unknown>> extends BaseRep
   }
 
   /**
-   * Bulk soft delete
+   * 批量软删除记录
+   *
+   * @param ctx - MTPC 上下文
+   * @param ids - 记录 ID 数组
+   * @returns 删除的记录数量
    */
   async softDeleteMany(ctx: MTPCContext, ids: string[]): Promise<number> {
     const tableAny = this.table as any;
@@ -102,7 +129,11 @@ export class TenantRepository<T extends Record<string, unknown>> extends BaseRep
   }
 
   /**
-   * Restore soft deleted
+   * 恢复软删除的记录
+   *
+   * @param ctx - MTPC 上下文
+   * @param id - 记录 ID
+   * @returns 恢复的记录或 null
    */
   async restore(ctx: MTPCContext, id: string): Promise<T | null> {
     const tableAny = this.table as any;
@@ -122,7 +153,11 @@ export class TenantRepository<T extends Record<string, unknown>> extends BaseRep
   }
 
   /**
-   * Find including soft deleted
+   * 查找记录（包含已软删除的）
+   *
+   * @param ctx - MTPC 上下文
+   * @param id - 记录 ID
+   * @returns 记录或 null
    */
   async findByIdIncludingDeleted(ctx: MTPCContext, id: string): Promise<T | null> {
     const tableAny = this.table as any;
@@ -137,7 +172,11 @@ export class TenantRepository<T extends Record<string, unknown>> extends BaseRep
   }
 
   /**
-   * Find deleted items
+   * 查询已删除的记录
+   *
+   * @param ctx - MTPC 上下文
+   * @param options - 查询选项
+   * @returns 已删除记录的分页结果
    */
   async findDeleted(ctx: MTPCContext, options: QueryOptions = {}): Promise<PaginatedResult<T>> {
     const tableAny = this.table as any;
@@ -145,7 +184,7 @@ export class TenantRepository<T extends Record<string, unknown>> extends BaseRep
     const { page = 1, pageSize = 20 } = pagination;
     const offset = (page - 1) * pageSize;
 
-    // Count
+    // 计数
     const countResult = await this.db
       .select({ count: sql`count(*)` })
       .from(this.table)
@@ -154,7 +193,7 @@ export class TenantRepository<T extends Record<string, unknown>> extends BaseRep
     const total = Number(countResult[0]?.count ?? 0);
     const totalPages = Math.ceil(total / pageSize);
 
-    // Data
+    // 数据查询
     const data = await this.db
       .select()
       .from(this.table)

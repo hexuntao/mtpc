@@ -5,16 +5,28 @@ import type {
   QueryOptions,
   SortOptions,
 } from '@mtpc/core';
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, like, or, sql } from 'drizzle-orm';
-import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, like, sql } from 'drizzle-orm';
+import type { PgTable } from 'drizzle-orm/pg-core';
 import type { DrizzleDB, Repository } from '../types.js';
 
 /**
- * Base repository class
+ * 基础仓储类
+ * 实现通用的数据访问层 CRUD 操作
+ *
+ * **功能**：
+ * - 基本的 CRUD 操作
+ * - 分页查询
+ * - 条件过滤
+ * - 排序
+ * - 软删除支持
+ * - 自动租户隔离
  */
 export class BaseRepository<T extends Record<string, unknown>> implements Repository<T> {
+  /** 数据库实例 */
   protected db: DrizzleDB;
+  /** Drizzle 表定义 */
   protected table: PgTable;
+  /** 表名 */
   protected tableName: string;
 
   constructor(db: DrizzleDB, table: PgTable, tableName: string) {
@@ -24,7 +36,11 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
   }
 
   /**
-   * Find by ID
+   * 根据 ID 查找记录
+   *
+   * @param ctx - MTPC 上下文
+   * @param id - 记录 ID
+   * @returns 记录或 null
    */
   async findById(ctx: MTPCContext, id: string): Promise<T | null> {
     const tableAny = this.table as any;
@@ -39,28 +55,31 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
   }
 
   /**
-   * Find many with pagination
+   * 查询多条记录（带分页）
+   *
+   * @param ctx - MTPC 上下文
+   * @param options - 查询选项（分页、排序、过滤）
+   * @returns 分页结果
    */
   async findMany(ctx: MTPCContext, options: QueryOptions = {}): Promise<PaginatedResult<T>> {
     const { pagination = {}, sort = [], filters = [] } = options;
     const { page = 1, pageSize = 20 } = pagination;
 
-    const tableAny = this.table as any;
     const offset = (page - 1) * pageSize;
 
-    // Build where conditions
+    // 构建条件
     const conditions = this.buildWhereConditions(ctx, filters);
 
-    // Build order by
+    // 构建排序
     const orderBy = this.buildOrderBy(sort);
 
-    // Execute count query
+    // 执行计数查询
     const countResult = await this.db.select({ count: count() }).from(this.table).where(conditions);
 
     const total = Number(countResult[0]?.count ?? 0);
     const totalPages = Math.ceil(total / pageSize);
 
-    // Execute data query
+    // 执行数据查询
     let query = this.db.select().from(this.table).where(conditions).limit(pageSize).offset(offset);
 
     if (orderBy.length > 0) {
@@ -81,7 +100,11 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
   }
 
   /**
-   * Create record
+   * 创建记录
+   *
+   * @param ctx - MTPC 上下文
+   * @param data - 记录数据
+   * @returns 创建的记录
    */
   async create(ctx: MTPCContext, data: Partial<T>): Promise<T> {
     const now = new Date();
@@ -103,7 +126,12 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
   }
 
   /**
-   * Update record
+   * 更新记录
+   *
+   * @param ctx - MTPC 上下文
+   * @param id - 记录 ID
+   * @param data - 更新数据
+   * @returns 更新后的记录或 null
    */
   async update(ctx: MTPCContext, id: string, data: Partial<T>): Promise<T | null> {
     const tableAny = this.table as any;
@@ -124,7 +152,11 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
   }
 
   /**
-   * Delete record
+   * 删除记录（硬删除）
+   *
+   * @param ctx - MTPC 上下文
+   * @param id - 记录 ID
+   * @returns 是否删除成功
    */
   async delete(ctx: MTPCContext, id: string): Promise<boolean> {
     const tableAny = this.table as any;
@@ -138,7 +170,11 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
   }
 
   /**
-   * Soft delete record
+   * 软删除记录
+   *
+   * @param ctx - MTPC 上下文
+   * @param id - 记录 ID
+   * @returns 是否删除成功
    */
   async softDelete(ctx: MTPCContext, id: string): Promise<boolean> {
     const tableAny = this.table as any;
@@ -156,7 +192,11 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
   }
 
   /**
-   * Count records
+   * 统计记录数量
+   *
+   * @param ctx - MTPC 上下文
+   * @param options - 查询选项（过滤条件）
+   * @returns 记录数量
    */
   async count(ctx: MTPCContext, options: QueryOptions = {}): Promise<number> {
     const { filters = [] } = options;
@@ -168,7 +208,11 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
   }
 
   /**
-   * Find one by conditions
+   * 根据条件查找单条记录
+   *
+   * @param ctx - MTPC 上下文
+   * @param conditions - 过滤条件
+   * @returns 记录或 null
    */
   async findOne(ctx: MTPCContext, conditions: FilterCondition[]): Promise<T | null> {
     const whereConditions = this.buildWhereConditions(ctx, conditions);
@@ -179,7 +223,11 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
   }
 
   /**
-   * Check if exists
+   * 检查记录是否存在
+   *
+   * @param ctx - MTPC 上下文
+   * @param id - 记录 ID
+   * @returns 是否存在
    */
   async exists(ctx: MTPCContext, id: string): Promise<boolean> {
     const tableAny = this.table as any;
@@ -193,13 +241,32 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
   }
 
   /**
-   * Build where conditions
+   * 构建查询条件
+   * 将过滤条件转换为 Drizzle 条件表达式
+   *
+   * @param ctx - MTPC 上下文
+   * @param filters - 过滤条件
+   * @returns Drizzle 条件
+   *
+   **支持的运算符**：
+   * - `eq` - 等于
+   * - `neq` - 不等于
+   * - `gt` - 大于
+   * - `gte` - 大于等于
+   * - `lt` - 小于
+   * - `lte` - 小于等于
+   * - `in` - 在数组中
+   * - `contains` - 包含
+   * - `startsWith` - 以...开头
+   * - `endsWith` - 以...结尾
+   * - `isNull` - 为空
+   * - `isNotNull` - 不为空
    */
   protected buildWhereConditions(ctx: MTPCContext, filters: FilterCondition[]) {
     const tableAny = this.table as any;
     const conditions: any[] = [eq(tableAny.tenantId, ctx.tenant.id)];
 
-    // Exclude soft deleted by default
+    // 默认排除已软删除的记录
     if (tableAny.deletedAt) {
       conditions.push(isNull(tableAny.deletedAt));
     }
@@ -254,7 +321,11 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
   }
 
   /**
-   * Build order by
+   * 构建排序条件
+   * 将排序选项转换为 Drizzle 排序表达式
+   *
+   * @param sort - 排序选项
+   * @returns Drizzle 排序表达式
    */
   protected buildOrderBy(sort: SortOptions[]): any[] {
     const tableAny = this.table as any;
@@ -267,7 +338,7 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
       orderBy.push(s.direction === 'desc' ? desc(column) : asc(column));
     }
 
-    // Default sort by createdAt desc
+    // 默认按创建时间降序
     if (orderBy.length === 0 && tableAny.createdAt) {
       orderBy.push(desc(tableAny.createdAt));
     }

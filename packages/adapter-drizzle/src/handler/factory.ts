@@ -1,15 +1,24 @@
 import type { ResourceDefinition } from '@mtpc/core';
 import { toSnakeCase } from '@mtpc/shared';
 import type { PgTable } from 'drizzle-orm/pg-core';
-import type { CRUDHandler, DrizzleDB } from '../types.js';
+import type { DrizzleDB } from '../types.js';
 import { DrizzleCRUDHandler } from './crud-handler.js';
 
 /**
- * Handler factory for MTPC resources
+ * Drizzle 处理器工厂
+ * 为 MTPC 资源创建和管理 CRUD 处理器
+ *
+ * **功能**：
+ * - 创建资源的 CRUD 处理器
+ * - 处理器缓存
+ * - 表名映射
  */
 export class DrizzleHandlerFactory {
+  /** 数据库实例 */
   private db: DrizzleDB;
+  /** 表名到表定义的映射 */
   private tables: Map<string, PgTable>;
+  /** 处理器缓存 */
   private handlers: Map<string, DrizzleCRUDHandler<any>>;
 
   constructor(db: DrizzleDB, tables: Record<string, PgTable>) {
@@ -19,7 +28,10 @@ export class DrizzleHandlerFactory {
   }
 
   /**
-   * Create handler for resource
+   * 为资源创建处理器
+   *
+   * @param resource - 资源定义
+   * @returns CRUD 处理器实例
    */
   createHandler<T extends Record<string, unknown>>(
     resource: ResourceDefinition
@@ -43,21 +55,27 @@ export class DrizzleHandlerFactory {
   }
 
   /**
-   * Get factory function for Hono adapter
+   * 获取用于 Hono 适配器的工厂函数
+   *
+   * @returns 工厂函数
    */
   getHandlerFactoryFn() {
     return (resource: ResourceDefinition) => this.createHandler(resource);
   }
 
   /**
-   * Register table
+   * 注册表定义
+   *
+   * @param name - 表名
+   * @param table - Drizzle 表定义
    */
   registerTable(name: string, table: PgTable): void {
     this.tables.set(name, table);
   }
 
   /**
-   * Clear handler cache
+   * 清空处理器缓存
+   * 强制下次获取时重新创建处理器
    */
   clearCache(): void {
     this.handlers.clear();
@@ -65,7 +83,11 @@ export class DrizzleHandlerFactory {
 }
 
 /**
- * Create handler factory
+ * 创建 Drizzle 处理器工厂
+ *
+ * @param db - 数据库实例
+ * @param tables - 表名到表定义的映射
+ * @returns 处理器工厂实例
  */
 export function createDrizzleHandlerFactory(
   db: DrizzleDB,
@@ -75,7 +97,11 @@ export function createDrizzleHandlerFactory(
 }
 
 /**
- * Create handler factory function for Hono
+ * 创建用于 Hono 的处理器工厂函数
+ *
+ * @param db - 数据库实例
+ * @param tables - 表名到表定义的映射
+ * @returns 工厂函数
  */
 export function createHandlerFactory(db: DrizzleDB, tables: Record<string, PgTable>) {
   const factory = new DrizzleHandlerFactory(db, tables);

@@ -1,4 +1,4 @@
-import type { FilterCondition, MTPCContext, SortOptions } from '@mtpc/core';
+import type { MTPCContext } from '@mtpc/core';
 import {
   and,
   asc,
@@ -9,7 +9,6 @@ import {
   isNotNull,
   isNull,
   like,
-  not,
   or,
   sql,
 } from 'drizzle-orm';
@@ -17,31 +16,59 @@ import type { PgTable } from 'drizzle-orm/pg-core';
 import type { DrizzleDB } from '../types.js';
 
 /**
- * Query builder for complex queries
+ * 查询构建器
+ * 提供流畅的 API 用于构建复杂的数据库查询
+ *
+ * **功能**：
+ * - 链式查询构建
+ * - 条件过滤（where、whereIn、whereLike 等）
+ * - 排序
+ * - 分页
+ * - 列选择
+ * - 软删除控制
+ *
+ * **示例**：
+ * ```ts
+ * const users = await createQueryBuilder(db, usersTable, ctx)
+ *   .whereEquals('status', 'active')
+ *   .whereLike('name', 'John%')
+ *   .orderBy('createdAt', 'desc')
+ *   .limit(10)
+ *   .getMany();
+ * ```
  */
 export class QueryBuilder<T extends Record<string, unknown>> {
+  /** 数据库实例 */
   private db: DrizzleDB;
+  /** Drizzle 表定义 */
   private table: PgTable;
-  private ctx: MTPCContext;
+  /** 查询条件列表 */
   private conditions: any[] = [];
+  /** 排序条件列表 */
   private sortOptions: any[] = [];
+  /** 限制数量 */
   private limitValue?: number;
+  /** 偏移量 */
   private offsetValue?: number;
-  private selectColumns: string[] = [];
+  /** 是否包含已软删除的记录 */
   private includeSoftDeleted = false;
 
-  constructor(db: DrizzleDB, table: PgTable, ctx: MTPCContext) {
+  constructor(db: DrizzleDB, table: PgTable, _ctx: MTPCContext) {
     this.db = db;
     this.table = table;
-    this.ctx = ctx;
 
-    // Always filter by tenant
+    // 始终按租户过滤
     const tableAny = table as any;
-    this.conditions.push(eq(tableAny.tenantId, ctx.tenant.id));
+    this.conditions.push(eq(tableAny.tenantId, _ctx.tenant.id));
   }
 
   /**
-   * Add where condition
+   * 添加 where 条件
+   *
+   * @param field - 字段名
+   * @param operator - 运算符
+   * @param value - 值
+   * @returns this，支持链式调用
    */
   where(field: string, operator: string, value: unknown): this {
     const tableAny = this.table as any;
@@ -58,42 +85,65 @@ export class QueryBuilder<T extends Record<string, unknown>> {
   }
 
   /**
-   * Add where equals condition
+   * 添加等于条件
+   *
+   * @param field - 字段名
+   * @param value - 值
+   * @returns this，支持链式调用
    */
   whereEquals(field: string, value: unknown): this {
     return this.where(field, 'eq', value);
   }
 
   /**
-   * Add where in condition
+   * 添加 IN 条件
+   *
+   * @param field - 字段名
+   * @param values - 值数组
+   * @returns this，支持链式调用
    */
   whereIn(field: string, values: unknown[]): this {
     return this.where(field, 'in', values);
   }
 
   /**
-   * Add where like condition
+   * 添加 LIKE 条件
+   *
+   * @param field - 字段名
+   * @param pattern - 匹配模式
+   * @returns this，支持链式调用
    */
   whereLike(field: string, pattern: string): this {
     return this.where(field, 'like', pattern);
   }
 
   /**
-   * Add where null condition
+   * 添加 IS NULL 条件
+   *
+   * @param field - 字段名
+   * @returns this，支持链式调用
    */
   whereNull(field: string): this {
     return this.where(field, 'isNull', null);
   }
 
   /**
-   * Add where not null condition
+   * 添加 IS NOT NULL 条件
+   *
+   * @param field - 字段名
+   * @returns this，支持链式调用
    */
   whereNotNull(field: string): this {
     return this.where(field, 'isNotNull', null);
   }
 
   /**
-   * Add where between condition
+   * 添加 BETWEEN 条件
+   *
+   * @param field - 字段名
+   * @param min - 最小值
+   * @param max - 最大值
+   * @returns this，支持链式调用
    */
   whereBetween(field: string, min: unknown, max: unknown): this {
     const tableAny = this.table as any;
@@ -108,7 +158,10 @@ export class QueryBuilder<T extends Record<string, unknown>> {
   }
 
   /**
-   * Add or where condition
+   * 添加 OR 条件
+   *
+   * @param conditions - 条件数组
+   * @returns this，支持链式调用
    */
   orWhere(conditions: Array<{ field: string; operator: string; value: unknown }>): this {
     const tableAny = this.table as any;
@@ -128,7 +181,11 @@ export class QueryBuilder<T extends Record<string, unknown>> {
   }
 
   /**
-   * Add order by
+   * 添加排序
+   *
+   * @param field - 字段名
+   * @param direction - 排序方向
+   * @returns this，支持链式调用
    */
   orderBy(field: string, direction: 'asc' | 'desc' = 'asc'): this {
     const tableAny = this.table as any;
@@ -143,7 +200,10 @@ export class QueryBuilder<T extends Record<string, unknown>> {
   }
 
   /**
-   * Set limit
+   * 设置限制数量
+   *
+   * @param value - 限制数量
+   * @returns this，支持链式调用
    */
   limit(value: number): this {
     this.limitValue = value;
@@ -151,7 +211,10 @@ export class QueryBuilder<T extends Record<string, unknown>> {
   }
 
   /**
-   * Set offset
+   * 设置偏移量
+   *
+   * @param value - 偏移量
+   * @returns this，支持链式调用
    */
   offset(value: number): this {
     this.offsetValue = value;
@@ -159,15 +222,20 @@ export class QueryBuilder<T extends Record<string, unknown>> {
   }
 
   /**
-   * Select specific columns
+   * 选择特定列
+   *
+   * @param _columns - 列名数组
+   * @returns this，支持链式调用
    */
-  select(...columns: string[]): this {
-    this.selectColumns = columns;
+  select(..._columns: string[]): this {
+    // TODO: 实现列选择功能
     return this;
   }
 
   /**
-   * Include soft deleted records
+   * 包含已软删除的记录
+   *
+   * @returns this，支持链式调用
    */
   withDeleted(): this {
     this.includeSoftDeleted = true;
@@ -175,7 +243,9 @@ export class QueryBuilder<T extends Record<string, unknown>> {
   }
 
   /**
-   * Execute and get all results
+   * 执行查询并返回所有结果
+   *
+   * @returns 查询结果数组
    */
   async getMany(): Promise<T[]> {
     this.applyDefaultFilters();
@@ -201,7 +271,9 @@ export class QueryBuilder<T extends Record<string, unknown>> {
   }
 
   /**
-   * Execute and get first result
+   * 执行查询并返回第一条结果
+   *
+   * @returns 第一条记录或 null
    */
   async getOne(): Promise<T | null> {
     const results = await this.limit(1).getMany();
@@ -209,7 +281,9 @@ export class QueryBuilder<T extends Record<string, unknown>> {
   }
 
   /**
-   * Get count
+   * 获取记录数量
+   *
+   * @returns 记录数量
    */
   async count(): Promise<number> {
     this.applyDefaultFilters();
@@ -223,7 +297,9 @@ export class QueryBuilder<T extends Record<string, unknown>> {
   }
 
   /**
-   * Check if exists
+   * 检查是否存在记录
+   *
+   * @returns 是否存在
    */
   async exists(): Promise<boolean> {
     const count = await this.count();
@@ -231,7 +307,12 @@ export class QueryBuilder<T extends Record<string, unknown>> {
   }
 
   /**
-   * Build condition from operator
+   * 根据运算符构建条件
+   *
+   * @param column - 列
+   * @param operator - 运算符
+   * @param value - 值
+   * @returns Drizzle 条件表达式
    */
   private buildCondition(column: any, operator: string, value: unknown): any {
     switch (operator) {
@@ -261,12 +342,13 @@ export class QueryBuilder<T extends Record<string, unknown>> {
   }
 
   /**
-   * Apply default filters
+   * 应用默认过滤器
+   * 自动排除已软删除的记录
    */
   private applyDefaultFilters(): void {
     const tableAny = this.table as any;
 
-    // Exclude soft deleted by default
+    // 默认排除已软删除的记录
     if (!this.includeSoftDeleted && tableAny.deletedAt) {
       this.conditions.push(isNull(tableAny.deletedAt));
     }
@@ -274,7 +356,12 @@ export class QueryBuilder<T extends Record<string, unknown>> {
 }
 
 /**
- * Create query builder
+ * 创建查询构建器
+ *
+ * @param db - 数据库实例
+ * @param table - Drizzle 表定义
+ * @param ctx - MTPC 上下文
+ * @returns 查询构建器实例
  */
 export function createQueryBuilder<T extends Record<string, unknown>>(
   db: DrizzleDB,
