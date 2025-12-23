@@ -1,15 +1,16 @@
 import { zValidator } from '@hono/zod-validator';
-import { getMTPCContext, InMemoryCRUDHandler, requirePermission } from '@mtpc/adapter-hono';
+import { DrizzleCRUDHandler, getMTPCContext, requirePermission } from '@mtpc/adapter-hono';
 import { Hono } from 'hono';
-import { z } from 'zod';
+import { db } from '../db/connection.js';
+import { product } from '../db/schema.js';
 import { productResource } from '../resources.js';
 
 export const productRoutes = new Hono();
 
-// In-memory handler for demo
-const handler = new InMemoryCRUDHandler(productResource);
+// 使用数据库存储的处理器
+const handler = new DrizzleCRUDHandler(db, product, productResource);
 
-// List products
+// 列出产品
 productRoutes.get('/', requirePermission('product', 'list'), async c => {
   const ctx = getMTPCContext(c);
   const query = c.req.query();
@@ -22,7 +23,7 @@ productRoutes.get('/', requirePermission('product', 'list'), async c => {
   return c.json({ success: true, data: result });
 });
 
-// Get product by ID
+// 根据 ID 获取产品
 productRoutes.get('/:id', requirePermission('product', 'read'), async c => {
   const ctx = getMTPCContext(c);
   const id = c.req.param('id');
@@ -30,16 +31,13 @@ productRoutes.get('/:id', requirePermission('product', 'read'), async c => {
   const result = await handler.read(ctx, id);
 
   if (!result) {
-    return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Product not found' } },
-      404
-    );
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: '产品未找到' } }, 404);
   }
 
   return c.json({ success: true, data: result });
 });
 
-// Create product
+// 创建产品
 productRoutes.post(
   '/',
   requirePermission('product', 'create'),
@@ -54,7 +52,7 @@ productRoutes.post(
   }
 );
 
-// Update product
+// 更新产品
 productRoutes.put(
   '/:id',
   requirePermission('product', 'update'),
@@ -67,17 +65,14 @@ productRoutes.put(
     const result = await handler.update(ctx, id, data);
 
     if (!result) {
-      return c.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'Product not found' } },
-        404
-      );
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: '产品未找到' } }, 404);
     }
 
     return c.json({ success: true, data: result });
   }
 );
 
-// Delete product
+// 删除产品
 productRoutes.delete('/:id', requirePermission('product', 'delete'), async c => {
   const ctx = getMTPCContext(c);
   const id = c.req.param('id');
@@ -85,10 +80,7 @@ productRoutes.delete('/:id', requirePermission('product', 'delete'), async c => 
   const result = await handler.delete(ctx, id);
 
   if (!result) {
-    return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Product not found' } },
-      404
-    );
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: '产品未找到' } }, 404);
   }
 
   return c.json({ success: true, data: { deleted: true } });

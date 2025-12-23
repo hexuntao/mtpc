@@ -8,7 +8,10 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "seed": "tsx src/seed.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.2.0",
@@ -23,8 +26,12 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
+    "@hono/node-server": "^1.19.7",
+    "@types/node": "^20.19.27",
+    "@vitest/coverage-v8": "^4.0.16",
+    "supertest": "^7.1.4",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^4.0.16"
   }
 }

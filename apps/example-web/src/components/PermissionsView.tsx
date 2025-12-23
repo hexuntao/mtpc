@@ -1,4 +1,3 @@
-import React from 'react';
 import { usePermissions } from '../hooks/usePermissions';
 
 interface PermissionsViewProps {
@@ -7,16 +6,6 @@ interface PermissionsViewProps {
 
 export function PermissionsView({ permissions }: PermissionsViewProps) {
   const { roles, canAccess } = usePermissions();
-
-  // Group permissions by resource
-  const grouped = permissions.reduce((acc, perm) => {
-    const [resource] = perm.split(':');
-    if (!acc[resource]) {
-      acc[resource] = [];
-    }
-    acc[resource].push(perm);
-    return acc;
-  }, {} as Record<string, string[]>);
 
   // All possible permissions to check
   const allPermissions = [

@@ -1,14 +1,16 @@
 import { zValidator } from '@hono/zod-validator';
-import { getMTPCContext, InMemoryCRUDHandler, requirePermission } from '@mtpc/adapter-hono';
+import { DrizzleCRUDHandler, getMTPCContext, requirePermission } from '@mtpc/adapter-hono';
 import { Hono } from 'hono';
 import { orderResource } from '../resources.js';
+import { db } from '../db/connection.js';
+import { order } from '../db/schema.js';
 
 export const orderRoutes = new Hono();
 
-// In-memory handler for demo
-const handler = new InMemoryCRUDHandler(orderResource);
+// 使用数据库存储的处理器
+const handler = new DrizzleCRUDHandler(db, order, orderResource);
 
-// List orders
+// 列出订单
 orderRoutes.get('/', requirePermission('order', 'list'), async c => {
   const ctx = getMTPCContext(c);
   const query = c.req.query();
@@ -21,7 +23,7 @@ orderRoutes.get('/', requirePermission('order', 'list'), async c => {
   return c.json({ success: true, data: result });
 });
 
-// Get order by ID
+// 根据 ID 获取订单
 orderRoutes.get('/:id', requirePermission('order', 'read'), async c => {
   const ctx = getMTPCContext(c);
   const id = c.req.param('id');
@@ -30,7 +32,7 @@ orderRoutes.get('/:id', requirePermission('order', 'read'), async c => {
 
   if (!result) {
     return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } },
+      { success: false, error: { code: 'NOT_FOUND', message: '订单未找到' } },
       404
     );
   }
@@ -38,7 +40,7 @@ orderRoutes.get('/:id', requirePermission('order', 'read'), async c => {
   return c.json({ success: true, data: result });
 });
 
-// Create order
+// 创建订单
 orderRoutes.post(
   '/',
   requirePermission('order', 'create'),
@@ -47,7 +49,7 @@ orderRoutes.post(
     const ctx = getMTPCContext(c);
     const data = c.req.valid('json');
 
-    // Generate order number
+    // 生成订单号
     const orderData = {
       ...data,
       orderNumber: `ORD-${Date.now()}`,
@@ -61,7 +63,7 @@ orderRoutes.post(
   }
 );
 
-// Update order
+// 更新订单
 orderRoutes.put(
   '/:id',
   requirePermission('order', 'update'),
@@ -75,7 +77,7 @@ orderRoutes.put(
 
     if (!result) {
       return c.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } },
+        { success: false, error: { code: 'NOT_FOUND', message: '订单未找到' } },
         404
       );
     }
@@ -84,7 +86,7 @@ orderRoutes.put(
   }
 );
 
-// Confirm order (custom action)
+// 确认订单（自定义操作）
 orderRoutes.post('/:id/confirm', requirePermission('order:confirm'), async c => {
   const ctx = getMTPCContext(c);
   const id = c.req.param('id');
@@ -93,7 +95,7 @@ orderRoutes.post('/:id/confirm', requirePermission('order:confirm'), async c => 
 
   if (!result) {
     return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } },
+      { success: false, error: { code: 'NOT_FOUND', message: '订单未找到' } },
       404
     );
   }
@@ -101,7 +103,7 @@ orderRoutes.post('/:id/confirm', requirePermission('order:confirm'), async c => 
   return c.json({ success: true, data: result });
 });
 
-// Cancel order (custom action)
+// 取消订单（自定义操作）
 orderRoutes.post('/:id/cancel', requirePermission('order:cancel'), async c => {
   const ctx = getMTPCContext(c);
   const id = c.req.param('id');
@@ -110,7 +112,7 @@ orderRoutes.post('/:id/cancel', requirePermission('order:cancel'), async c => {
 
   if (!result) {
     return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } },
+      { success: false, error: { code: 'NOT_FOUND', message: '订单未找到' } },
       404
     );
   }

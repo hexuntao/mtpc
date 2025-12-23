@@ -6,16 +6,16 @@ import { roleRoutes } from './roles.js';
 
 export const apiRoutes = new Hono();
 
-// Mount resource routes
+// 挂载资源路由
 apiRoutes.route('/products', productRoutes);
 apiRoutes.route('/orders', orderRoutes);
 apiRoutes.route('/customers', customerRoutes);
 apiRoutes.route('/roles', roleRoutes);
 
-// Root API info
+// 根 API 信息
 apiRoutes.get('/', c => {
   return c.json({
-    name: 'MTPC Example API',
+    name: 'MTPC 示例 API',
     version: '0.1.0',
     endpoints: [
       '/api/products',

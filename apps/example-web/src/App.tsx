@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useEffect, useState } from 'react';
-import { api, setCurrentUser } from './api/client';
+import { setCurrentUser } from './api/client';
 import { PermissionsView } from './components/PermissionsView';
 import { ResourceView } from './components/ResourceView';
 import { RolesView } from './components/RolesView';

@@ -11,10 +11,10 @@ import { logger } from 'hono/logger';
 import { mtpc, rbac } from './mtpc.js';
 import { apiRoutes } from './routes/index.js';
 
-// Create Hono app
+// 创建 Hono 应用
 export const app = new Hono();
 
-// Global middleware
+// 全局中间件
 app.use(
   '*',
   cors({
@@ -24,10 +24,10 @@ app.use(
 );
 app.use('*', logger());
 
-// MTPC middleware
+// MTPC 中间件
 app.use('*', mtpcMiddleware(mtpc));
 
-// Tenant middleware for API routes
+// API 路由的租户中间件
 app.use(
   '/api/*',
   tenantMiddleware({
@@ -37,7 +37,7 @@ app.use(
   })
 );
 
-// Auth middleware for API routes
+// API 路由的认证中间件
 app.use(
   '/api/*',
   authMiddleware({
@@ -47,7 +47,7 @@ app.use(
   })
 );
 
-// Health check
+// 健康检查
 app.get('/health', c => {
   return c.json({
     status: 'ok',
@@ -56,16 +56,16 @@ app.get('/health', c => {
   });
 });
 
-// Mount API routes
+// 挂载 API 路由
 app.route('/api', apiRoutes);
 
-// Metadata endpoint
+// 元数据端点
 app.get('/api/metadata', c => {
   const metadata = mtpc.exportMetadata();
   return c.json({ success: true, data: metadata });
 });
 
-// Permissions endpoint
+// 权限端点
 app.get('/api/permissions', async c => {
   const tenantId = c.req.header('x-tenant-id') ?? 'default';
   const userId = c.req.header('x-user-id');
@@ -84,6 +84,6 @@ app.get('/api/permissions', async c => {
   });
 });
 
-// Error handling
+// 错误处理
 app.onError(mtpcErrorHandler({ includeStack: process.env.NODE_ENV !== 'production' }));
 app.notFound(notFoundHandler);

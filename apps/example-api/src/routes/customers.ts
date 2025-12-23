@@ -1,14 +1,16 @@
 import { zValidator } from '@hono/zod-validator';
-import { getMTPCContext, InMemoryCRUDHandler, requirePermission } from '@mtpc/adapter-hono';
+import { DrizzleCRUDHandler, getMTPCContext, requirePermission } from '@mtpc/adapter-hono';
 import { Hono } from 'hono';
 import { customerResource } from '../resources.js';
+import { db } from '../db/connection.js';
+import { customer } from '../db/schema.js';
 
 export const customerRoutes = new Hono();
 
-// In-memory handler for demo
-const handler = new InMemoryCRUDHandler(customerResource);
+// 使用数据库存储的处理器
+const handler = new DrizzleCRUDHandler(db, customer, customerResource);
 
-// List customers
+// 列出客户
 customerRoutes.get('/', requirePermission('customer', 'list'), async c => {
   const ctx = getMTPCContext(c);
   const query = c.req.query();
@@ -21,7 +23,7 @@ customerRoutes.get('/', requirePermission('customer', 'list'), async c => {
   return c.json({ success: true, data: result });
 });
 
-// Get customer by ID
+// 根据 ID 获取客户
 customerRoutes.get('/:id', requirePermission('customer', 'read'), async c => {
   const ctx = getMTPCContext(c);
   const id = c.req.param('id');
@@ -30,7 +32,7 @@ customerRoutes.get('/:id', requirePermission('customer', 'read'), async c => {
 
   if (!result) {
     return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } },
+      { success: false, error: { code: 'NOT_FOUND', message: '客户未找到' } },
       404
     );
   }
@@ -38,7 +40,7 @@ customerRoutes.get('/:id', requirePermission('customer', 'read'), async c => {
   return c.json({ success: true, data: result });
 });
 
-// Create customer
+// 创建客户
 customerRoutes.post(
   '/',
   requirePermission('customer', 'create'),
@@ -53,7 +55,7 @@ customerRoutes.post(
   }
 );
 
-// Update customer
+// 更新客户
 customerRoutes.put(
   '/:id',
   requirePermission('customer', 'update'),
@@ -67,7 +69,7 @@ customerRoutes.put(
 
     if (!result) {
       return c.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } },
+        { success: false, error: { code: 'NOT_FOUND', message: '客户未找到' } },
         404
       );
     }
@@ -76,7 +78,7 @@ customerRoutes.put(
   }
 );
 
-// Delete customer
+// 删除客户
 customerRoutes.delete('/:id', requirePermission('customer', 'delete'), async c => {
   const ctx = getMTPCContext(c);
   const id = c.req.param('id');
@@ -85,7 +87,7 @@ customerRoutes.delete('/:id', requirePermission('customer', 'delete'), async c =
 
   if (!result) {
     return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } },
+      { success: false, error: { code: 'NOT_FOUND', message: '客户未找到' } },
       404
     );
   }

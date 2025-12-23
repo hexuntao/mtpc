@@ -1,7 +1,7 @@
 import { defineResource } from '@mtpc/core';
 import { z } from 'zod';
 
-// Product resource
+// 产品资源
 export const productResource = defineResource({
   name: 'product',
   schema: z.object({
@@ -41,19 +41,19 @@ export const productResource = defineResource({
     },
   },
   permissions: [
-    { action: 'export', description: 'Export products' },
-    { action: 'import', description: 'Import products' },
+    { action: 'export', description: '导出产品' },
+    { action: 'import', description: '导入产品' },
   ],
   metadata: {
-    displayName: 'Product',
-    pluralName: 'Products',
-    description: 'Product catalog management',
+    displayName: '产品',
+    pluralName: '产品列表',
+    description: '产品目录管理',
     icon: 'package',
     group: 'catalog',
   },
 });
 
-// Order resource
+// 订单资源
 export const orderResource = defineResource({
   name: 'order',
   schema: z.object({
@@ -106,7 +106,7 @@ export const orderResource = defineResource({
     create: true,
     read: true,
     update: true,
-    delete: false, // Orders cannot be deleted
+    delete: false, // 订单不能删除
     list: true,
     advanced: {
       softDelete: false,
@@ -119,20 +119,20 @@ export const orderResource = defineResource({
     },
   },
   permissions: [
-    { action: 'confirm', description: 'Confirm order' },
-    { action: 'ship', description: 'Mark as shipped' },
-    { action: 'cancel', description: 'Cancel order' },
+    { action: 'confirm', description: '确认订单' },
+    { action: 'ship', description: '标记为已发货' },
+    { action: 'cancel', description: '取消订单' },
   ],
   metadata: {
-    displayName: 'Order',
-    pluralName: 'Orders',
-    description: 'Order management',
+    displayName: '订单',
+    pluralName: '订单列表',
+    description: '订单管理',
     icon: 'shopping-cart',
     group: 'sales',
   },
 });
 
-// Customer resource
+// 客户资源
 export const customerResource = defineResource({
   name: 'customer',
   schema: z.object({
@@ -169,13 +169,13 @@ export const customerResource = defineResource({
     },
   },
   metadata: {
-    displayName: 'Customer',
-    pluralName: 'Customers',
-    description: 'Customer management',
+    displayName: '客户',
+    pluralName: '客户列表',
+    description: '客户管理',
     icon: 'users',
     group: 'crm',
   },
 });
 
-// Export all resources
+// 导出所有资源
 export const resources = [productResource, orderResource, customerResource];

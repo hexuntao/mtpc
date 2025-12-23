@@ -5,7 +5,7 @@ import { rbac } from '../mtpc.js';
 
 export const roleRoutes = new Hono();
 
-// List roles
+// 列出角色
 roleRoutes.get('/', async c => {
   const tenantId = c.req.header('x-tenant-id') ?? 'default';
   const roles = await rbac.listRoles(tenantId);
@@ -13,7 +13,7 @@ roleRoutes.get('/', async c => {
   return c.json({ success: true, data: roles });
 });
 
-// Get role by ID
+// 根据 ID 获取角色
 roleRoutes.get('/:id', async c => {
   const tenantId = c.req.header('x-tenant-id') ?? 'default';
   const id = c.req.param('id');
@@ -21,13 +21,13 @@ roleRoutes.get('/:id', async c => {
   const role = await rbac.getRole(tenantId, id);
 
   if (!role) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Role not found' } }, 404);
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: '角色未找到' } }, 404);
   }
 
   return c.json({ success: true, data: role });
 });
 
-// Create role
+// 创建角色
 roleRoutes.post(
   '/',
   zValidator(
@@ -59,7 +59,7 @@ roleRoutes.post(
   }
 );
 
-// Assign role to user
+// 分配角色给用户
 roleRoutes.post(
   '/:roleId/assign',
   zValidator(
@@ -93,7 +93,7 @@ roleRoutes.post(
   }
 );
 
-// Revoke role from user
+// 从用户撤销角色
 roleRoutes.post(
   '/:roleId/revoke',
   zValidator(
@@ -113,7 +113,7 @@ roleRoutes.post(
   }
 );
 
-// Get user's roles
+// 获取用户的角色
 roleRoutes.get('/user/:userId', async c => {
   const tenantId = c.req.header('x-tenant-id') ?? 'default';
   const userId = c.req.param('userId');
