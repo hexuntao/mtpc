@@ -65,7 +65,7 @@ export function createAuditPlugin(
     const masked = options.mask ? options.mask(entry) : entry;
     if (options.async) {
       // 异步记录（即发即弃）
-      void store.log(masked);
+      store.log(masked);
     } else {
       // 同步记录
       await store.log(masked);
@@ -121,7 +121,7 @@ export function createAuditPlugin(
         ],
         // 在任何资源操作之后调用
         afterAny: [
-          async (mtpcCtx, operation, resourceName, result) => {
+          async (_mtpcCtx, _operation, _resourceName, _result) => {
             // 可选：我们可以在这里记录结果，但 beforeAny 已经记录了操作
             // 消费者可以根据需要定制此钩子
           },

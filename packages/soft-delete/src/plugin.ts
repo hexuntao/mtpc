@@ -25,7 +25,7 @@ export function createSoftDeletePlugin(): PluginDefinition & {
     configureResource: (config: SoftDeleteConfig, context: PluginContext) => void;
   } = {
     configs,
-    
+
     /**
      * 为特定资源配置软删除
      *

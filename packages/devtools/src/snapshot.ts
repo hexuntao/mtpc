@@ -1,35 +1,49 @@
-import type { MTPC, Permission, PolicyDefinition, ResourceDefinition } from '@mtpc/core';
+import type { MTPC } from '@mtpc/core';
 
 /**
  * MTPC 状态快照 - 用于调试和工具展示的 MTPC 状态快照
- * 
+ *
  * 包含资源、权限和策略的关键信息，用于 DevTools 可视化展示和调试。
  */
 export interface MTPCSnapshot {
-  resources: Array<{ // 资源列表
-    name: string; // 资源名称
-    displayName: string; // 资源显示名称
-    group?: string; // 资源分组
-    actions: string[]; // 支持的操作列表
-    permissions: string[]; // 资源相关的权限编码列表
+  /** 资源列表 */
+  resources: Array<{
+    /** 资源名称 */
+    name: string;
+    /** 资源显示名称 */
+    displayName: string;
+    /** 资源分组 */
+    group?: string;
+    /** 支持的操作列表 */
+    actions: string[];
+    /** 资源相关的权限编码列表 */
+    permissions: string[];
   }>;
-  permissions: string[]; // 所有权限编码列表
-  policies: Array<{ // 策略列表
-    id: string; // 策略 ID
-    name: string; // 策略名称
-    priority: string; // 策略优先级
-    enabled: boolean; // 是否启用
-    tenantId?: string; // 租户 ID（可选）
-    ruleCount: number; // 规则数量
+  /** 所有权限编码列表 */
+  permissions: string[];
+  /** 策略列表 */
+  policies: Array<{
+    /** 策略 ID */
+    id: string;
+    /** 策略名称 */
+    name: string;
+    /** 策略优先级 */
+    priority: string;
+    /** 是否启用 */
+    enabled: boolean;
+    /** 租户 ID（可选） */
+    tenantId?: string;
+    /** 规则数量 */
+    ruleCount: number;
   }>;
 }
 
 /**
  * 从 MTPC 实例创建状态快照
- * 
+ *
  * 该函数从 MTPC 实例的注册表中提取资源、权限和策略的关键信息，
  * 构建一个结构化的快照，用于 DevTools 可视化展示和调试。
- * 
+ *
  * @param mtpc MTPC 实例
  * @returns MTPC 状态快照
  */

@@ -24,7 +24,7 @@ export function createVersioningPlugin(): PluginDefinition & {
     configureResource: (config: VersioningConfig, context: PluginContext) => void;
   } = {
     configs,
-    
+
     /**
      * 为特定资源配置版本控制
      *

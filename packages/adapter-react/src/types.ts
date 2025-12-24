@@ -1,6 +1,5 @@
 // @mtpc/adapter-react - MTPC React 适配器的类型定义
 
-import type { MTPCContext, SubjectContext, TenantContext } from '@mtpc/core';
 import type { ReactNode } from 'react';
 
 /**
@@ -14,10 +13,14 @@ export type MatchMode = 'any' | 'all';
  * 权限评估结果
  */
 export interface PermissionEvalResult {
-  required: string[]; // 要求的权限列表
-  granted: string[]; // 已授予的权限列表
-  missing: string[]; // 缺失的权限列表
-  allowed: boolean; // 是否允许访问
+  /** 要求的权限列表 */
+  required: string[];
+  /** 已授予的权限列表 */
+  granted: string[];
+  /** 缺失的权限列表 */
+  missing: string[];
+  /** 是否允许访问 */
+  allowed: boolean;
 }
 
 /**
@@ -25,13 +28,20 @@ export interface PermissionEvalResult {
  * 包含当前用户的权限、角色和相关方法
  */
 export interface PermissionContextValue {
-  tenantId?: string; // 租户 ID
-  subjectId?: string; // 主体 ID（用户、服务等）
-  roles: string[]; // 角色列表
-  permissions: string[]; // 权限列表
-  loading: boolean; // 权限加载状态
-  error?: string; // 权限加载错误信息
-  lastUpdated?: Date; // 权限最后更新时间
+  /** 租户 ID */
+  tenantId?: string;
+  /** 主体 ID（用户、服务等） */
+  subjectId?: string;
+  /** 角色列表 */
+  roles: string[];
+  /** 权限列表 */
+  permissions: string[];
+  /** 权限加载状态 */
+  loading: boolean;
+  /** 权限加载错误信息 */
+  error?: string;
+  /** 权限最后更新时间 */
+  lastUpdated?: Date;
 
   /**
    * 检查单个权限是否允许
@@ -118,12 +128,18 @@ export interface UsePermissionOptions {
  * <Can> 组件的属性
  */
 export interface CanProps {
-  permission?: string; // 单个权限代码
-  permissions?: string[]; // 权限代码数组
-  mode?: MatchMode; // 匹配模式：'any' 或 'all'
-  not?: boolean; // 是否取反，true 表示权限不允许时渲染
-  fallback?: ReactNode; // 权限不允许时的回退内容
-  children?: ReactNode | ((allowed: boolean) => ReactNode); // 权限允许时渲染的内容
+  /** 单个权限代码 */
+  permission?: string;
+  /** 权限代码数组 */
+  permissions?: string[];
+  /** 匹配模式：'any' 或 'all' */
+  mode?: MatchMode;
+  /** 是否取反，true 表示权限不允许时渲染 */
+  not?: boolean;
+  /** 权限不允许时的回退内容 */
+  fallback?: ReactNode | (() => any);
+  /** 权限允许时渲染的内容 */
+  children?: ReactNode | ((allowed: boolean) => ReactNode);
 }
 
 /**
@@ -172,15 +188,23 @@ export interface ApiFetcherOptions {
  * 被默认提取器使用
  */
 export interface DefaultApiResponse {
-  success: boolean; // 请求是否成功
+  /** 请求是否成功 */
+  success: boolean;
+  /** 响应数据（可选） */
   data?: {
-    permissions?: string[]; // 权限列表
-    roles?: string[]; // 角色列表
-    [key: string]: unknown; // 其他数据
+    /** 权限列表（可选） */
+    permissions?: string[];
+    /** 角色列表（可选） */
+    roles?: string[];
+    /** 其他数据（可选） */
+    [key: string]: unknown;
   };
   error?: {
-    code: string; // 错误代码
-    message: string; // 错误消息
-    [key: string]: unknown; // 其他错误信息
+    /** 错误代码 */
+    code: string;
+    /** 错误消息 */
+    message: string;
+    /** 其他错误信息（可选） */
+    [key: string]: unknown;
   };
 }

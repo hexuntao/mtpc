@@ -12,10 +12,10 @@ export interface PermissionMatrixRow {
 
 /**
  * 从 MTPC 注册表构建扁平化的权限矩阵
- * 
+ *
  * 该函数遍历所有注册的资源和权限，构建一个包含资源、操作和权限编码的矩阵，
  * 用于在 DevTools 中可视化展示权限关系。
- * 
+ *
  * @param mtpc MTPC 实例
  * @returns 权限矩阵行数组
  */

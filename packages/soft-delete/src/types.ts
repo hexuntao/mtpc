@@ -1,4 +1,4 @@
-import type { FilterCondition, MTPCContext, ResourceHooks } from '@mtpc/core';
+import type { FilterCondition, MTPCContext } from '@mtpc/core';
 
 /**
  * 资源的软删除配置

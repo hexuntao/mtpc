@@ -2,7 +2,7 @@ import type { AuditEntry, AuditQueryFilter } from './types.js';
 
 /**
  * 审计过滤器构建器 - 用于流畅地构建审计查询过滤器
- * 
+ *
  * 示例用法：
  * ```
  * const filter = createAuditFilter()

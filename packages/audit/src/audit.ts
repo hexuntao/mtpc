@@ -88,7 +88,7 @@ export class Audit implements AuditLogger {
     // 根据配置决定是异步还是同步记录日志
     if (this.options.async) {
       // 异步记录（即发即弃）
-      void this.store.log(masked);
+      this.store.log(masked);
     } else {
       // 同步记录
       await this.store.log(masked);

@@ -36,7 +36,7 @@ export function usePermission(
   const ctx = usePermissionContext();
   // 规范化权限输入，将单个权限或权限数组转换为统一的数组格式
   const required = toArray(permission, permissions);
-  
+
   // 使用 computed 计算属性，只有当依赖变化时才重新计算
   const result = computed(() => ctx.evaluate(required, mode));
   const allowed = computed(() => result.value.allowed);

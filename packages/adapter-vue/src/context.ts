@@ -1,6 +1,6 @@
 // @mtpc/adapter-vue - MTPC 的 Vue 3 适配器
 
-import { computed, inject, provide, type Ref, ref } from 'vue';
+import { inject, provide, ref } from 'vue';
 import type {
   ApiFetcherOptions,
   PermissionContextValue,
@@ -33,10 +33,10 @@ export function createPermissionContext(props: PermissionProviderProps): Permiss
    */
   const refresh = async () => {
     if (!props.fetcher) return;
-    
+
     loading.value = true;
     error.value = undefined;
-    
+
     try {
       const result = await props.fetcher();
       permissions.value = result.permissions ?? [];
@@ -51,7 +51,7 @@ export function createPermissionContext(props: PermissionProviderProps): Permiss
 
   // 如果配置了 fetcher 且 autoFetch 不为 false，则自动加载权限
   if (props.fetcher && props.autoFetch !== false) {
-    void refresh();
+    refresh();
   }
 
   /**
@@ -120,13 +120,13 @@ export function providePermissionContext(ctx: PermissionContextValue): void {
 export function usePermissionContext(): PermissionContextValue {
   // 尝试从父组件注入权限上下文
   const ctx = inject<PermissionContextValue | null>(PermissionSymbol, null);
-  
+
   if (!ctx) {
     // 如果没有找到上下文，则创建一个默认的空上下文
     const dummy = createPermissionContext({});
     return dummy;
   }
-  
+
   return ctx;
 }
 
@@ -140,18 +140,18 @@ export function createApiPermissionFetcher(
   options: ApiFetcherOptions
 ): () => Promise<{ permissions: string[]; roles?: string[] }> {
   const { baseUrl, path = '/permissions', headers = {} } = options;
-  
+
   return async () => {
     // 发送 GET 请求获取权限
     const res = await fetch(baseUrl + path, {
       method: 'GET',
       headers,
     });
-    
-    const json = await res.json();
+
+    const json = (await res.json()) as any;
     // 尽量兼容 example-api 的返回结构
     const data = json?.data ?? {};
-    
+
     return {
       permissions: data.permissions ?? [],
       roles: data.roles ?? [],

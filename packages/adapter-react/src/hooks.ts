@@ -19,7 +19,7 @@ export function usePermissions(): {
 } {
   // 获取权限上下文
   const ctx = usePermissionContext();
-  
+
   // 返回上下文信息，包含权限、角色、加载状态等
   return {
     permissions: ctx.permissions,
@@ -51,7 +51,7 @@ export function usePermission(
 } {
   // 获取权限上下文
   const ctx = usePermissionContext();
-  
+
   // 规范化权限输入，将单个权限或权限数组转换为统一的数组格式
   const required = normalizePermissions(permission, permissions);
 
@@ -66,7 +66,7 @@ export function usePermission(
         allowed: true,
       };
     }
-    
+
     // 调用上下文的 evaluate 方法进行权限评估
     return ctx.evaluate(required, mode);
   }, [ctx, required, mode]);
@@ -92,7 +92,7 @@ export function usePermission(
 export function useCan(permission: string): boolean {
   // 获取权限上下文
   const ctx = usePermissionContext();
-  
+
   // 调用上下文的 can 方法检查权限
   return ctx.can(permission);
 }
@@ -105,7 +105,7 @@ export function useCan(permission: string): boolean {
 export function useCanAny(permissions: string[]): boolean {
   // 获取权限上下文
   const ctx = usePermissionContext();
-  
+
   // 调用上下文的 canAny 方法检查权限
   return ctx.canAny(permissions);
 }
@@ -118,7 +118,7 @@ export function useCanAny(permissions: string[]): boolean {
 export function useCanAll(permissions: string[]): boolean {
   // 获取权限上下文
   const ctx = usePermissionContext();
-  
+
   // 调用上下文的 canAll 方法检查权限
   return ctx.canAll(permissions);
 }
@@ -130,7 +130,7 @@ export function useCanAll(permissions: string[]): boolean {
 export function useRoles(): string[] {
   // 获取权限上下文
   const ctx = usePermissionContext();
-  
+
   // 返回角色列表
   return ctx.roles;
 }
@@ -143,7 +143,7 @@ export function useRoles(): string[] {
 export function useHasRole(role: string): boolean {
   // 获取权限上下文
   const ctx = usePermissionContext();
-  
+
   // 检查角色列表中是否包含指定角色
   return ctx.roles.includes(role);
 }
@@ -156,7 +156,7 @@ export function useHasRole(role: string): boolean {
 export function useAnyRole(roles: string[]): boolean {
   // 获取权限上下文
   const ctx = usePermissionContext();
-  
+
   // 检查角色列表中是否包含任意一个指定角色
   return roles.some(r => ctx.roles.includes(r));
 }
@@ -169,7 +169,7 @@ export function useAnyRole(roles: string[]): boolean {
 export function useAllRoles(roles: string[]): boolean {
   // 获取权限上下文
   const ctx = usePermissionContext();
-  
+
   // 检查角色列表中是否包含所有指定角色
   return roles.every(r => ctx.roles.includes(r));
 }

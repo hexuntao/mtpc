@@ -1,8 +1,7 @@
 // @mtpc/adapter-react - MTPC 的 React 适配器
 
-import React, {
+import  {
   createContext,
-  type ReactNode,
   useCallback,
   useContext,
   useEffect,
@@ -107,7 +106,7 @@ export function PermissionProvider(props: PermissionProviderProps): JSX.Element 
    */
   useEffect(() => {
     if (fetcher && autoFetch) {
-      void refresh(); // 异步调用 refresh，不阻塞渲染
+      refresh(); // 异步调用 refresh，不阻塞渲染
     }
   }, [fetcher, autoFetch, refresh]);
 

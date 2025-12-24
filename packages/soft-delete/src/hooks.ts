@@ -1,4 +1,4 @@
-import type { FilterCondition, MTPCContext, ResourceHooks } from '@mtpc/core';
+import type { FilterCondition, ResourceHooks } from '@mtpc/core';
 import type {
   SoftDeleteBeforeDeleteHook,
   SoftDeleteConfig,
@@ -21,20 +21,23 @@ import type {
 export function createSoftDeleteHooks<T = unknown>(
   config: SoftDeleteConfig
 ): Partial<ResourceHooks<T>> {
-  const deletedAtField = config.deletedAtField ?? 'deletedAt'; // 默认的软删除时间戳字段
-  const flagField = config.flagField; // 软删除标志字段（如果使用布尔值）
-  const autoFilter = config.autoFilter ?? true; // 是否自动过滤软删除记录，默认true
+  // 默认的软删除时间戳字段
+  const deletedAtField = config.deletedAtField ?? 'deletedAt';
+  // 软删除标志字段（如果使用布尔值）
+  const flagField = config.flagField;
+  // 是否自动过滤软删除记录，默认true
+  const autoFilter = config.autoFilter ?? true;
 
   /**
    * beforeDelete 钩子 - 在删除操作前执行
-   * 
+   *
    * 该钩子用于控制删除行为，可以选择阻断硬删除，改为软删除
-   * 
+   *
    * @param ctx MTPC 上下文
    * @param id 要删除的资源 ID
    * @returns 返回一个对象，proceed 为 true 表示继续删除，false 表示阻断删除
    */
-  const beforeDelete: SoftDeleteBeforeDeleteHook = async (ctx, id) => {
+  const beforeDelete: SoftDeleteBeforeDeleteHook = async (_ctx, id) => {
     // 默认行为：不阻断删除，只是为上层提供可以接入的信息
     // 若某个 Adapter 想完全阻止硬删除，可在其自己的 Hook 中判断并 return { proceed: false }
     return { proceed: true, data: id };
@@ -42,14 +45,14 @@ export function createSoftDeleteHooks<T = unknown>(
 
   /**
    * filterQuery 钩子 - 在查询资源前执行
-   * 
+   *
    * 该钩子用于自动添加过滤条件，排除已软删除的记录
-   * 
+   *
    * @param ctx MTPC 上下文
    * @param baseFilters 基础过滤条件数组
    * @returns 处理后的过滤条件数组，包含排除软删除记录的条件
    */
-  const filterQuery: SoftDeleteFilterQueryHook = (ctx, baseFilters) => {
+  const filterQuery: SoftDeleteFilterQueryHook = (_ctx, baseFilters) => {
     // 如果配置了不自动过滤，则直接返回基础过滤条件
     if (!autoFilter) {
       return baseFilters;

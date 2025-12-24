@@ -13,10 +13,14 @@ export type MatchMode = 'any' | 'all';
  * 权限评估结果
  */
 export interface PermissionEvalResult {
-  required: string[]; // 要求的权限列表
-  granted: string[]; // 已授予的权限列表
-  missing: string[]; // 缺失的权限列表
-  allowed: boolean; // 是否允许访问
+  /** 要求的权限列表 */
+  required: string[];
+  /** 已授予的权限列表 */
+  granted: string[];
+  /** 缺失的权限列表 */
+  missing: string[];
+  /** 是否允许访问 */
+  allowed: boolean;
 }
 
 /**
@@ -24,13 +28,20 @@ export interface PermissionEvalResult {
  * 包含当前用户的权限、角色和相关方法
  */
 export interface PermissionContextValue {
-  tenantId?: string; // 租户 ID
-  subjectId?: string; // 主体 ID（用户、服务等）
-  roles: Ref<string[]>; // 角色列表（Vue Ref 对象）
-  permissions: Ref<string[]>; // 权限列表（Vue Ref 对象）
-  loading: Ref<boolean>; // 权限加载状态（Vue Ref 对象）
-  error: Ref<string | undefined>; // 权限加载错误信息（Vue Ref 对象）
-  lastUpdated: Ref<Date | undefined>; // 权限最后更新时间（Vue Ref 对象）
+  /** 租户 ID */
+  tenantId?: string;
+  /** 主体 ID（用户、服务等） */
+  subjectId?: string; //
+  /** 角色列表（Vue Ref 对象） */
+  roles: Ref<string[]>; //
+  /** 权限列表（Vue Ref 对象） */
+  permissions: Ref<string[]>;
+  /** 权限加载状态（Vue Ref 对象） */
+  loading: Ref<boolean>;
+  /** 权限加载错误信息（Vue Ref 对象） */
+  error: Ref<string | undefined>;
+  /** 权限最后更新时间（Vue Ref 对象） */
+  lastUpdated: Ref<Date | undefined>;
 
   /**
    * 检查单个权限是否允许
@@ -72,22 +83,32 @@ export interface PermissionContextValue {
  * 权限提供者配置参数
  */
 export interface PermissionProviderProps {
-  initialPermissions?: string[]; // 初始权限列表
-  initialRoles?: string[]; // 初始角色列表
-  tenantId?: string; // 租户 ID
-  subjectId?: string; // 主体 ID
-  fetcher?: () => Promise<{ permissions: string[]; roles?: string[] }>; // 权限获取器，用于从远程加载权限
-  autoFetch?: boolean; // 是否自动加载权限（默认：true）
+  /** 初始权限列表 */
+  initialPermissions?: string[];
+  /** 初始角色列表 */
+  initialRoles?: string[];
+  /** 租户 ID */
+  tenantId?: string;
+  /** 主体 ID */
+  subjectId?: string;
+  /** 权限获取器，用于从远程加载权限 */
+  fetcher?: () => Promise<{ permissions: string[]; roles?: string[] }>;
+  /** 是否自动加载权限（默认：true） */
+  autoFetch?: boolean;
 }
 
 /**
  * Can 组件的属性
  */
 export interface CanProps {
-  permission?: string; // 单个权限代码
-  permissions?: string[]; // 权限代码数组
-  mode?: MatchMode; // 匹配模式：'any' 或 'all'
-  not?: boolean; // 是否取反，true 表示权限不允许时渲染
+  /** 单个权限代码 */
+  permission?: string;
+  /** 权限代码数组 */
+  permissions?: string[];
+  /** 匹配模式：'any' 或 'all' */
+  mode?: MatchMode;
+  /** 是否取反，true 表示权限不允许时渲染 */
+  not?: boolean;
 }
 
 /**
@@ -95,7 +116,10 @@ export interface CanProps {
  * 用于配置从 API 获取权限的行为
  */
 export interface ApiFetcherOptions {
-  baseUrl: string; // API 的基础 URL，例如 "/api"
-  path?: string; // 权限端点路径，例如 "/permissions"
-  headers?: Record<string, string>; // 请求中包含的可选头信息
+  /** API 的基础 URL，例如 "/api" */
+  baseUrl: string;
+  /** 权限端点路径，例如 "/permissions" */
+  path?: string;
+  /** 请求中包含的可选头信息 */
+  headers?: Record<string, string>;
 }

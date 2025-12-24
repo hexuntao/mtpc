@@ -4,13 +4,13 @@ import type { FilterCondition, MTPCContext } from '@mtpc/core';
  * 范围类型 - 预定义范围模式
  */
 export type ScopeType =
-  | 'all'          // 无限制（管理员）
-  | 'tenant'       // 租户隔离（访问租户内所有数据）
-  | 'department'   // 部门隔离（访问同部门数据）
-  | 'team'         // 团队隔离（访问同团队数据）
-  | 'self'         // 个人隔离（仅访问个人数据）
+  | 'all' // 无限制（管理员）
+  | 'tenant' // 租户隔离（访问租户内所有数据）
+  | 'department' // 部门隔离（访问同部门数据）
+  | 'team' // 团队隔离（访问同团队数据）
+  | 'self' // 个人隔离（仅访问个人数据）
   | 'subordinates' // 层级隔离（访问个人及下属数据）
-  | 'custom';      // 自定义条件
+  | 'custom'; // 自定义条件
 
 /**
  * 范围值解析器
@@ -50,11 +50,11 @@ export interface HierarchyResolver {
  * 范围条件操作符
  */
 export type ScopeConditionOperator =
-  | 'eq'        // 等于
-  | 'neq'       // 不等于
-  | 'in'        // 在数组中
-  | 'notIn'     // 不在数组中
-  | 'contains'  // 数组包含（用于数组字段）
+  | 'eq' // 等于
+  | 'neq' // 不等于
+  | 'in' // 在数组中
+  | 'notIn' // 不在数组中
+  | 'contains' // 数组包含（用于数组字段）
   | 'hierarchy'; // 层级关系（需要配合 HierarchyResolver 使用）
 
 /**

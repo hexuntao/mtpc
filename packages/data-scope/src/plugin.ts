@@ -81,10 +81,7 @@ export function createDataScopePlugin(
    * 创建资源的 filterQuery 钩子函数
    */
   const createFilterQueryHook = (resourceName: string) => {
-    return async (
-      ctx: MTPCContext,
-      baseFilters: FilterCondition[]
-    ): Promise<FilterCondition[]> => {
+    return async (ctx: MTPCContext, baseFilters: FilterCondition[]): Promise<FilterCondition[]> => {
       try {
         const result: ScopeResolutionResult = await resolver.resolve({
           mtpcContext: ctx,
@@ -130,7 +127,7 @@ export function createDataScopePlugin(
 
   return {
     name: '@mtpc/data-scope',
-    version: '0.2.0',
+    version: '0.1.0',
     description: 'Data scope / row-level security extension for MTPC',
 
     state,
@@ -143,7 +140,7 @@ export function createDataScopePlugin(
       }
 
       // 2. 订阅后续注册的资源
-      const unsubscribe = context.onResourceRegistered((resource) => {
+      const unsubscribe = context.onResourceRegistered(resource => {
         addFilterToResource(context, resource.name);
       });
       state.unsubscribeCallbacks.push(unsubscribe);
@@ -151,13 +148,9 @@ export function createDataScopePlugin(
 
     onInit(context: PluginContext): void {
       const resources = context.listResources();
-      const enabledCount = resources.filter(
-        r => r.metadata?.dataScope?.enabled !== false
-      ).length;
+      const enabledCount = resources.filter(r => r.metadata?.dataScope?.enabled !== false).length;
 
-      console.log(
-        `[@mtpc/data-scope] 插件已初始化，已为 ${enabledCount} 个资源启用数据范围控制`
-      );
+      console.log(`[@mtpc/data-scope] 插件已初始化，已为 ${enabledCount} 个资源启用数据范围控制`);
     },
 
     onDestroy(): void {

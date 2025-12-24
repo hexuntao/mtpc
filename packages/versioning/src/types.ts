@@ -1,10 +1,11 @@
-import type { MTPCContext, ResourceHooks } from '@mtpc/core';
+// import type { MTPCContext, ResourceHooks } from '@mtpc/core';
 
 /**
  * 版本控制配置
  */
 export interface VersioningConfig {
-  resourceName: string; // 资源名称
+  /** 资源名称 */
+  resourceName: string; 
   /**
    * 资源 schema 中的版本字段名，例如 "version"
    */
@@ -13,12 +14,14 @@ export interface VersioningConfig {
 
 /**
  * 版本冲突错误（用于乐观锁机制）
- * 
+ *
  * 当并发更新同一资源时，如果版本号不匹配，会抛出此错误
  */
 export class VersionConflictError extends Error {
-  readonly expected: number | undefined; // 期望的版本号
-  readonly actual: number | undefined; // 实际的版本号
+  /** 期望的版本号 */
+  readonly expected: number | undefined; 
+  /** 实际的版本号 */
+  readonly actual: number | undefined; 
 
   /**
    * 构造函数

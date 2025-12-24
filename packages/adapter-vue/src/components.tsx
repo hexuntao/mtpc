@@ -1,6 +1,6 @@
 // @mtpc/adapter-vue - MTPC Vue 适配器的组件
 
-import { defineComponent, h } from 'vue';
+import { defineComponent, } from 'vue';
 import { usePermissionContext } from './context.js';
 import type { CanProps } from './types.js';
 import { toArray } from './utils.js';

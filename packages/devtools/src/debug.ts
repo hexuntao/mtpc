@@ -5,17 +5,23 @@ import { parsePermissionCode } from '@mtpc/shared';
  * 权限检查的详细调试信息
  */
 export interface PermissionDebugInfo {
-  permission: string; // 完整的权限编码
-  resource: string; // 资源名称
-  action: string; // 操作类型
-  allowed: boolean; // 是否允许访问
-  reason?: string; // 决策原因
-  evaluationTime?: number; // 评估耗时（毫秒）
+  /** 完整的权限编码 */
+  permission: string;
+  /** 资源名称 */
+  resource: string;
+  /** 操作类型 */
+  action: string;
+  /** 是否允许访问 */
+  allowed: boolean;
+  /** 决策原因 */
+  reason?: string;
+  /** 评估耗时（毫秒） */
+  evaluationTime?: number;
 }
 
 /**
  * 调试权限检查 - 运行权限检查并返回结构化结果，可用于 DevTools UI 展示
- * 
+ *
  * @param mtpc MTPC 实例
  * @param ctx MTPC 上下文对象
  * @param permission 权限编码
@@ -30,7 +36,7 @@ export async function debugPermissionCheck(
 ): Promise<PermissionDebugInfo> {
   // 解析权限编码，提取资源和操作
   const parsed = parsePermissionCode(permission);
-  
+
   // 如果权限编码无效，返回错误信息
   if (!parsed) {
     return {
@@ -44,11 +50,11 @@ export async function debugPermissionCheck(
 
   // 执行权限检查
   const result = await mtpc.checkPermission({
-    tenant: ctx.tenant, // 租户信息
-    subject: ctx.subject, // 主体信息
-    resource: parsed.resource, // 资源名称
-    action: parsed.action, // 操作类型
-    resourceId, // 资源标识符（可选）
+    tenant: ctx.tenant,
+    subject: ctx.subject,
+    resource: parsed.resource,
+    action: parsed.action,
+    resourceId,
   });
 
   // 返回结构化的调试信息

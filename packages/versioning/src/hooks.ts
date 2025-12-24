@@ -17,17 +17,18 @@ import type { VersioningConfig } from './types.js';
 export function createVersioningHooks<T extends Record<string, unknown>>(
   config: VersioningConfig
 ): Partial<ResourceHooks<T>> {
-  const versionField = config.versionField ?? 'version'; // 默认的版本字段名
+  // 默认的版本字段名
+  const versionField = config.versionField ?? 'version';
 
   return {
     /**
      * beforeUpdate 钩子 - 在更新操作前执行
-     * 
+     *
      * 此钩子主要用于处理版本字段的透传，不修改数据本身
      * 由 ORM 在实际更新时利用 versionField 做并发控制
      */
     beforeUpdate: [
-      async (ctx: MTPCContext, id: string, data: Partial<T>) => {
+      async (_ctx: MTPCContext, _id: string, data: Partial<T>) => {
         // 这里只做透传，不修改数据，由 ORM 在更新时利用 versionField 做并发控制
         // 如果需要，可以在 metadata 中记录期望版本
         return {
@@ -36,14 +37,14 @@ export function createVersioningHooks<T extends Record<string, unknown>>(
         };
       },
     ],
-    
+
     /**
      * afterUpdate 钩子 - 在更新操作后执行
-     * 
+     *
      * 此钩子主要用于处理更新后的版本信息
      */
     afterUpdate: [
-      async (ctx: MTPCContext, id: string, _data: Partial<T>, updated: T) => {
+      async (_ctx: MTPCContext, _id: string, _data: Partial<T>, _updated: T) => {
         // 若资源 schema 中存在 version 字段，应用侧可在此处做日志或统计
         // 不主动改写 updated，以避免和 ORM 的返回结果冲突
       },
