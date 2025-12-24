@@ -2,7 +2,6 @@
   "name": "@mtpc/adapter-drizzle",
   "version": "0.1.0",
   "type": "module",
-  "private": true,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -30,7 +29,8 @@
   "devDependencies": {
     "@types/node": "^20.10.0",
     "postgres": "^3.4.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^1.6.0"
   },
   "peerDependencies": {
     "drizzle-orm": "^0.30.0",
