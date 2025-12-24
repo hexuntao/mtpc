@@ -180,49 +180,83 @@ try {
 ### 4.1 批量权限检查
 
 ```typescript
-// 批量检查多个权限
-const batchResults = await mtpc.checkPermissionBatch([
-  { ...context, resource: 'user', action: 'read' },
-  { ...context, resource: 'user', action: 'update' },
-  { ...context, resource: 'user', action: 'delete' },
-  { ...context, resource: 'user', action: 'export' }
-], {
-  parallel: true, // 并行执行
-  maxConcurrency: 10 // 最大并发数
-});
+// 并行检查多个权限
+const checkResults = await Promise.all([
+  mtpc.checkPermission({ ...context, resource: 'user', action: 'read' }),
+  mtpc.checkPermission({ ...context, resource: 'user', action: 'update' }),
+  mtpc.checkPermission({ ...context, resource: 'user', action: 'delete' }),
+  mtpc.checkPermission({ ...context, resource: 'user', action: 'export' })
+]);
 
-console.log('批量检查结果:', batchResults);
-console.log('是否所有权限都允许:', batchResults.allAllowed);
-console.log('是否有任意权限允许:', batchResults.anyAllowed);
+console.log('批量检查结果:', checkResults);
+console.log('是否所有权限都允许:', checkResults.every(r => r.allowed));
+console.log('是否有任意权限允许:', checkResults.some(r => r.allowed));
+
+// 或者使用循环批量检查
+const permissions = [
+  { resource: 'user', action: 'read' },
+  { resource: 'user', action: 'update' },
+  { resource: 'user', action: 'delete' }
+];
+
+const results = new Map();
+for (const perm of permissions) {
+  const result = await mtpc.checkPermission({ ...context, ...perm });
+  results.set(`${perm.resource}:${perm.action}`, result);
+}
 ```
 
 ### 4.2 自定义策略条件
 
 ```typescript
-// 注册自定义条件处理器
-mtpc.policyEngine.addConditionHandler('custom', async (context, condition) => {
-  // 实现自定义条件逻辑
-  if (condition.field === 'subject.customAttribute') {
-    return context.subject.attributes?.customAttribute === condition.value;
-  }
-  return false;
-});
-
-// 使用自定义条件注册策略
+// 使用内置的条件类型
 mtpc.registerPolicy({
-  id: 'custom-condition-policy',
-  name: '自定义条件策略',
+  id: 'custom-field-policy',
+  name: '基于自定义字段的策略',
   rules: [{
     permissions: ['user:special-action'],
     effect: 'allow',
     conditions: [{
-      type: 'custom',
-      field: 'subject.customAttribute',
-      operator: 'eq',
-      value: 'special-value'
+      type: 'field',           // 条件类型：field
+      field: 'subject.attributes.level',  // 自定义字段
+      operator: 'eq',          // 操作符：eq, neq, in, notIn, contains
+      value: 'premium'         // 比较值
     }]
   }],
   priority: 'normal',
+  enabled: true
+});
+
+// 支持的操作符
+// - eq: 等于
+// - neq: 不等于
+// - in: 在列表中
+// - notIn: 不在列表中
+// - contains: 包含（用于数组字段）
+
+// 多条件组合
+mtpc.registerPolicy({
+  id: 'multi-condition-policy',
+  name: '多条件策略',
+  rules: [{
+    permissions: ['order:approve'],
+    effect: 'allow',
+    conditions: [
+      {
+        type: 'field',
+        field: 'subject.attributes.role',
+        operator: 'eq',
+        value: 'manager'
+      },
+      {
+        type: 'field',
+        field: 'subject.attributes.department',
+        operator: 'in',
+        value: ['finance', 'sales']
+      }
+    ]
+  }],
+  priority: 'high',
   enabled: true
 });
 ```
@@ -237,10 +271,19 @@ const auditPlugin = {
   install(ctx) {
     // 注册全局钩子
     ctx.registerGlobalHooks({
-      afterPermissionCheck: async (context, result) => {
+      afterAny: async (context, operation, resource, result) => {
         // 记录审计日志
-        console.log(`[审计日志] ${context.subject.id} 尝试访问 ${context.permission?.code}，结果: ${result.allowed}`);
+        console.log(`[审计日志] ${context.subject.id} 执行 ${operation} 于 ${resource}，结果:`, result);
         // 实际项目中可以写入数据库或日志系统
+      },
+      beforeAny: async (context, operation, resource) => {
+        // 操作前检查
+        console.log(`[审计日志] ${context.subject.id} 即将执行 ${operation} 于 ${resource}`);
+        return { proceed: true };
+      },
+      onError: async (context, operation, resource, error) => {
+        // 错误日志
+        console.error(`[审计日志] ${context.subject.id} 执行 ${operation} 于 ${resource} 时出错:`, error.message);
       }
     });
   }
@@ -285,11 +328,12 @@ mtpc.registerResource(orderResource);
 ### 4.4 多租户上下文管理
 
 ```typescript
-// 获取或创建租户
-const tenant = await mtpc.tenants.getOrCreate({
+// 创建新租户
+const tenant = await mtpc.tenants.createTenant({
   id: 'new-tenant-123',
   name: '新租户',
-  attributes: {
+  status: 'active',
+  metadata: {
     tier: 'enterprise',
     maxUsers: 1000
   }
@@ -525,13 +569,45 @@ async function checkMultiplePermissions(subject, permissions) {
     };
   });
 
-  // 使用并行模式进行批量检查
-  const result = await mtpc.checkPermissionBatch(permissionContexts, {
-    parallel: true,
-    maxConcurrency: 20 // 根据系统性能调整
-  });
+  // 使用 Promise.all 并行检查
+  const results = await Promise.all(
+    permissionContexts.map(ctx => mtpc.checkPermission(ctx))
+  );
 
-  return result;
+  // 返回 Map 结构便于查询
+  const resultMap = new Map();
+  for (let i = 0; i < permissions.length; i++) {
+    resultMap.set(permissions[i], results[i]);
+  }
+
+  return resultMap;
+}
+
+// 如果需要控制并发数，可以使用 p-limit 或类似库
+import pLimit from 'p-limit';
+
+async function checkMultiplePermissionsWithLimit(subject, permissions, maxConcurrency = 10) {
+  const context = mtpc.createContext(
+    { id: subject.tenantId },
+    { id: subject.id, type: 'user' }
+  );
+
+  const limit = pLimit(maxConcurrency);
+  const tasks = permissions.map(p =>
+    limit(async () => {
+      const [resource, action] = p.split(':');
+      return await mtpc.checkPermission({ ...context, resource, action });
+    })
+  );
+
+  const results = await Promise.all(tasks);
+
+  const resultMap = new Map();
+  for (let i = 0; i < permissions.length; i++) {
+    resultMap.set(permissions[i], results[i]);
+  }
+
+  return resultMap;
 }
 ```
 
@@ -650,34 +726,37 @@ mtpc.checkPermission = async (context) => {
 };
 ```
 
-### 8.2 使用 Explain 功能分析权限决策
+### 8.2 权限决策调试
 
 ```typescript
-// 示例：使用 @mtpc/explain 扩展分析权限决策
-import { explainPermissionDecision } from '@mtpc/explain';
-
+// 示例：调试权限决策问题
 async function debugPermissionIssue(permissionContext) {
   // 检查权限
   const result = await mtpc.checkPermission(permissionContext);
-  
+
   if (!result.allowed) {
     // 分析拒绝原因
-    const explanation = await explainPermissionDecision(mtpc, permissionContext);
-    console.log('权限拒绝分析:', explanation);
-    /*
-    输出示例：
-    {
-      "decision": "deny",
-      "reason": "没有匹配的策略规则",
-      "evaluationPath": [
-        "policy:admin-only-delete",
-        "rule:0",
-        "condition:0 [failed] subject.attributes.role != 'admin'"
-      ],
-      "matchedPolicies": [],
-      "availablePermissions": ["user:read", "user:update"]
+    console.log('权限拒绝分析:');
+    console.log('- 权限:', `${permissionContext.resource}:${permissionContext.action}`);
+    console.log('- 主体:', permissionContext.subject.id);
+    console.log('- 原因:', result.reason);
+    console.log('- 评估时间:', result.evaluationTime, 'ms');
+
+    // 检查可用权限
+    if (permissionContext.subject.permissions) {
+      console.log('- 主体权限:', Array.from(permissionContext.subject.permissions));
     }
-    */
+
+    // 检查策略
+    const summary = mtpc.getSummary();
+    console.log('- 系统策略数:', summary.policies);
+
+    // 评估策略（用于调试）
+    const policyResult = await mtpc.evaluatePolicy({
+      ...permissionContext,
+      permissions: new Set([`${permissionContext.resource}:${permissionContext.action}`])
+    });
+    console.log('- 策略评估:', policyResult);
   }
 }
 ```
@@ -723,18 +802,21 @@ async function debugPermissionIssue(permissionContext) {
 | `createMTPC(options)` | 创建 MTPC 实例 |
 | `defineResource(definition)` | 定义资源 |
 | `mtpc.registerResource(resource)` | 注册资源 |
+| `mtpc.registerResources(resources)` | 批量注册资源 |
 | `mtpc.registerPolicy(policy)` | 注册策略 |
+| `mtpc.registerPolicies(policies)` | 批量注册策略 |
 | `mtpc.use(plugin)` | 使用插件 |
 | `mtpc.init()` | 初始化 MTPC 实例 |
+| `mtpc.isInitialized()` | 检查是否已初始化 |
 | `mtpc.createContext(tenant, subject)` | 创建上下文 |
 | `mtpc.checkPermission(context)` | 检查权限 |
 | `mtpc.requirePermission(context)` | 检查权限并在无权限时抛出异常 |
-| `mtpc.checkPermissionBatch(contexts, options)` | 批量检查权限 |
 | `mtpc.evaluatePolicy(context)` | 评估策略 |
 | `mtpc.getPermissionCodes()` | 获取所有权限代码 |
 | `mtpc.getResourceNames()` | 获取所有资源名称 |
 | `mtpc.getResource(name)` | 根据名称获取资源定义 |
 | `mtpc.exportMetadata()` | 导出元数据供 UI 使用 |
+| `mtpc.getSummary()` | 获取系统摘要信息 |
 
 ### 10.2 错误类型
 
