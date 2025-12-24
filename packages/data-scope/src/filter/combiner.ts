@@ -1,13 +1,13 @@
 import type { FilterCondition } from '@mtpc/core';
-import type { DataScopeDefinition, ResolvedScope } from '../types.js';
+import type { ResolvedScope } from '../types.js';
 
 /**
- * Combine mode
+ * 组合模式
  */
 export type CombineMode = 'and' | 'or' | 'priority';
 
 /**
- * Combine multiple filter arrays
+ * 组合多个过滤器数组
  */
 export function combineFilters(
   filterArrays: FilterCondition[][],
@@ -38,7 +38,7 @@ export function combineFilters(
 }
 
 /**
- * Combine resolved scopes
+ * 组合已解析的范围
  */
 export function combineResolvedScopes(
   scopes: ResolvedScope[],
@@ -64,7 +64,7 @@ export function combineResolvedScopes(
 }
 
 /**
- * Deduplicate filters
+ * 过滤器去重
  */
 export function deduplicateFilters(filters: FilterCondition[]): FilterCondition[] {
   const seen = new Set<string>();
@@ -82,7 +82,7 @@ export function deduplicateFilters(filters: FilterCondition[]): FilterCondition[
 }
 
 /**
- * Merge filters with existing ones
+ * 与现有过滤器合并
  */
 export function mergeWithExisting(
   existing: FilterCondition[],
@@ -94,7 +94,7 @@ export function mergeWithExisting(
 }
 
 /**
- * Check if filters conflict
+ * 检查过滤器是否冲突
  */
 export function hasConflict(filters: FilterCondition[]): boolean {
   const fieldValues = new Map<string, { operator: string; values: unknown[] }>();

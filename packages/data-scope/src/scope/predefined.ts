@@ -2,7 +2,7 @@ import type { DataScopeDefinition } from '../types.js';
 import { scope } from './builder.js';
 
 /**
- * Predefined scope: All access (no restrictions)
+ * 预定义范围：完全访问（无限制）
  */
 export const SCOPE_ALL: DataScopeDefinition = scope('All Access')
   .id('scope:all')
@@ -13,7 +13,7 @@ export const SCOPE_ALL: DataScopeDefinition = scope('All Access')
   .build();
 
 /**
- * Predefined scope: Tenant isolation
+ * 预定义范围：租户隔离
  */
 export const SCOPE_TENANT: DataScopeDefinition = scope('Tenant')
   .id('scope:tenant')
@@ -23,7 +23,7 @@ export const SCOPE_TENANT: DataScopeDefinition = scope('Tenant')
   .build();
 
 /**
- * Predefined scope: Own records only
+ * 预定义范围：仅自己的记录
  */
 export const SCOPE_SELF: DataScopeDefinition = scope('Self')
   .id('scope:self')
@@ -33,7 +33,7 @@ export const SCOPE_SELF: DataScopeDefinition = scope('Self')
   .build();
 
 /**
- * Predefined scope: Department
+ * 预定义范围：部门
  */
 export const SCOPE_DEPARTMENT: DataScopeDefinition = scope('Department')
   .id('scope:department')
@@ -43,7 +43,7 @@ export const SCOPE_DEPARTMENT: DataScopeDefinition = scope('Department')
   .build();
 
 /**
- * Predefined scope: Team
+ * 预定义范围：团队
  */
 export const SCOPE_TEAM: DataScopeDefinition = scope('Team')
   .id('scope:team')
@@ -53,7 +53,7 @@ export const SCOPE_TEAM: DataScopeDefinition = scope('Team')
   .build();
 
 /**
- * All predefined scopes
+ * 所有预定义范围
  */
 export const PREDEFINED_SCOPES = {
   all: SCOPE_ALL,
@@ -64,7 +64,7 @@ export const PREDEFINED_SCOPES = {
 } as const;
 
 /**
- * Get predefined scope by type
+ * 根据类型获取预定义范围
  */
 export function getPredefinedScope(type: keyof typeof PREDEFINED_SCOPES): DataScopeDefinition {
   return PREDEFINED_SCOPES[type];

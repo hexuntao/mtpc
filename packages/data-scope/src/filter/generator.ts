@@ -1,13 +1,24 @@
 import type { FilterCondition, FilterOperator, MTPCContext } from '@mtpc/core';
 import type {
   DataScopeDefinition,
+  HierarchyResolver,
   ResolvedScope,
   ScopeCondition,
   ScopeValueResolver,
 } from '../types.js';
 
+// 保存层级解析器的全局引用
+let globalHierarchyResolver: HierarchyResolver | undefined;
+
 /**
- * Map scope operator to filter operator
+ * 设置全局层级解析器
+ */
+export function setHierarchyResolver(resolver: HierarchyResolver): void {
+  globalHierarchyResolver = resolver;
+}
+
+/**
+ * 将范围操作符映射为过滤器操作符
  */
 function mapOperator(scopeOp: ScopeCondition['operator']): FilterOperator {
   const mapping: Record<ScopeCondition['operator'], FilterOperator> = {
@@ -16,32 +27,47 @@ function mapOperator(scopeOp: ScopeCondition['operator']): FilterOperator {
     in: 'in',
     notIn: 'notIn',
     contains: 'contains',
-    hierarchy: 'in', // Hierarchy is resolved to 'in'
+    hierarchy: 'in', // 层级操作符映射为 'in'，需要先解析值
   };
   return mapping[scopeOp];
 }
 
 /**
- * Resolve scope value
+ * 解析范围值
  */
 async function resolveValue(
   value: unknown | ScopeValueResolver,
-  ctx: MTPCContext
+  ctx: MTPCContext,
+  operator?: ScopeCondition['operator']
 ): Promise<unknown> {
+  // 如果是函数，执行它
   if (typeof value === 'function') {
-    return await (value as ScopeValueResolver)(ctx);
+    const resolved = await (value as ScopeValueResolver)(ctx);
+
+    // 如果是层级操作符且解析结果是字符串，使用层级解析器展开
+    if (operator === 'hierarchy' && typeof resolved === 'string' && globalHierarchyResolver) {
+      return globalHierarchyResolver.resolveRoot(resolved);
+    }
+
+    return resolved;
   }
+
+  // 如果是层级操作符且值是字符串，使用层级解析器展开
+  if (operator === 'hierarchy' && typeof value === 'string' && globalHierarchyResolver) {
+    return globalHierarchyResolver.resolveRoot(value);
+  }
+
   return value;
 }
 
 /**
- * Generate filter condition from scope condition
+ * 从范围条件生成过滤条件
  */
 export async function generateFilterFromCondition(
   condition: ScopeCondition,
   ctx: MTPCContext
 ): Promise<FilterCondition> {
-  const resolvedValue = await resolveValue(condition.value, ctx);
+  const resolvedValue = await resolveValue(condition.value, ctx, condition.operator);
 
   return {
     field: condition.field,
@@ -51,7 +77,7 @@ export async function generateFilterFromCondition(
 }
 
 /**
- * Generate filters from scope definition
+ * 从范围定义生成过滤器
  */
 export async function generateFiltersFromScope(
   scope: DataScopeDefinition,
@@ -93,7 +119,7 @@ export async function generateFiltersFromScope(
 }
 
 /**
- * Resolve scope to filters
+ * 将范围解析为过滤器
  */
 export async function resolveScope(
   scope: DataScopeDefinition,
@@ -109,7 +135,7 @@ export async function resolveScope(
 }
 
 /**
- * Resolve multiple scopes
+ * 解析多个范围
  */
 export async function resolveScopes(
   scopes: DataScopeDefinition[],
@@ -125,7 +151,7 @@ export async function resolveScopes(
 }
 
 /**
- * Filter generator class
+ * 过滤器生成器类
  */
 export class FilterGenerator {
   private ctx: MTPCContext;
@@ -135,14 +161,14 @@ export class FilterGenerator {
   }
 
   /**
-   * Generate filters for a scope
+   * 为范围生成过滤器
    */
   async forScope(scope: DataScopeDefinition): Promise<FilterCondition[]> {
     return generateFiltersFromScope(scope, this.ctx);
   }
 
   /**
-   * Generate filters for multiple scopes
+   * 为多个范围生成过滤器
    */
   async forScopes(scopes: DataScopeDefinition[]): Promise<FilterCondition[]> {
     const allFilters: FilterCondition[] = [];
@@ -156,7 +182,7 @@ export class FilterGenerator {
   }
 
   /**
-   * Generate tenant filter
+   * 生成租户过滤器
    */
   tenantFilter(): FilterCondition {
     return {
@@ -167,7 +193,7 @@ export class FilterGenerator {
   }
 
   /**
-   * Generate owner filter
+   * 生成所有者过滤器
    */
   ownerFilter(field: string = 'createdBy'): FilterCondition {
     return {
@@ -179,7 +205,7 @@ export class FilterGenerator {
 }
 
 /**
- * Create filter generator
+ * 创建过滤器生成器
  */
 export function createFilterGenerator(ctx: MTPCContext): FilterGenerator {
   return new FilterGenerator(ctx);

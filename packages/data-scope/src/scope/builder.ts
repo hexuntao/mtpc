@@ -1,3 +1,4 @@
+import type { MTPCContext } from '@mtpc/core';
 import type {
   DataScopeDefinition,
   ScopeCondition,
@@ -8,7 +9,7 @@ import type {
 import { createScopeDefinition } from './definition.js';
 
 /**
- * Scope builder for fluent API
+ * 范围构建器，提供流式 API
  */
 export class ScopeBuilder {
   private definition: Partial<DataScopeDefinition> & { conditions: ScopeCondition[] };
@@ -24,7 +25,7 @@ export class ScopeBuilder {
   }
 
   /**
-   * Set scope ID
+   * 设置范围 ID
    */
   id(id: string): this {
     this.definition.id = id;
@@ -32,7 +33,7 @@ export class ScopeBuilder {
   }
 
   /**
-   * Set description
+   * 设置描述
    */
   description(description: string): this {
     this.definition.description = description;
@@ -40,7 +41,7 @@ export class ScopeBuilder {
   }
 
   /**
-   * Set scope type
+   * 设置范围类型
    */
   type(type: ScopeType): this {
     this.definition.type = type;
@@ -48,7 +49,7 @@ export class ScopeBuilder {
   }
 
   /**
-   * Set as "all" scope (no restrictions)
+   * 设置为 "all" 范围（无限制）
    */
   all(): this {
     this.definition.type = 'all';
@@ -57,7 +58,7 @@ export class ScopeBuilder {
   }
 
   /**
-   * Set as "tenant" scope
+   * 设置为 "tenant" 范围
    */
   tenant(): this {
     this.definition.type = 'tenant';
@@ -65,7 +66,7 @@ export class ScopeBuilder {
   }
 
   /**
-   * Set as "self" scope
+   * 设置为 "self" 范围
    */
   self(ownerField: string = 'createdBy'): this {
     this.definition.type = 'self';
@@ -73,7 +74,7 @@ export class ScopeBuilder {
       {
         field: ownerField,
         operator: 'eq',
-        value: ctx => ctx.subject.id,
+        value: (ctx: MTPCContext) => ctx.subject.id,
         contextField: 'subject.id',
       },
     ];
@@ -81,7 +82,7 @@ export class ScopeBuilder {
   }
 
   /**
-   * Set as "department" scope
+   * 设置为 "department" 范围
    */
   department(
     resourceField: string = 'departmentId',
@@ -92,7 +93,7 @@ export class ScopeBuilder {
       {
         field: resourceField,
         operator: 'eq',
-        value: ctx => {
+        value: (ctx: MTPCContext) => {
           const parts = contextField.split('.');
           let value: unknown = ctx;
           for (const part of parts) {
@@ -107,7 +108,7 @@ export class ScopeBuilder {
   }
 
   /**
-   * Set as "team" scope
+   * 设置为 "team" 范围
    */
   team(resourceField: string = 'teamId', contextField: string = 'subject.metadata.teamId'): this {
     this.definition.type = 'team';
@@ -115,7 +116,7 @@ export class ScopeBuilder {
       {
         field: resourceField,
         operator: 'eq',
-        value: ctx => {
+        value: (ctx: MTPCContext) => {
           const parts = contextField.split('.');
           let value: unknown = ctx;
           for (const part of parts) {
@@ -130,7 +131,7 @@ export class ScopeBuilder {
   }
 
   /**
-   * Add custom condition
+   * 添加自定义条件
    */
   where(
     field: string,
@@ -147,21 +148,21 @@ export class ScopeBuilder {
   }
 
   /**
-   * Add equality condition
+   * 添加相等条件
    */
   whereEquals(field: string, value: unknown | ScopeValueResolver): this {
     return this.where(field, 'eq', value);
   }
 
   /**
-   * Add field equals context field condition
+   * 添加字段等于上下文字段的条件
    */
   whereFieldEquals(resourceField: string, contextField: string): this {
     this.definition.type = 'custom';
     this.definition.conditions.push({
       field: resourceField,
       operator: 'eq',
-      value: ctx => {
+      value: (ctx: MTPCContext) => {
         const parts = contextField.split('.');
         let value: unknown = ctx;
         for (const part of parts) {
@@ -175,28 +176,28 @@ export class ScopeBuilder {
   }
 
   /**
-   * Add "in" condition
+   * 添加 "in" 条件
    */
   whereIn(field: string, values: unknown[] | ScopeValueResolver): this {
     return this.where(field, 'in', values);
   }
 
   /**
-   * Add "not in" condition
+   * 添加 "not in" 条件
    */
   whereNotIn(field: string, values: unknown[] | ScopeValueResolver): this {
     return this.where(field, 'notIn', values);
   }
 
   /**
-   * Add hierarchy condition (e.g., for org structure)
+   * 添加层级条件（例如：用于组织结构）
    */
   whereInHierarchy(field: string, rootResolver: ScopeValueResolver): this {
     return this.where(field, 'hierarchy', rootResolver);
   }
 
   /**
-   * Set priority
+   * 设置优先级
    */
   priority(priority: number): this {
     this.definition.priority = priority;
@@ -204,7 +205,7 @@ export class ScopeBuilder {
   }
 
   /**
-   * Set as non-combinable
+   * 设置为不可组合
    */
   exclusive(): this {
     this.definition.combinable = false;
@@ -212,7 +213,7 @@ export class ScopeBuilder {
   }
 
   /**
-   * Set metadata
+   * 设置元数据
    */
   metadata(metadata: Record<string, unknown>): this {
     this.definition.metadata = { ...this.definition.metadata, ...metadata };
@@ -220,7 +221,7 @@ export class ScopeBuilder {
   }
 
   /**
-   * Build the scope definition
+   * 构建范围定义
    */
   build(): DataScopeDefinition {
     return createScopeDefinition({
@@ -237,32 +238,32 @@ export class ScopeBuilder {
 }
 
 /**
- * Create a scope builder
+ * 创建范围构建器
  */
 export function scope(name: string): ScopeBuilder {
   return new ScopeBuilder(name);
 }
 
 /**
- * Quick create common scopes
+ * 快速创建通用范围
  */
 export const createScope = {
   /**
-   * Create "all" scope
+   * 创建 "all" 范围
    */
   all(name: string = 'all'): DataScopeDefinition {
     return scope(name).all().build();
   },
 
   /**
-   * Create "self" scope
+   * 创建 "self" 范围
    */
   self(name: string = 'self', ownerField?: string): DataScopeDefinition {
     return scope(name).self(ownerField).build();
   },
 
   /**
-   * Create "department" scope
+   * 创建 "department" 范围
    */
   department(
     name: string = 'department',
@@ -273,14 +274,14 @@ export const createScope = {
   },
 
   /**
-   * Create "team" scope
+   * 创建 "team" 范围
    */
   team(name: string = 'team', resourceField?: string, contextField?: string): DataScopeDefinition {
     return scope(name).team(resourceField, contextField).build();
   },
 
   /**
-   * Create custom scope with single condition
+   * 创建带有单个条件的自定义范围
    */
   custom(
     name: string,

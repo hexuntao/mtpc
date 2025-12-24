@@ -1,4 +1,4 @@
-import type { FilterCondition, MTPCContext } from '@mtpc/core';
+import type { MTPCContext } from '@mtpc/core';
 import { combineResolvedScopes, mergeWithExisting } from '../filter/combiner.js';
 import { resolveScope } from '../filter/generator.js';
 import { PREDEFINED_SCOPES } from '../scope/predefined.js';
@@ -9,26 +9,41 @@ import type {
   ScopeResolutionContext,
   ScopeResolutionResult,
 } from '../types.js';
-import { contextResolvers } from './context-resolver.js';
+import { contextResolvers, createAdminChecker } from './context-resolver.js';
 
 /**
- * Scope resolver - determines which scopes apply to a request
+ * 范围解析器 - 确定哪些范围适用于请求
  */
 export class ScopeResolver {
   private registry: ScopeRegistry;
   private defaultScopeId: string;
+  private isAdminChecker: (ctx: MTPCContext) => boolean;
+  private checkWildcardPermission: boolean;
 
-  constructor(registry: ScopeRegistry, options: { defaultScopeId?: string } = {}) {
+  constructor(
+    registry: ScopeRegistry,
+    options: {
+      defaultScopeId?: string;
+      adminRoles?: string[];
+      checkWildcardPermission?: boolean;
+    } = {}
+  ) {
     this.registry = registry;
     this.defaultScopeId = options.defaultScopeId ?? 'scope:tenant';
+    this.checkWildcardPermission = options.checkWildcardPermission ?? true;
+
+    // 创建管理员检查器
+    this.isAdminChecker = createAdminChecker(
+      options.adminRoles ?? ['admin'],
+      this.checkWildcardPermission
+    );
   }
 
   /**
-   * Resolve scopes for a request
+   * 解析请求的范围
    */
   async resolve(context: ScopeResolutionContext): Promise<ScopeResolutionResult> {
     const { mtpcContext, resourceName } = context;
-    const startTime = Date.now();
 
     // Check for system subject - no restrictions
     if (contextResolvers.isSystem(mtpcContext)) {
@@ -41,7 +56,7 @@ export class ScopeResolver {
     }
 
     // Check for admin - use "all" scope
-    if (contextResolvers.isAdmin(mtpcContext)) {
+    if (this.isAdminChecker(mtpcContext)) {
       const allScope = PREDEFINED_SCOPES.all;
       return {
         scopes: [{ definition: allScope, filters: [], resolvedAt: new Date() }],
@@ -99,14 +114,14 @@ export class ScopeResolver {
   }
 
   /**
-   * Quick check if subject has unrestricted access
+   * 快速检查主体是否有无限制访问权限
    */
   async hasUnrestrictedAccess(ctx: MTPCContext): Promise<boolean> {
     if (contextResolvers.isSystem(ctx)) {
       return true;
     }
 
-    if (contextResolvers.isAdmin(ctx)) {
+    if (this.isAdminChecker(ctx)) {
       return true;
     }
 
@@ -121,7 +136,7 @@ export class ScopeResolver {
   }
 
   /**
-   * Get effective scope type for subject
+   * 获取主体的有效范围类型
    */
   async getEffectiveScopeType(
     ctx: MTPCContext,
@@ -147,11 +162,15 @@ export class ScopeResolver {
 }
 
 /**
- * Create scope resolver
+ * 创建范围解析器
  */
 export function createScopeResolver(
   registry: ScopeRegistry,
-  options?: { defaultScopeId?: string }
+  options?: {
+    defaultScopeId?: string;
+    adminRoles?: string[];
+    checkWildcardPermission?: boolean;
+  }
 ): ScopeResolver {
   return new ScopeResolver(registry, options);
 }

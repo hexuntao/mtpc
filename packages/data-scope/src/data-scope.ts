@@ -1,4 +1,5 @@
 import type { FilterCondition, MTPC, MTPCContext, ResourceDefinition } from '@mtpc/core';
+import { setHierarchyResolver } from './filter/generator.js';
 import { createScopeResolver, type ScopeResolver } from './resolver/scope-resolver.js';
 import { createScope, scope } from './scope/builder.js';
 import { PREDEFINED_SCOPES } from './scope/predefined.js';
@@ -16,42 +17,47 @@ import type {
 } from './types.js';
 
 /**
- * DataScope - Row-level security for MTPC
+ * DataScope - MTPC 的行级安全控制
  */
 export class DataScope {
   private registry: ScopeRegistry;
   private resolver: ScopeResolver;
-  private options: DataScopeOptions;
 
   constructor(options: DataScopeOptions = {}) {
-    this.options = options;
     const store = options.store ?? new InMemoryDataScopeStore();
 
     this.registry = createScopeRegistry(store, {
       cacheTTL: options.cacheTTL,
     });
 
+    // 设置层级解析器
+    if (options.hierarchyResolver) {
+      setHierarchyResolver(options.hierarchyResolver);
+    }
+
     this.resolver = createScopeResolver(this.registry, {
       defaultScopeId: options.defaultScope ? `scope:${options.defaultScope}` : undefined,
+      adminRoles: options.adminRoles ?? ['admin'],
+      checkWildcardPermission: options.checkWildcardPermission ?? true,
     });
   }
 
   /**
-   * Define a new scope
+   * 定义新范围
    */
   async defineScope(definition: Omit<DataScopeDefinition, 'id'>): Promise<DataScopeDefinition> {
     return this.registry.createScope(definition);
   }
 
   /**
-   * Get a scope by ID
+   * 根据 ID 获取范围
    */
   async getScope(id: string): Promise<DataScopeDefinition | null> {
     return this.registry.getScope(id);
   }
 
   /**
-   * Assign scope to a resource
+   * 将范围分配给资源
    */
   async assignToResource(
     tenantId: string,
@@ -63,7 +69,7 @@ export class DataScope {
   }
 
   /**
-   * Assign scope to a role
+   * 将范围分配给角色
    */
   async assignToRole(
     tenantId: string,
@@ -75,7 +81,7 @@ export class DataScope {
   }
 
   /**
-   * Assign scope to a subject
+   * 将范围分配给主体
    */
   async assignToSubject(
     tenantId: string,
@@ -87,7 +93,7 @@ export class DataScope {
   }
 
   /**
-   * Resolve scopes for a context
+   * 解析上下文的范围
    */
   async resolve(
     ctx: MTPCContext,
@@ -104,7 +110,7 @@ export class DataScope {
   }
 
   /**
-   * Get filters for a context and resource
+   * 获取上下文和资源的过滤器
    */
   async getFilters(
     ctx: MTPCContext,
@@ -116,14 +122,14 @@ export class DataScope {
   }
 
   /**
-   * Check if subject has unrestricted access
+   * 检查主体是否有无限制访问权限
    */
   async hasUnrestrictedAccess(ctx: MTPCContext): Promise<boolean> {
     return this.resolver.hasUnrestrictedAccess(ctx);
   }
 
   /**
-   * Create filterQuery hook for a resource
+   * 为资源创建 filterQuery 钩子
    */
   createFilterQueryHook(resourceName: string) {
     return async (ctx: MTPCContext, baseFilters: FilterCondition[]): Promise<FilterCondition[]> => {
@@ -132,24 +138,63 @@ export class DataScope {
   }
 
   /**
-   * Integrate with MTPC
+   * 安全地扩展资源钩子
+   *
+   * @internal 这是内部方法，用于在集成时扩展资源钩子
+   * @param resource 资源定义
+   * @param hook 要添加的钩子函数
+   *
+   * @warning 此方法直接修改 resource.hooks，这是有意为之的行为
+   * 因为 ResourceDefinition 的 hooks 属性是只读的，我们需要使用类型断言
+   *
+   * @example
+   * ```typescript
+   * const hook = async (ctx, filters) => [...filters, { field: 'tenantId', operator: 'eq', value: ctx.tenant.id }];
+   * this.extendResourceHooks(resource, 'filterQuery', hook);
+   * ```
+   */
+  private extendResourceHooks(
+    resource: ResourceDefinition,
+    hookName: 'filterQuery',
+    hook: (ctx: MTPCContext, filters: FilterCondition[]) => Promise<FilterCondition[]>
+  ): void {
+    const existingHooks = resource.hooks[hookName] ?? [];
+    // 类型断言：我们需要扩展只读的 hooks 属性
+    (resource.hooks as { filterQuery: typeof existingHooks }).filterQuery = [
+      ...existingHooks,
+      hook,
+    ];
+  }
+
+  /**
+   * 与 MTPC 集成
+   *
+   * 为所有已注册的资源添加 filterQuery 钩子
+   *
+   * @param mtpc MTPC 实例
+   *
+   * @example
+   * ```typescript
+   * const mtpc = createMTPC();
+   * const dataScope = createDataScope();
+   *
+   * // 注册资源...
+   * mtpc.registry.registerResource(userResource);
+   *
+   * // 集成 data-scope
+   * dataScope.integrateWith(mtpc);
+   * ```
    */
   integrateWith(mtpc: MTPC): void {
-    // Add filterQuery hooks to all resources
+    // 为所有资源添加 filterQuery 钩子
     for (const resource of mtpc.registry.resources.list()) {
       const hook = this.createFilterQueryHook(resource.name);
-
-      // Extend resource hooks
-      const existingHooks = resource.hooks.filterQuery ?? [];
-      (resource.hooks as { filterQuery: typeof existingHooks }).filterQuery = [
-        ...existingHooks,
-        hook,
-      ];
+      this.extendResourceHooks(resource, 'filterQuery', hook);
     }
   }
 
   /**
-   * Quick setup: assign predefined scopes to roles
+   * 快速设置：将预定义范围分配给角色
    */
   async setupDefaultScopes(tenantId: string, roleScopes: Record<string, ScopeType>): Promise<void> {
     for (const [role, scopeType] of Object.entries(roleScopes)) {
@@ -159,21 +204,21 @@ export class DataScope {
   }
 
   /**
-   * Get registry
+   * 获取注册表
    */
   getRegistry(): ScopeRegistry {
     return this.registry;
   }
 
   /**
-   * Get resolver
+   * 获取解析器
    */
   getResolver(): ScopeResolver {
     return this.resolver;
   }
 
   /**
-   * Clear cache
+   * 清除缓存
    */
   clearCache(): void {
     this.registry.clearCache();
@@ -181,11 +226,11 @@ export class DataScope {
 }
 
 /**
- * Create DataScope instance
+ * 创建 DataScope 实例
  */
 export function createDataScope(options?: DataScopeOptions): DataScope {
   return new DataScope(options);
 }
 
-// Re-export builders for convenience
+// 便捷重导出构建器
 export { scope, createScope, PREDEFINED_SCOPES };

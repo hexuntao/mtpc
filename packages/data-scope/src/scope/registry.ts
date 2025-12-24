@@ -3,7 +3,7 @@ import { validateScopeDefinition } from './definition.js';
 import { PREDEFINED_SCOPES } from './predefined.js';
 
 /**
- * In-memory data scope store
+ * 内存数据范围存储
  */
 export class InMemoryDataScopeStore implements DataScopeStore {
   private scopes: Map<string, DataScopeDefinition> = new Map();
@@ -128,7 +128,7 @@ export class InMemoryDataScopeStore implements DataScopeStore {
 }
 
 /**
- * Scope registry - manages scope definitions and assignments
+ * 范围注册表 - 管理范围定义和分配
  */
 export class ScopeRegistry {
   private store: DataScopeStore;
@@ -264,7 +264,7 @@ export class ScopeRegistry {
 }
 
 /**
- * Create scope registry
+ * 创建范围注册表
  */
 export function createScopeRegistry(
   store?: DataScopeStore,

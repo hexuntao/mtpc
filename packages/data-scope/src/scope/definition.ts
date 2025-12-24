@@ -3,14 +3,14 @@ import type { DataScopeDefinition, ScopeCondition, ScopeType } from '../types.js
 let scopeIdCounter = 0;
 
 /**
- * Generate scope ID
+ * 生成范围 ID
  */
 function generateScopeId(): string {
   return `scope_${++scopeIdCounter}_${Date.now()}`;
 }
 
 /**
- * Create a data scope definition
+ * 创建数据范围定义
  */
 export function createScopeDefinition(
   options: Omit<DataScopeDefinition, 'id'> & { id?: string }
@@ -28,7 +28,7 @@ export function createScopeDefinition(
 }
 
 /**
- * Validate scope definition
+ * 验证范围定义
  */
 export function validateScopeDefinition(scope: DataScopeDefinition): void {
   if (!scope.id || typeof scope.id !== 'string') {
@@ -65,7 +65,7 @@ export function validateScopeDefinition(scope: DataScopeDefinition): void {
 }
 
 /**
- * Validate scope condition
+ * 验证范围条件
  */
 export function validateScopeCondition(condition: ScopeCondition): void {
   if (!condition.field || typeof condition.field !== 'string') {
@@ -79,7 +79,7 @@ export function validateScopeCondition(condition: ScopeCondition): void {
 }
 
 /**
- * Clone scope definition
+ * 克隆范围定义
  */
 export function cloneScopeDefinition(
   scope: DataScopeDefinition,
@@ -95,7 +95,7 @@ export function cloneScopeDefinition(
 }
 
 /**
- * Merge scope conditions
+ * 合并范围条件
  */
 export function mergeScopeConditions(
   ...conditionArrays: (ScopeCondition[] | undefined)[]

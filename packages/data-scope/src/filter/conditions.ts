@@ -2,7 +2,7 @@ import type { FilterCondition, MTPCContext } from '@mtpc/core';
 import type { ScopeValueResolver } from '../types.js';
 
 /**
- * Create a static filter condition
+ * 创建静态过滤条件
  */
 export function staticCondition(
   field: string,
@@ -13,7 +13,7 @@ export function staticCondition(
 }
 
 /**
- * Create a context-based filter condition
+ * 创建基于上下文的过滤条件
  */
 export function contextCondition(
   field: string,
@@ -28,7 +28,7 @@ export function contextCondition(
 }
 
 /**
- * Create tenant equality condition
+ * 创建租户相等条件
  */
 export function tenantEquals(field: string = 'tenantId'): (ctx: MTPCContext) => FilterCondition {
   return ctx => ({
@@ -39,7 +39,7 @@ export function tenantEquals(field: string = 'tenantId'): (ctx: MTPCContext) => 
 }
 
 /**
- * Create subject equality condition
+ * 创建主体相等条件
  */
 export function subjectEquals(field: string = 'createdBy'): (ctx: MTPCContext) => FilterCondition {
   return ctx => ({
@@ -50,7 +50,7 @@ export function subjectEquals(field: string = 'createdBy'): (ctx: MTPCContext) =
 }
 
 /**
- * Create metadata field equality condition
+ * 创建元数据字段相等条件
  */
 export function metadataEquals(
   resourceField: string,
@@ -64,14 +64,14 @@ export function metadataEquals(
 }
 
 /**
- * Create role-based condition
+ * 创建基于角色的条件
  */
 export function hasRole(role: string): (ctx: MTPCContext) => boolean {
   return ctx => ctx.subject.roles?.includes(role) ?? false;
 }
 
 /**
- * Conditional filter - applies filter only if condition is met
+ * 条件过滤器 - 仅在满足条件时应用过滤器
  */
 export function conditionalFilter(
   condition: (ctx: MTPCContext) => boolean,
@@ -86,26 +86,26 @@ export function conditionalFilter(
 }
 
 /**
- * Common filter presets
+ * 通用过滤器预设
  */
 export const filterPresets = {
   /**
-   * Filter by tenant
+   * 按租户过滤
    */
   byTenant: tenantEquals(),
 
   /**
-   * Filter by owner/creator
+   * 按所有者/创建者过滤
    */
   byOwner: subjectEquals(),
 
   /**
-   * Filter by department
+   * 按部门过滤
    */
   byDepartment: metadataEquals('departmentId', 'departmentId'),
 
   /**
-   * Filter by team
+   * 按团队过滤
    */
   byTeam: metadataEquals('teamId', 'teamId'),
 };
