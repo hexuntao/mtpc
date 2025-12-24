@@ -1,26 +1,25 @@
 import type {
   PermissionCheckResult,
-  PolicyDefinition,
   ResourceDefinition,
   SubjectContext,
   TenantContext,
 } from '@mtpc/core';
-import { createPermissionCode, parsePermissionCode } from '@mtpc/shared';
+import { createPermissionCode } from '@mtpc/shared';
 import type { MockMTPC, MockMTPCOptions, PermissionCheckSpy } from '../types.js';
 
 /**
- * Create a mock MTPC instance for testing
+ * 创建用于测试的模拟 MTPC 实例
  */
 export function createMockMTPC(options: MockMTPCOptions = {}): MockMTPC {
-  const { resources = [], policies = [], defaultPermissions = [], defaultDeny = true } = options;
+  const { resources = [], defaultPermissions = [], defaultDeny = true } = options;
 
-  // Permission grants: tenantId -> subjectId -> Set<permission>
+  // 权限授予：租户 ID -> 主体 ID -> 权限集合
   const grants = new Map<string, Map<string, Set<string>>>();
 
-  // Spy data
+  // 监听器数据
   const spyCalls: PermissionCheckSpy['calls'] = [];
 
-  // Helper to get or create tenant map
+  // 获取或创建租户权限映射的辅助函数
   const getTenantGrants = (tenantId: string): Map<string, Set<string>> => {
     let tenantMap = grants.get(tenantId);
     if (!tenantMap) {
@@ -30,7 +29,7 @@ export function createMockMTPC(options: MockMTPCOptions = {}): MockMTPC {
     return tenantMap;
   };
 
-  // Helper to get or create subject set
+  // 获取或创建主体权限集合的辅助函数
   const getSubjectPermissions = (tenantId: string, subjectId: string): Set<string> => {
     const tenantMap = getTenantGrants(tenantId);
     let perms = tenantMap.get(subjectId);
@@ -264,7 +263,7 @@ export function createMockMTPC(options: MockMTPCOptions = {}): MockMTPC {
 }
 
 /**
- * Create a mock MTPC that allows everything
+ * 创建允许所有操作的模拟 MTPC
  */
 export function createPermissiveMockMTPC(): MockMTPC {
   const mock = createMockMTPC({ defaultDeny: false });
@@ -273,7 +272,7 @@ export function createPermissiveMockMTPC(): MockMTPC {
 }
 
 /**
- * Create a mock MTPC that denies everything
+ * 创建拒绝所有操作的模拟 MTPC
  */
 export function createRestrictiveMockMTPC(): MockMTPC {
   return createMockMTPC({ defaultDeny: true });

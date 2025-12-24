@@ -1,6 +1,5 @@
 import type {
   MTPCContext,
-  Permission,
   PermissionCheckResult,
   PolicyDefinition,
   ResourceDefinition,
@@ -9,7 +8,7 @@ import type {
 } from '@mtpc/core';
 
 /**
- * Mock tenant options
+ * 模拟租户选项
  */
 export interface MockTenantOptions {
   id?: string;
@@ -18,7 +17,7 @@ export interface MockTenantOptions {
 }
 
 /**
- * Mock subject options
+ * 模拟主体选项
  */
 export interface MockSubjectOptions {
   id?: string;
@@ -29,7 +28,7 @@ export interface MockSubjectOptions {
 }
 
 /**
- * Mock context options
+ * 模拟上下文选项
  */
 export interface MockContextOptions {
   tenant?: TenantContext | MockTenantOptions;
@@ -42,7 +41,7 @@ export interface MockContextOptions {
 }
 
 /**
- * Mock MTPC options
+ * 模拟 MTPC 选项
  */
 export interface MockMTPCOptions {
   resources?: ResourceDefinition[];
@@ -52,7 +51,7 @@ export interface MockMTPCOptions {
 }
 
 /**
- * Permission grant entry
+ * 权限授予条目
  */
 export interface PermissionGrant {
   tenantId: string;
@@ -61,7 +60,7 @@ export interface PermissionGrant {
 }
 
 /**
- * Permission check spy
+ * 权限检查监听器
  */
 export interface PermissionCheckSpy {
   calls: Array<{
@@ -82,7 +81,7 @@ export interface PermissionCheckSpy {
 }
 
 /**
- * Test permission matrix entry
+ * 测试权限矩阵条目
  */
 export interface PermissionMatrixEntry {
   role: string;
@@ -91,7 +90,7 @@ export interface PermissionMatrixEntry {
 }
 
 /**
- * Test context
+ * 测试上下文
  */
 export interface TestContext {
   mtpc: MockMTPC;
@@ -101,7 +100,7 @@ export interface TestContext {
 }
 
 /**
- * Mock MTPC interface
+ * 模拟 MTPC 接口
  */
 export interface MockMTPC {
   // Permission management

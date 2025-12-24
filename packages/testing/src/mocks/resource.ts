@@ -2,7 +2,7 @@ import { defineResource, type ResourceDefinition } from '@mtpc/core';
 import { z } from 'zod';
 
 /**
- * Create a minimal mock resource for testing
+ * 创建用于测试的最小模拟资源
  */
 export function createMockResource(
   name: string,
@@ -41,7 +41,7 @@ export function createMockResource(
 }
 
 /**
- * Create standard test resources
+ * 创建标准测试资源
  */
 export function createTestResources(): ResourceDefinition[] {
   return [

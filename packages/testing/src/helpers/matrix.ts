@@ -1,11 +1,11 @@
-import type { SubjectContext, TenantContext } from '@mtpc/core';
+import type { TenantContext } from '@mtpc/core';
 import { createMockSubject } from '../mocks/subject.js';
 import { createMockTenant } from '../mocks/tenant.js';
 import type { MockMTPC, PermissionMatrixEntry } from '../types.js';
 import { testPermission } from './permission.js';
 
 /**
- * Permission matrix test result
+ * 权限矩阵测试结果
  */
 export interface MatrixTestResult {
   entry: PermissionMatrixEntry;
@@ -15,7 +15,7 @@ export interface MatrixTestResult {
 }
 
 /**
- * Permission matrix configuration
+ * 权限矩阵配置
  */
 export interface PermissionMatrixConfig {
   roles: Record<string, string[]>; // role -> permissions
@@ -23,7 +23,7 @@ export interface PermissionMatrixConfig {
 }
 
 /**
- * Test a permission matrix
+ * 测试权限矩阵
  */
 export async function testPermissionMatrix(
   mtpc: MockMTPC,
@@ -70,7 +70,7 @@ export async function testPermissionMatrix(
 }
 
 /**
- * Create matrix entries for standard CRUD
+ * 为标准 CRUD 创建矩阵条目
  */
 export function createCRUDMatrix(
   resource: string,
@@ -93,7 +93,7 @@ export function createCRUDMatrix(
 }
 
 /**
- * Generate matrix from role definitions
+ * 从角色定义生成矩阵
  */
 export function generateMatrix(
   resources: string[],
@@ -120,7 +120,7 @@ export function generateMatrix(
 }
 
 /**
- * Assert all matrix tests pass
+ * 断言所有矩阵测试通过
  */
 export function assertMatrixPasses(results: MatrixTestResult[]): void {
   const failures = results.filter(r => !r.passed);
@@ -132,7 +132,7 @@ export function assertMatrixPasses(results: MatrixTestResult[]): void {
 }
 
 /**
- * Print matrix results
+ * 打印矩阵结果
  */
 export function printMatrixResults(results: MatrixTestResult[]): void {
   console.table(

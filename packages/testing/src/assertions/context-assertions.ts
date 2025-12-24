@@ -1,7 +1,7 @@
-import type { MTPCContext, SubjectContext, TenantContext } from '@mtpc/core';
+import type { MTPCContext, SubjectContext } from '@mtpc/core';
 
 /**
- * Assert tenant ID
+ * 断言租户 ID
  */
 export function assertTenantId(ctx: MTPCContext, expectedId: string): void {
   if (ctx.tenant.id !== expectedId) {
@@ -10,7 +10,7 @@ export function assertTenantId(ctx: MTPCContext, expectedId: string): void {
 }
 
 /**
- * Assert subject ID
+ * 断言主体 ID
  */
 export function assertSubjectId(ctx: MTPCContext, expectedId: string): void {
   if (ctx.subject.id !== expectedId) {
@@ -19,7 +19,7 @@ export function assertSubjectId(ctx: MTPCContext, expectedId: string): void {
 }
 
 /**
- * Assert subject type
+ * 断言主体类型
  */
 export function assertSubjectType(ctx: MTPCContext, expectedType: SubjectContext['type']): void {
   if (ctx.subject.type !== expectedType) {
@@ -28,7 +28,7 @@ export function assertSubjectType(ctx: MTPCContext, expectedType: SubjectContext
 }
 
 /**
- * Assert subject has role
+ * 断言主体拥有角色
  */
 export function assertHasRole(ctx: MTPCContext, role: string): void {
   if (!ctx.subject.roles?.includes(role)) {
@@ -39,7 +39,7 @@ export function assertHasRole(ctx: MTPCContext, role: string): void {
 }
 
 /**
- * Assert subject does not have role
+ * 断言主体不拥有角色
  */
 export function assertNotHasRole(ctx: MTPCContext, role: string): void {
   if (ctx.subject.roles?.includes(role)) {
@@ -48,7 +48,7 @@ export function assertNotHasRole(ctx: MTPCContext, role: string): void {
 }
 
 /**
- * Assert tenant is active
+ * 断言租户处于活动状态
  */
 export function assertTenantActive(ctx: MTPCContext): void {
   if (ctx.tenant.status && ctx.tenant.status !== 'active') {
@@ -57,7 +57,7 @@ export function assertTenantActive(ctx: MTPCContext): void {
 }
 
 /**
- * Assert context has metadata
+ * 断言上下文拥有元数据
  */
 export function assertHasMetadata(ctx: MTPCContext, key: string, value?: unknown): void {
   const metadata = ctx.subject.metadata ?? ctx.tenant.metadata;

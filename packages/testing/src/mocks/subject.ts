@@ -1,10 +1,10 @@
-import type { SubjectContext, SubjectType } from '@mtpc/core';
+import type { SubjectContext } from '@mtpc/core';
 import type { MockSubjectOptions } from '../types.js';
 
 let subjectCounter = 0;
 
 /**
- * Create a mock subject context
+ * 创建模拟主体上下文
  */
 export function createMockSubject(
   idOrOptions?: string | MockSubjectOptions,
@@ -23,7 +23,7 @@ export function createMockSubject(
 }
 
 /**
- * Create an anonymous subject
+ * 创建匿名主体
  */
 export function createAnonymousSubject(): SubjectContext {
   return {
@@ -35,7 +35,7 @@ export function createAnonymousSubject(): SubjectContext {
 }
 
 /**
- * Create a system subject with full access
+ * 创建具有完全访问权限的系统主体
  */
 export function createSystemSubject(): SubjectContext {
   return {
@@ -47,7 +47,7 @@ export function createSystemSubject(): SubjectContext {
 }
 
 /**
- * Create an admin subject
+ * 创建管理员主体
  */
 export function createAdminSubject(id?: string): SubjectContext {
   return createMockSubject({
@@ -59,7 +59,7 @@ export function createAdminSubject(id?: string): SubjectContext {
 }
 
 /**
- * Create a subject with specific roles
+ * 创建具有特定角色的主体
  */
 export function createSubjectWithRoles(roles: string[], id?: string): SubjectContext {
   return createMockSubject({
@@ -69,7 +69,7 @@ export function createSubjectWithRoles(roles: string[], id?: string): SubjectCon
 }
 
 /**
- * Create a subject with specific permissions
+ * 创建具有特定权限的主体
  */
 export function createSubjectWithPermissions(permissions: string[], id?: string): SubjectContext {
   return createMockSubject({
@@ -79,7 +79,7 @@ export function createSubjectWithPermissions(permissions: string[], id?: string)
 }
 
 /**
- * Create a service subject
+ * 创建服务主体
  */
 export function createServiceSubject(serviceId: string, permissions?: string[]): SubjectContext {
   return {

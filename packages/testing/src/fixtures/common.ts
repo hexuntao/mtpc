@@ -1,7 +1,7 @@
 import type { SubjectContext, TenantContext } from '@mtpc/core';
 
 /**
- * Common test tenants
+ * 通用测试租户
  */
 export const TEST_TENANTS = {
   default: {
@@ -23,7 +23,7 @@ export const TEST_TENANTS = {
 } satisfies Record<string, TenantContext>;
 
 /**
- * Common test subjects
+ * 通用测试主体
  */
 export const TEST_SUBJECTS = {
   admin: {
@@ -59,7 +59,7 @@ export const TEST_SUBJECTS = {
 } satisfies Record<string, SubjectContext>;
 
 /**
- * Common test role permissions
+ * 通用测试角色权限
  */
 export const TEST_ROLE_PERMISSIONS: Record<string, string[]> = {
   admin: ['*'],
@@ -76,17 +76,17 @@ export const TEST_ROLE_PERMISSIONS: Record<string, string[]> = {
 };
 
 /**
- * Common test resources
+ * 通用测试资源
  */
 export const TEST_RESOURCES = ['product', 'order', 'customer'] as const;
 
 /**
- * Common test actions
+ * 通用测试操作
  */
 export const TEST_ACTIONS = ['create', 'read', 'update', 'delete', 'list'] as const;
 
 /**
- * Generate all permission codes
+ * 生成所有权限代码
  */
 export function generateAllPermissions(
   resources: readonly string[] = TEST_RESOURCES,

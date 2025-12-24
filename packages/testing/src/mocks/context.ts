@@ -1,34 +1,51 @@
 import type { MTPCContext, SubjectContext, TenantContext } from '@mtpc/core';
 import { createContext } from '@mtpc/core';
-import type { MockContextOptions } from '../types.js';
+import type { MockContextOptions, MockSubjectOptions, MockTenantOptions } from '../types.js';
 import { createAnonymousSubject, createMockSubject } from './subject.js';
 import { createDefaultTenant, createMockTenant } from './tenant.js';
 
 let requestCounter = 0;
 
 /**
- * Create a mock MTPC context
+ * 判断是否为 MockTenantOptions
+ * TenantContext 必然有 id 字段，但 MockTenantOptions 也可能有 id 字段
+ * 通过检查是否存在 status 或 metadata 字段来区分
+ */
+function isMockTenantOptions(obj: unknown): obj is MockTenantOptions {
+  if (typeof obj !== 'object' || obj === null) return false;
+  // 如果有 status 或 metadata 字段，说明是 MockTenantOptions
+  return 'status' in obj || 'metadata' in obj;
+}
+
+/**
+ * 判断是否为 MockSubjectOptions
+ * SubjectContext 必然有 type 字段，而 MockSubjectOptions 中 type 是可选的
+ * 通过检查是否缺少 type 字段来判断
+ */
+function isMockSubjectOptions(obj: unknown): obj is MockSubjectOptions {
+  if (typeof obj !== 'object' || obj === null) return false;
+  return !('type' in obj);
+}
+
+/**
+ * 创建模拟 MTPC 上下文
  */
 export function createMockContext(options: MockContextOptions = {}): MTPCContext {
-  // Resolve tenant
+  // 解析租户
   let tenant: TenantContext;
   if (!options.tenant) {
     tenant = createDefaultTenant();
-  } else if (
-    'id' in options.tenant &&
-    typeof options.tenant.id === 'string' &&
-    !('status' in options.tenant)
-  ) {
-    tenant = createMockTenant(options.tenant as { id: string });
+  } else if (isMockTenantOptions(options.tenant)) {
+    tenant = createMockTenant(options.tenant);
   } else {
     tenant = options.tenant as TenantContext;
   }
 
-  // Resolve subject
+  // 解析主体
   let subject: SubjectContext;
   if (!options.subject) {
     subject = createAnonymousSubject();
-  } else if (!('type' in options.subject)) {
+  } else if (isMockSubjectOptions(options.subject)) {
     subject = createMockSubject(options.subject);
   } else {
     subject = options.subject as SubjectContext;
@@ -48,7 +65,7 @@ export function createMockContext(options: MockContextOptions = {}): MTPCContext
 }
 
 /**
- * Create context for a specific tenant and subject
+ * 为特定租户和主体创建上下文
  */
 export function createTestContext(
   tenantId: string,
@@ -62,7 +79,7 @@ export function createTestContext(
 }
 
 /**
- * Create context with full permissions
+ * 创建具有完全权限的上下文
  */
 export function createAdminContext(tenantId?: string): MTPCContext {
   return createMockContext({
@@ -77,7 +94,7 @@ export function createAdminContext(tenantId?: string): MTPCContext {
 }
 
 /**
- * Create context with no permissions
+ * 创建无权限上下文
  */
 export function createGuestContext(tenantId?: string): MTPCContext {
   return createMockContext({
@@ -87,7 +104,7 @@ export function createGuestContext(tenantId?: string): MTPCContext {
 }
 
 /**
- * Clone context with modified subject
+ * 克隆上下文并修改主体
  */
 export function withSubject(ctx: MTPCContext, subject: SubjectContext): MTPCContext {
   return createContext({
@@ -98,7 +115,7 @@ export function withSubject(ctx: MTPCContext, subject: SubjectContext): MTPCCont
 }
 
 /**
- * Clone context with modified tenant
+ * 克隆上下文并修改租户
  */
 export function withTenant(ctx: MTPCContext, tenant: TenantContext): MTPCContext {
   return createContext({
@@ -109,7 +126,7 @@ export function withTenant(ctx: MTPCContext, tenant: TenantContext): MTPCContext
 }
 
 /**
- * Clone context with additional permissions
+ * 克隆上下文并添加权限
  */
 export function withPermissions(ctx: MTPCContext, permissions: string[]): MTPCContext {
   return createContext({
@@ -123,7 +140,7 @@ export function withPermissions(ctx: MTPCContext, permissions: string[]): MTPCCo
 }
 
 /**
- * Clone context with additional roles
+ * 克隆上下文并添加角色
  */
 export function withRoles(ctx: MTPCContext, roles: string[]): MTPCContext {
   return createContext({

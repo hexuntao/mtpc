@@ -2,7 +2,7 @@ import type { PermissionCheckResult } from '@mtpc/core';
 import type { PermissionCheckSpy } from '../types.js';
 
 /**
- * Assert that a permission check result is allowed
+ * 断言权限检查结果为允许
  */
 export function assertAllowed(result: PermissionCheckResult): void {
   if (!result.allowed) {
@@ -13,7 +13,7 @@ export function assertAllowed(result: PermissionCheckResult): void {
 }
 
 /**
- * Assert that a permission check result is denied
+ * 断言权限检查结果为拒绝
  */
 export function assertDenied(result: PermissionCheckResult): void {
   if (result.allowed) {
@@ -22,7 +22,7 @@ export function assertDenied(result: PermissionCheckResult): void {
 }
 
 /**
- * Assert that a permission was checked
+ * 断言权限已被检查
  */
 export function assertWasChecked(spy: PermissionCheckSpy, permission: string): void {
   if (!spy.wasChecked(permission)) {
@@ -31,7 +31,7 @@ export function assertWasChecked(spy: PermissionCheckSpy, permission: string): v
 }
 
 /**
- * Assert that a permission was not checked
+ * 断言权限未被检查
  */
 export function assertWasNotChecked(spy: PermissionCheckSpy, permission: string): void {
   if (spy.wasChecked(permission)) {
@@ -40,7 +40,7 @@ export function assertWasNotChecked(spy: PermissionCheckSpy, permission: string)
 }
 
 /**
- * Assert check count
+ * 断言检查次数
  */
 export function assertCheckCount(spy: PermissionCheckSpy, expected: number): void {
   if (spy.calls.length !== expected) {
@@ -49,7 +49,7 @@ export function assertCheckCount(spy: PermissionCheckSpy, expected: number): voi
 }
 
 /**
- * Assert all checks were allowed
+ * 断言所有检查都被允许
  */
 export function assertAllChecksAllowed(spy: PermissionCheckSpy): void {
   const denied = spy.calls.filter(c => !c.result.allowed);
@@ -60,7 +60,7 @@ export function assertAllChecksAllowed(spy: PermissionCheckSpy): void {
 }
 
 /**
- * Assert all checks were denied
+ * 断言所有检查都被拒绝
  */
 export function assertAllChecksDenied(spy: PermissionCheckSpy): void {
   const allowed = spy.calls.filter(c => c.result.allowed);

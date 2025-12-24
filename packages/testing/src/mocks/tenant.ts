@@ -4,7 +4,7 @@ import type { MockTenantOptions } from '../types.js';
 let tenantCounter = 0;
 
 /**
- * Create a mock tenant context
+ * 创建模拟租户上下文
  */
 export function createMockTenant(idOrOptions?: string | MockTenantOptions): TenantContext {
   const options: MockTenantOptions =
@@ -18,7 +18,7 @@ export function createMockTenant(idOrOptions?: string | MockTenantOptions): Tena
 }
 
 /**
- * Create a default test tenant
+ * 创建默认测试租户
  */
 export function createDefaultTenant(): TenantContext {
   return {
@@ -28,7 +28,7 @@ export function createDefaultTenant(): TenantContext {
 }
 
 /**
- * Create a system tenant
+ * 创建系统租户
  */
 export function createSystemTenant(): TenantContext {
   return {
@@ -39,7 +39,7 @@ export function createSystemTenant(): TenantContext {
 }
 
 /**
- * Create multiple mock tenants
+ * 创建多个模拟租户
  */
 export function createMockTenants(count: number): TenantContext[] {
   return Array.from({ length: count }, (_, i) => createMockTenant({ id: `test-tenant-${i + 1}` }));

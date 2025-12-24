@@ -1,4 +1,4 @@
-import type { MTPCContext, SubjectContext, TenantContext } from '@mtpc/core';
+import type { MTPCContext, SubjectContext } from '@mtpc/core';
 import { createMockContext } from '../mocks/context.js';
 import { createMockMTPC } from '../mocks/mtpc.js';
 import { createMockSubject } from '../mocks/subject.js';
@@ -6,7 +6,7 @@ import { createMockTenant } from '../mocks/tenant.js';
 import type { MockMTPC, TestContext } from '../types.js';
 
 /**
- * Setup test options
+ * 测试设置选项
  */
 export interface SetupTestOptions {
   tenantId?: string;
@@ -16,7 +16,7 @@ export interface SetupTestOptions {
 }
 
 /**
- * Setup a complete test context
+ * 设置完整的测试上下文
  */
 export function setupTest(options: SetupTestOptions = {}): TestContext {
   const mtpc = createMockMTPC();
@@ -37,7 +37,7 @@ export function setupTest(options: SetupTestOptions = {}): TestContext {
 }
 
 /**
- * Setup test for admin user
+ * 设置管理员用户的测试
  */
 export function setupAdminTest(tenantId?: string): TestContext {
   return setupTest({
@@ -49,7 +49,7 @@ export function setupAdminTest(tenantId?: string): TestContext {
 }
 
 /**
- * Setup test for viewer user
+ * 设置查看者用户的测试
  */
 export function setupViewerTest(resources: string[], tenantId?: string): TestContext {
   const permissions = resources.flatMap(r => [`${r}:read`, `${r}:list`]);
@@ -62,7 +62,7 @@ export function setupViewerTest(resources: string[], tenantId?: string): TestCon
 }
 
 /**
- * Setup test for guest/anonymous user
+ * 设置访客/匿名用户的测试
  */
 export function setupGuestTest(tenantId?: string): TestContext {
   const mtpc = createMockMTPC();
@@ -79,7 +79,7 @@ export function setupGuestTest(tenantId?: string): TestContext {
 }
 
 /**
- * Create a test harness for multiple scenarios
+ * 创建多场景测试工具
  */
 export function createTestHarness(): {
   mtpc: MockMTPC;

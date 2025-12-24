@@ -3,7 +3,7 @@ import { parsePermissionCode } from '@mtpc/shared';
 import type { MockMTPC } from '../types.js';
 
 /**
- * Grant a single permission to the mock MTPC
+ * 向模拟 MTPC 授予单个权限
  */
 export function grantPermission(
   mtpc: MockMTPC,
@@ -15,7 +15,7 @@ export function grantPermission(
 }
 
 /**
- * Grant multiple permissions
+ * 授予多个权限
  */
 export function grantPermissions(
   mtpc: MockMTPC,
@@ -27,7 +27,7 @@ export function grantPermissions(
 }
 
 /**
- * Grant full access to a resource
+ * 授予资源的完全访问权限
  */
 export function grantFullAccess(
   mtpc: MockMTPC,
@@ -39,7 +39,7 @@ export function grantFullAccess(
 }
 
 /**
- * Grant read-only access to a resource
+ * 授予资源的只读访问权限
  */
 export function grantReadAccess(
   mtpc: MockMTPC,
@@ -51,7 +51,7 @@ export function grantReadAccess(
 }
 
 /**
- * Deny a permission (by not granting it - explicit for clarity)
+ * 拒绝权限（通过不授予来明确拒绝）
  */
 export function denyPermission(
   mtpc: MockMTPC,
@@ -63,18 +63,18 @@ export function denyPermission(
 }
 
 /**
- * Deny all permissions
+ * 拒绝所有权限
  */
 export function denyAllPermissions(mtpc: MockMTPC, subjectId?: string, tenantId?: string): void {
   mtpc.revokeAllPermissions(subjectId, tenantId);
 }
 
 /**
- * Set up permissions for a role
+ * 为角色设置权限
  */
 export function setupRole(
   mtpc: MockMTPC,
-  roleName: string,
+  // roleName: string,
   permissions: string[],
   subjectId?: string,
   tenantId?: string
@@ -85,7 +85,7 @@ export function setupRole(
 }
 
 /**
- * Test if a permission would be allowed
+ * 测试权限是否会被允许
  */
 export async function testPermission(
   mtpc: MockMTPC,
@@ -109,7 +109,7 @@ export async function testPermission(
 }
 
 /**
- * Assert permission is allowed
+ * 断言权限被允许
  */
 export async function assertPermissionAllowed(
   mtpc: MockMTPC,
@@ -124,7 +124,7 @@ export async function assertPermissionAllowed(
 }
 
 /**
- * Assert permission is denied
+ * 断言权限被拒绝
  */
 export async function assertPermissionDenied(
   mtpc: MockMTPC,
