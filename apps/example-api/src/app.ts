@@ -10,6 +10,8 @@ import { logger } from 'hono/logger';
 import { jwtAuth } from './middleware/jwt-auth.js';
 import { mtpc, rbac } from './mtpc.js';
 import { authRoutes } from './routes/auth.js';
+import { auditRoutes } from './routes/audit.js';
+import { cacheRoutes } from './routes/cache.js';
 import { apiRoutes } from './routes/index.js';
 
 // 创建 Hono 应用
@@ -52,6 +54,12 @@ app.route('/api/auth', authRoutes);
 
 // API 路由的认证中间件（可选认证）
 app.use('/api/*', jwtAuth({ required: false }));
+
+// 挂载审计日志路由
+app.route('/api/audit', auditRoutes);
+
+// 挂载缓存统计路由
+app.route('/api/cache', cacheRoutes);
 
 // 挂载 API 路由
 app.route('/api', apiRoutes);

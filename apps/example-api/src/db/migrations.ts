@@ -176,6 +176,56 @@ migrationRunner.register({
   },
 });
 
+// 注册审计日志表迁移
+migrationRunner.register({
+  id: '0004_audit_tables',
+  name: 'Create audit log tables',
+  async up(db) {
+    await db.execute(
+      sql.raw(`
+        -- Audit logs table (MTPC Audit)
+        CREATE TABLE IF NOT EXISTS mtpc_audit_logs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          tenant_id TEXT NOT NULL,
+          subject_id TEXT,
+          subject_type VARCHAR(50),
+          timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+          category VARCHAR(50) NOT NULL,
+          action VARCHAR(100) NOT NULL,
+          resource VARCHAR(100),
+          resource_id TEXT,
+          permission VARCHAR(255),
+          decision VARCHAR(20) NOT NULL,
+          success BOOLEAN NOT NULL,
+          reason TEXT,
+          before JSONB,
+          after JSONB,
+          ip VARCHAR(50),
+          user_agent TEXT,
+          request_id TEXT,
+          path TEXT,
+          method VARCHAR(10),
+          metadata JSONB
+        );
+
+        -- 创建索引以优化查询性能
+        CREATE INDEX IF NOT EXISTS audit_tenant_timestamp_idx ON mtpc_audit_logs(tenant_id, timestamp DESC);
+        CREATE INDEX IF NOT EXISTS audit_subject_idx ON mtpc_audit_logs(tenant_id, subject_type, subject_id);
+        CREATE INDEX IF NOT EXISTS audit_resource_idx ON mtpc_audit_logs(tenant_id, resource, resource_id);
+        CREATE INDEX IF NOT EXISTS audit_category_idx ON mtpc_audit_logs(tenant_id, category, timestamp DESC);
+        CREATE INDEX IF NOT EXISTS audit_decision_idx ON mtpc_audit_logs(tenant_id, decision, timestamp DESC);
+      `)
+    );
+  },
+  async down(db) {
+    await db.execute(
+      sql.raw(`
+        DROP TABLE IF EXISTS mtpc_audit_logs CASCADE;
+      `)
+    );
+  },
+});
+
 // 运行迁移
 async function runMigrations() {
   try {

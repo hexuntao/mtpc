@@ -1,10 +1,14 @@
 import { createMTPC } from '@mtpc/core';
 import { createRBAC, role } from '@mtpc/rbac';
+import { createAuditPlugin } from '@mtpc/audit';
+import { createPolicyCachePlugin } from '@mtpc/policy-cache';
 import { resources } from './resources.js';
 import { DatabaseRBACStore } from './store/database-rbac-store.js';
+import { DatabaseAuditStore } from './store/audit-store.js';
 
 // 创建数据库存储实例
 const dbStore = new DatabaseRBACStore();
+const auditStore = new DatabaseAuditStore();
 
 // 创建 RBAC 实例，使用数据库存储
 export const rbac = createRBAC({
@@ -58,8 +62,42 @@ export const mtpc = createMTPC({
 // 注册资源
 mtpc.registerResources(resources);
 
+// 注册审计日志插件
+mtpc.use(
+  createAuditPlugin({
+    store: auditStore,
+    // 异步写入，不阻塞主流程
+    async: true,
+    // 记录所有类型的审计事件
+    include: {
+      permissionChecks: true,
+      resourceOperations: true,
+      roleChanges: true,
+      policyChanges: true,
+    },
+  })
+);
+
+// 注册权限缓存插件
+mtpc.use(
+  createPolicyCachePlugin({
+    // LRU 缓存策略
+    strategy: 'lru',
+    // 最多缓存 1000 个主体的权限
+    maxEntries: 1000,
+    // 权限缓存 5 分钟
+    defaultTTL: 5 * 60 * 1000,
+    // 缓存键前缀
+    keyPrefix: 'mtpc:policy',
+    // 启用统计信息
+    enableStats: true,
+  })
+);
+
 // 初始化 MTPC
 await mtpc.init();
 
 console.log('✅ MTPC 初始化完成，摘要:', mtpc.getSummary());
 console.log('✅ RBAC 使用数据库存储');
+console.log('✅ 审计日志插件已启用');
+console.log('✅ 权限缓存插件已启用');
