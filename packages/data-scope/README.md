@@ -2,6 +2,90 @@
 
 > MTPC 的行级安全控制（Row-Level Security）扩展
 
+## 快速开始
+
+### 方式一：声明式配置（推荐 v0.2.0+）
+
+通过资源元数据声明式配置数据范围控制：
+
+```typescript
+import { createMTPC, defineResource } from '@mtpc/core';
+import { createDataScopePlugin } from '@mtpc/data-scope';
+
+const mtpc = createMTPC();
+
+// 注册资源，声明式配置数据范围
+mtpc.registry.registerResource(
+  defineResource({
+    name: 'user',
+    schema: z.object({
+      id: z.string(),
+      name: z.string(),
+      departmentId: z.string(),
+      tenantId: z.string(),
+    }),
+    metadata: {
+      // 启用数据范围控制，按租户隔离
+      dataScope: {
+        enabled: true,
+        defaultScope: 'tenant',
+      },
+    },
+  })
+);
+
+mtpc.registry.registerResource(
+  defineResource({
+    name: 'order',
+    schema: z.object({
+      id: z.string(),
+      userId: z.string(),
+      departmentId: z.string(),
+    }),
+    metadata: {
+      // 按部门隔离
+      dataScope: {
+        enabled: true,
+        defaultScope: 'department',
+        departmentField: 'departmentId',
+      },
+    },
+  })
+);
+
+// 注册插件 - 会自动为所有启用的资源添加 filterQuery 钩子
+mtpc.plugins.use(
+  createDataScopePlugin({
+    adminRoles: ['admin'],
+    defaultScope: 'tenant',
+  })
+);
+
+await mtpc.init();
+```
+
+### 方式二：手动集成
+
+如果需要更精细的控制，可以使用 `DataScope` 类：
+
+```typescript
+import { createMTPC } from '@mtpc/core';
+import { createDataScope } from '@mtpc/data-scope';
+
+const mtpc = createMTPC();
+const dataScope = createDataScope({
+  defaultScope: 'tenant',
+  adminRoles: ['admin'],
+});
+
+// 注册资源
+mtpc.registry.registerResource(userResource);
+mtpc.registry.registerResource(orderResource);
+
+// 手动集成
+dataScope.integrateWith(mtpc);
+```
+
 ## 概述
 
 `@mtpc/data-scope` 是 MTPC 框架的数据范围控制扩展，用于实现行级安全（Row-Level Security, RLS）。它与 `@mtpc/rbac`（基于角色的访问控制）互补，共同构成完整的权限控制体系：
@@ -406,15 +490,11 @@ export function hasConflict(filters: FilterCondition[]): boolean {
    - `combineFilters` 的 'or' 模式只是简单展平，实际 OR 逻辑需要查询层支持
    - 建议在 FilterCondition 中添加逻辑运算符（AND/OR/NOT）
 
-2. **PluginContext 限制**
-   - 插件的 `install` 方法无法访问已注册的资源列表
-   - 必须手动调用 `integrateWith` 方法
-
-3. **同步 ID 生成**
+2. **同步 ID 生成**
    - `InMemoryDataScopeStore` 使用自增计数器生成 ID
    - 多实例环境下可能产生 ID 冲突
 
-4. **无分布式缓存支持**
+3. **无分布式缓存支持**
    - 缓存是本地内存存储
    - 多实例部署时缓存不共享
 
@@ -751,9 +831,36 @@ const dataScope = createDataScope({
 });
 ```
 
+### Q6: 声明式配置 vs 手动集成，如何选择？
+
+**A:**
+- **声明式配置（推荐）**: 使用资源元数据 `metadata.dataScope` 配置，插件自动处理
+  - 适用于大多数场景
+  - 代码更简洁，集成更方便
+
+- **手动集成**: 使用 `DataScope` 类和 `integrateWith()` 方法
+  - 适用于需要动态控制、运行时修改范围的场景
+  - 提供更细粒度的控制
+
+### Q7: 如何禁用某个资源的数据范围控制？
+
+**A:** 在资源元数据中设置 `enabled: false`：
+
+```typescript
+defineResource({
+  name: 'publicResource',
+  schema: z.object({ id: z.string() }),
+  metadata: {
+    dataScope: {
+      enabled: false, // 禁用数据范围控制
+    },
+  },
+});
+```
+
 ## 注意事项
 
-1. **插件集成限制**: 由于 `PluginContext` 不提供 `listResources()` 方法，必须手动调用 `integrateWith(mtpc)`
+1. **声明式配置优先**: v0.2.0+ 推荐使用资源元数据声明式配置数据范围
 
 2. **预定义范围保护**: 预定义范围（如 `scope:all`）无法被删除
 
@@ -762,6 +869,8 @@ const dataScope = createDataScope({
 4. **线程安全**: 当前 `InMemoryDataScopeStore` 不是线程安全的，单实例使用
 
 5. **类型安全**: 使用 TypeScript 时充分利用类型定义避免错误
+
+6. **资源元数据**: 使用声明式配置时，确保在插件注册前完成所有资源注册
 
 ## 类型参考
 
@@ -778,6 +887,22 @@ interface DataScopeOptions {
   adminRoles?: string[];                     // 管理员角色
   checkWildcardPermission?: boolean;         // 检查通配符权限
   hierarchyResolver?: HierarchyResolver;     // 层级解析器
+}
+```
+
+### ResourceDataScopeConfig (Core 包)
+
+资源元数据中的数据范围配置：
+
+```typescript
+interface ResourceDataScopeConfig {
+  enabled?: boolean;                         // 是否启用（默认 true）
+  defaultScope?: 'all' | 'tenant' | 'department' | 'team' | 'self' | 'subordinates' | 'custom';
+  ownerField?: string;                       // 所有者字段（默认 'createdBy'）
+  departmentField?: string;                  // 部门字段（默认 'departmentId'）
+  teamField?: string;                        // 团队字段（默认 'teamId'）
+  adminBypass?: boolean;                     // 管理员是否可绕过（默认 false）
+  customScopeId?: string;                    // 自定义范围 ID
 }
 ```
 

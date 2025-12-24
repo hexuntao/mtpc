@@ -166,6 +166,57 @@ export interface ResourceMetadata {
   hidden?: boolean;
   /** 资源标签列表（可选，用于分类和筛选） */
   tags?: string[];
+  /** 数据范围控制配置（可选） */
+  dataScope?: ResourceDataScopeConfig;
+}
+
+/**
+ * 资源数据范围控制配置
+ * 声明式配置资源的数据范围控制行为
+ *
+ * @example
+ * ```typescript
+ * // 用户资源：默认按租户隔离
+ * const userDataScope: ResourceDataScopeConfig = {
+ *   enabled: true,
+ *   defaultScope: 'tenant'
+ * };
+ *
+ * // 订单资源：默认按部门隔离，但管理员可查看全部
+ * const orderDataScope: ResourceDataScopeConfig = {
+ *   enabled: true,
+ *   defaultScope: 'department',
+ *   adminBypass: true
+ * };
+ *
+ * // 日志资源：不启用数据范围控制
+ * const logDataScope: ResourceDataScopeConfig = {
+ *   enabled: false
+ * };
+ *
+ * // 敏感数据：仅个人可访问
+ * const profileDataScope: ResourceDataScopeConfig = {
+ *   enabled: true,
+ *   defaultScope: 'self',
+ *   ownerField: 'userId'
+ * };
+ * ```
+ */
+export interface ResourceDataScopeConfig {
+  /** 是否启用数据范围控制（默认 true） */
+  enabled?: boolean;
+  /** 默认范围类型（如：'tenant'、'department'、'self'） */
+  defaultScope?: 'all' | 'tenant' | 'department' | 'team' | 'self' | 'subordinates' | 'custom';
+  /** 所有者字段名（默认 'createdBy'，用于 self 类型范围） */
+  ownerField?: string;
+  /** 部门字段名（默认 'departmentId'，用于 department 类型范围） */
+  departmentField?: string;
+  /** 团队字段名（默认 'teamId'，用于 team 类型范围） */
+  teamField?: string;
+  /** 管理员是否可绕过限制（默认 false） */
+  adminBypass?: boolean;
+  /** 自定义范围 ID（当 defaultScope 为 'custom' 时使用） */
+  customScopeId?: string;
 }
 
 /**

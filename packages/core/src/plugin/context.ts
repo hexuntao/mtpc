@@ -55,6 +55,25 @@ export function createPluginContext(
     throw new Error('globalHooks 参数不能为空');
   }
 
+  // 资源注册回调函数列表
+  const resourceCallbacks: Array<(resource: ResourceDefinition) => void> = [];
+
+  // 保存原始的 registerResource 方法
+  const originalRegisterResource = registry.registerResource.bind(registry);
+
+  // 包装 registerResource 以支持回调
+  registry.registerResource = (resource: ResourceDefinition): void => {
+    originalRegisterResource(resource);
+    // 触发所有回调
+    for (const callback of resourceCallbacks) {
+      try {
+        callback(resource);
+      } catch (error) {
+        console.error(`资源注册回调执行失败 (${resource.name}):`, error);
+      }
+    }
+  };
+
   return {
     /**
      * 注册资源定义
@@ -318,6 +337,62 @@ export function createPluginContext(
       }
 
       return registry.policies.get(id);
+    },
+
+    /**
+     * 获取当前已注册的所有资源
+     * @returns 资源定义数组（返回的是快照，后续注册的资源不会被包含）
+     *
+     * @example
+     * ```typescript
+     * // 在 install 中遍历所有已注册的资源
+     * const resources = context.listResources();
+     * for (const resource of resources) {
+     *   console.log(`已注册资源: ${resource.name}`);
+     *   if (resource.metadata?.dataScope?.enabled) {
+     *     // 为启用了数据范围控制的资源添加钩子
+     *   }
+     * }
+     * ```
+     */
+    listResources(): ResourceDefinition[] {
+      return Array.from(registry.resources.list());
+    },
+
+    /**
+     * 订阅资源注册事件
+     * @param callback 当新资源注册时被调用的回调函数
+     * @returns 取消订阅的函数
+     *
+     * @example
+     * ```typescript
+     * // 在 install 中订阅后续注册的资源
+     * const unsubscribe = context.onResourceRegistered((resource) => {
+     *   console.log(`新资源已注册: ${resource.name}`);
+     *   // 为新资源添加钩子
+     *   context.extendResourceHooks(resource.name, { ... });
+     * });
+     *
+     * // 在 onDestroy 中取消订阅
+     * onDestroy() {
+     *   unsubscribe();
+     * }
+     * ```
+     */
+    onResourceRegistered(callback: (resource: ResourceDefinition) => void): () => void {
+      if (typeof callback !== 'function') {
+        throw new Error('callback 必须是函数');
+      }
+
+      resourceCallbacks.push(callback);
+
+      // 返回取消订阅函数
+      return () => {
+        const index = resourceCallbacks.indexOf(callback);
+        if (index > -1) {
+          resourceCallbacks.splice(index, 1);
+        }
+      };
     },
 
     /** 策略引擎实例 */

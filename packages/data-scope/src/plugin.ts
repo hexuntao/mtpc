@@ -1,4 +1,4 @@
-import type { PluginContext, PluginDefinition } from '@mtpc/core';
+import type { FilterCondition, MTPCContext, PluginContext, PluginDefinition } from '@mtpc/core';
 import { setHierarchyResolver } from './filter/generator.js';
 import { createScopeResolver, type ScopeResolver } from './resolver/scope-resolver.js';
 import {
@@ -6,7 +6,7 @@ import {
   InMemoryDataScopeStore,
   type ScopeRegistry,
 } from './scope/registry.js';
-import type { DataScopeOptions } from './types.js';
+import type { DataScopeOptions, ScopeResolutionResult } from './types.js';
 
 /**
  * 数据范围插件状态
@@ -14,30 +14,43 @@ import type { DataScopeOptions } from './types.js';
 export interface DataScopePluginState {
   registry: ScopeRegistry;
   resolver: ScopeResolver;
+  unsubscribeCallbacks: Array<() => void>;
 }
 
 /**
  * 创建数据范围插件
  *
- * **注意**：由于 PluginContext 的限制，插件无法在 install 阶段为所有资源注册 filterQuery 钩子。
- * 推荐使用以下方式集成：
+ * 支持声明式配置：通过资源的 metadata.dataScope 配置是否启用数据范围控制
  *
+ * @example
  * ```typescript
- * import { createMTPC } from '@mtpc/core';
- * import { createDataScope } from '@mtpc/data-scope';
+ * import { createMTPC, defineResource } from '@mtpc/core';
+ * import { createDataScopePlugin } from '@mtpc/data-scope';
  *
  * const mtpc = createMTPC();
- * const dataScope = createDataScope();
  *
- * // 注册资源后，调用 integrateWith 方法
- * mtpc.registry.registerResource(userResource);
- * mtpc.registry.registerResource(orderResource);
+ * // 注册资源，声明式配置数据范围
+ * mtpc.registry.registerResource(
+ *   defineResource({
+ *     name: 'user',
+ *     schema: z.object({ id: z.string(), name: z.string() }),
+ *     metadata: {
+ *       dataScope: {
+ *         enabled: true,
+ *         defaultScope: 'tenant'
+ *       }
+ *     }
+ *   })
+ * );
  *
- * // 集成 data-scope 到 MTPC
- * dataScope.integrateWith(mtpc);
+ * // 注册插件 - 会自动为所有启用的资源添加 filterQuery 钩子
+ * mtpc.plugins.use(createDataScopePlugin({
+ *   adminRoles: ['admin'],
+ *   defaultScope: 'tenant'
+ * }));
+ *
+ * await mtpc.init();
  * ```
- *
- * 如果需要通过插件系统使用，请确保在所有资源注册完成后再初始化插件。
  */
 export function createDataScopePlugin(
   options: DataScopeOptions = {}
@@ -61,27 +74,103 @@ export function createDataScopePlugin(
   const state: DataScopePluginState = {
     registry,
     resolver,
+    unsubscribeCallbacks: [],
+  };
+
+  /**
+   * 创建资源的 filterQuery 钩子函数
+   */
+  const createFilterQueryHook = (resourceName: string) => {
+    return async (
+      ctx: MTPCContext,
+      baseFilters: FilterCondition[]
+    ): Promise<FilterCondition[]> => {
+      try {
+        const result: ScopeResolutionResult = await resolver.resolve({
+          mtpcContext: ctx,
+          resourceName,
+          action: 'read',
+          existingFilters: baseFilters,
+        });
+        return result.combinedFilters;
+      } catch (error) {
+        console.error(`[@mtpc/data-scope] 解析资源 ${resourceName} 的范围失败:`, error);
+        // 出错时返回原始过滤器，不影响数据访问
+        return baseFilters;
+      }
+    };
+  };
+
+  /**
+   * 为单个资源添加 filterQuery 钩子
+   */
+  const addFilterToResource = (context: PluginContext, resourceName: string): void => {
+    try {
+      const resource = context.getResource(resourceName);
+      if (!resource) {
+        return;
+      }
+
+      // 检查资源的元数据配置
+      const dataScopeConfig = resource.metadata?.dataScope;
+
+      // 如果明确禁用了数据范围控制，跳过
+      if (dataScopeConfig?.enabled === false) {
+        return;
+      }
+
+      // 添加 filterQuery 钩子
+      context.extendResourceHooks(resourceName, {
+        filterQuery: [createFilterQueryHook(resourceName)],
+      });
+    } catch (error) {
+      console.error(`[@mtpc/data-scope] 为资源 ${resourceName} 添加钩子失败:`, error);
+    }
   };
 
   return {
     name: '@mtpc/data-scope',
-    version: '0.1.0',
+    version: '0.2.0',
     description: 'Data scope / row-level security extension for MTPC',
 
     state,
 
-    install(_context: PluginContext): void {
-      // 注意：由于 PluginContext 没有提供 listResources() 方法，
-      // 无法在此处为所有资源注册 filterQuery 钩子。
-      // 请使用 DataScope.integrateWith(mtpc) 方法进行集成。
+    install(context: PluginContext): void {
+      // 1. 为当前已注册的资源添加钩子
+      const resources = context.listResources();
+      for (const resource of resources) {
+        addFilterToResource(context, resource.name);
+      }
+
+      // 2. 订阅后续注册的资源
+      const unsubscribe = context.onResourceRegistered((resource) => {
+        addFilterToResource(context, resource.name);
+      });
+      state.unsubscribeCallbacks.push(unsubscribe);
     },
 
-    onInit(_context: PluginContext): void {
-      console.log('Data scope plugin initialized');
+    onInit(context: PluginContext): void {
+      const resources = context.listResources();
+      const enabledCount = resources.filter(
+        r => r.metadata?.dataScope?.enabled !== false
+      ).length;
+
+      console.log(
+        `[@mtpc/data-scope] 插件已初始化，已为 ${enabledCount} 个资源启用数据范围控制`
+      );
     },
 
     onDestroy(): void {
+      // 取消所有订阅
+      for (const unsubscribe of state.unsubscribeCallbacks) {
+        unsubscribe();
+      }
+      state.unsubscribeCallbacks = [];
+
+      // 清除缓存
       registry.clearCache();
+
+      console.log('[@mtpc/data-scope] 插件已销毁');
     },
   };
 }

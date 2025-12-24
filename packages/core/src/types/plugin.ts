@@ -85,6 +85,31 @@ export interface PluginMetadata {
  *     ctx.registerResource(userProfileResource);
  *   }
  * };
+ *
+ * // 数据范围插件示例 - 使用 listResources 和 onResourceRegistered
+ * const dataScopePlugin: PluginDefinition = {
+ *   name: 'data-scope',
+ *   version: '1.0.0',
+ *   install(ctx) {
+ *     // 为当前已注册的资源添加钩子
+ *     for (const resource of ctx.listResources()) {
+ *       if (resource.metadata?.dataScope?.enabled !== false) {
+ *         ctx.extendResourceHooks(resource.name, {
+ *           filterQuery: [createDataScopeFilter(resource.name)]
+ *         });
+ *       }
+ *     }
+ *
+ *     // 订阅后续注册的资源
+ *     ctx.onResourceRegistered((resource) => {
+ *       if (resource.metadata?.dataScope?.enabled !== false) {
+ *         ctx.extendResourceHooks(resource.name, {
+ *           filterQuery: [createDataScopeFilter(resource.name)]
+ *         });
+ *       }
+ *     });
+ *   }
+ * };
  * ```
  */
 export interface PluginContext {
@@ -100,6 +125,44 @@ export interface PluginContext {
   getResource(name: string): ResourceDefinition | undefined;
   /** 获取策略定义（可选） */
   getPolicy(id: string): PolicyDefinition | undefined;
+  /**
+   * 获取当前已注册的所有资源
+   * @returns 资源定义数组（返回的是快照，后续注册的资源不会被包含）
+   *
+   * @example
+   * ```typescript
+   * // 在 install 中遍历所有已注册的资源
+   * const resources = ctx.listResources();
+   * for (const resource of resources) {
+   *   console.log(`已注册资源: ${resource.name}`);
+   *   if (resource.metadata?.dataScope?.enabled) {
+   *     // 为启用了数据范围控制的资源添加钩子
+   *   }
+   * }
+   * ```
+   */
+  listResources(): ResourceDefinition[];
+  /**
+   * 订阅资源注册事件
+   * @param callback 当新资源注册时被调用的回调函数
+   * @returns 取消订阅的函数
+   *
+   * @example
+   * ```typescript
+   * // 在 install 中订阅后续注册的资源
+   * const unsubscribe = ctx.onResourceRegistered((resource) => {
+   *   console.log(`新资源已注册: ${resource.name}`);
+   *   // 为新资源添加钩子
+   *   ctx.extendResourceHooks(resource.name, { ... });
+   * });
+   *
+   * // 在 onDestroy 中取消订阅
+   * onDestroy() {
+   *   unsubscribe();
+   * }
+   * ```
+   */
+  onResourceRegistered(callback: (resource: ResourceDefinition) => void): () => void;
   /** 策略引擎实例（可选） */
   policyEngine?: PolicyEngine;
   /** 权限解析器函数（可选） */
