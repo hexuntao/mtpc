@@ -6,7 +6,7 @@ import { scope } from './builder.js';
  */
 export const SCOPE_ALL: DataScopeDefinition = scope('All Access')
   .id('scope:all')
-  .description('No data restrictions - access all records')
+  .description('无数据限制 - 可访问所有记录')
   .all()
   .priority(1000)
   .exclusive()
@@ -17,7 +17,7 @@ export const SCOPE_ALL: DataScopeDefinition = scope('All Access')
  */
 export const SCOPE_TENANT: DataScopeDefinition = scope('Tenant')
   .id('scope:tenant')
-  .description('Access records within the same tenant')
+  .description('同一租户内的访问记录')
   .tenant()
   .priority(100)
   .build();
@@ -27,7 +27,7 @@ export const SCOPE_TENANT: DataScopeDefinition = scope('Tenant')
  */
 export const SCOPE_SELF: DataScopeDefinition = scope('Self')
   .id('scope:self')
-  .description('Access only own records')
+  .description('仅访问自己的记录')
   .self('createdBy')
   .priority(10)
   .build();
@@ -37,7 +37,7 @@ export const SCOPE_SELF: DataScopeDefinition = scope('Self')
  */
 export const SCOPE_DEPARTMENT: DataScopeDefinition = scope('Department')
   .id('scope:department')
-  .description('Access records in the same department')
+  .description('同一部门的访问记录')
   .department()
   .priority(50)
   .build();
@@ -47,7 +47,7 @@ export const SCOPE_DEPARTMENT: DataScopeDefinition = scope('Department')
  */
 export const SCOPE_TEAM: DataScopeDefinition = scope('Team')
   .id('scope:team')
-  .description('Access records in the same team')
+  .description('同一团队中的访问记录')
   .team()
   .priority(30)
   .build();

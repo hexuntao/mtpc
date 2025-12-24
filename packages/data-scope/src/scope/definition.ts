@@ -56,7 +56,7 @@ export function validateScopeDefinition(scope: DataScopeDefinition): void {
     throw new Error('Custom scope must have at least one condition');
   }
 
-  // Validate conditions
+  // 验证条件
   if (scope.conditions) {
     for (const condition of scope.conditions) {
       validateScopeCondition(condition);

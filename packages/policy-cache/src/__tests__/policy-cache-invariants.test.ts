@@ -7,9 +7,10 @@
  * 3. 缓存异常时 Fail-safe
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { PolicyCache, createPolicyCache } from '../policy-cache.js';
-import type { PermissionCacheEntry } from '../types.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { createPolicyCache, type PolicyCache } from '../policy-cache.js';
+
+// import type { PermissionCacheEntry } from '../types.js';
 
 // ========== Fixtures ==========
 

@@ -144,15 +144,15 @@ export function createExplainPlugin(
         throw new Error('Explain plugin requires policyEngine to be available in plugin context');
       }
       if (!context.permissionResolver) {
-        throw new Error('Explain plugin requires permissionResolver to be available in plugin context');
+        throw new Error(
+          'Explain plugin requires permissionResolver to be available in plugin context'
+        );
       }
 
       // 创建权限解释器
-      state.explainer = new PermissionExplainer(
-        context.policyEngine,
-        context.permissionResolver,
-        { defaultLevel: options.defaultLevel }
-      );
+      state.explainer = new PermissionExplainer(context.policyEngine, context.permissionResolver, {
+        defaultLevel: options.defaultLevel,
+      });
 
       // 如果启用了自动收集，注册钩子
       if (options.collectExplanations) {

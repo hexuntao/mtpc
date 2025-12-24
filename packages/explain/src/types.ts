@@ -1,8 +1,4 @@
-import type {
-  PolicyCondition,
-  SubjectContext,
-  TenantContext,
-} from '@mtpc/core';
+import type { PolicyCondition, SubjectContext, TenantContext } from '@mtpc/core';
 
 /**
  * 解释详细级别

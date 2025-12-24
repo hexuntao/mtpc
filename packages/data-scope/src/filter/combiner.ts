@@ -15,16 +15,16 @@ export function combineFilters(
 ): FilterCondition[] {
   switch (mode) {
     case 'and':
-      // All filters apply (flatten)
+      // 所有过滤器都适用（展平）
       return filterArrays.flat();
 
     case 'or':
-      // Any filter set can match - this would need special handling in the query layer
-      // For now, we just flatten (consumers need to handle OR logic)
+      // 任何过滤器集都可以匹配 - 这需要在查询层特殊处理
+      // 现在，我们只是展平（消费者需要处理 OR 逻辑）
       return filterArrays.flat();
 
     case 'priority':
-      // Only use first non-empty filter set
+      // 仅使用第一个非空过滤器集
       for (const filters of filterArrays) {
         if (filters.length > 0) {
           return filters;
@@ -33,6 +33,7 @@ export function combineFilters(
       return [];
 
     default:
+      // 默认使用 AND 组合
       return filterArrays.flat();
   }
 }
@@ -44,19 +45,19 @@ export function combineResolvedScopes(
   scopes: ResolvedScope[],
   mode: CombineMode = 'and'
 ): FilterCondition[] {
-  // Sort by priority
+  // 按优先级排序（高到低）
   const sorted = [...scopes].sort(
     (a, b) => (b.definition.priority ?? 0) - (a.definition.priority ?? 0)
   );
 
-  // Check for exclusive (non-combinable) scopes
+  // 检查是否有排他范围（不可组合）
   const exclusive = sorted.find(s => !s.definition.combinable);
   if (exclusive) {
-    // Only use the exclusive scope
+    // 仅使用排他范围的过滤器
     return exclusive.filters;
   }
 
-  // Combine all scope filters
+  // 组合所有范围的过滤器
   return combineFilters(
     sorted.map(s => s.filters),
     mode
@@ -103,7 +104,7 @@ export function hasConflict(filters: FilterCondition[]): boolean {
     const existing = fieldValues.get(filter.field);
 
     if (existing) {
-      // Check for eq/neq conflict on same field
+      // 检查相同字段上的 eq/neq 冲突
       if (
         (existing.operator === 'eq' && filter.operator === 'neq') ||
         (existing.operator === 'neq' && filter.operator === 'eq')

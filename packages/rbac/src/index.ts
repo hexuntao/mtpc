@@ -62,23 +62,17 @@
  * @packageDocumentation
  */
 
-// 导出核心类型
-export * from './types.js';
-
-// 导出 RBAC 类和工厂函数
-export * from './rbac.js';
-
-// 导出插件
-export * from './plugin.js';
-
-// 导出角色相关
-export * from './role/index.js';
-
-// 导出策略相关
-export * from './policy/index.js';
-
 // 导出绑定相关
 export * from './binding/index.js';
-
+// 导出插件
+export * from './plugin.js';
+// 导出策略相关
+export * from './policy/index.js';
+// 导出 RBAC 类和工厂函数
+export * from './rbac.js';
+// 导出角色相关
+export * from './role/index.js';
 // 导出存储相关
 export * from './store/index.js';
+// 导出核心类型
+export * from './types.js';

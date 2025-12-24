@@ -45,7 +45,7 @@ export class ScopeResolver {
   async resolve(context: ScopeResolutionContext): Promise<ScopeResolutionResult> {
     const { mtpcContext, resourceName } = context;
 
-    // Check for system subject - no restrictions
+    // 系统主体无需范围检查
     if (contextResolvers.isSystem(mtpcContext)) {
       return {
         scopes: [],
@@ -55,7 +55,7 @@ export class ScopeResolver {
       };
     }
 
-    // Check for admin - use "all" scope
+    // 检查管理员权限 - 使用 "all" 范围
     if (this.isAdminChecker(mtpcContext)) {
       const allScope = PREDEFINED_SCOPES.all;
       return {
@@ -66,10 +66,10 @@ export class ScopeResolver {
       };
     }
 
-    // Collect applicable scopes
+    // 收集适用范围
     const scopes: DataScopeDefinition[] = [];
 
-    // 1. Check resource-specific scope
+    // 1. 检查资源特定范围
     const resourceScope = await this.registry.getScopeForResource(
       mtpcContext.tenant.id,
       resourceName
@@ -78,7 +78,7 @@ export class ScopeResolver {
       scopes.push(resourceScope);
     }
 
-    // 2. Check subject/role scopes
+    // 2. 检查主体/角色范围
     const subjectScopes = await this.registry.getScopesForSubject(
       mtpcContext.tenant.id,
       mtpcContext.subject.id,
@@ -86,7 +86,7 @@ export class ScopeResolver {
     );
     scopes.push(...subjectScopes);
 
-    // 3. Apply default scope if no scopes found
+    // 3. 应用默认范围（如果没有其他范围）
     if (scopes.length === 0) {
       const defaultScope = await this.registry.getScope(this.defaultScopeId);
       if (defaultScope) {
@@ -94,14 +94,14 @@ export class ScopeResolver {
       }
     }
 
-    // Resolve all scopes to filters
+    // 4. 解析范围到过滤条件
     const resolvedScopes: ResolvedScope[] = [];
     for (const scope of scopes) {
       const resolved = await resolveScope(scope, mtpcContext);
       resolvedScopes.push(resolved);
     }
 
-    // Combine filters
+    // 合并过滤条件
     const scopeFilters = combineResolvedScopes(resolvedScopes);
     const combinedFilters = mergeWithExisting(context.existingFilters ?? [], scopeFilters);
 
@@ -125,7 +125,7 @@ export class ScopeResolver {
       return true;
     }
 
-    // Check for "all" scope assignment
+    // 检查 "all" 范围是否分配给主体
     const scopes = await this.registry.getScopesForSubject(
       ctx.tenant.id,
       ctx.subject.id,
@@ -156,7 +156,7 @@ export class ScopeResolver {
       return 'tenant';
     }
 
-    // Return highest priority scope type
+    // 返回最高优先级范围类型
     return result.scopes[0].definition.type;
   }
 }

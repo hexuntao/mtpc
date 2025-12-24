@@ -11,7 +11,6 @@ export class InMemoryDataScopeStore implements DataScopeStore {
   private idCounter = 0;
 
   constructor() {
-    // Register predefined scopes
     for (const scope of Object.values(PREDEFINED_SCOPES)) {
       this.scopes.set(scope.id, scope);
     }
@@ -21,7 +20,6 @@ export class InMemoryDataScopeStore implements DataScopeStore {
     return `id_${++this.idCounter}_${Date.now()}`;
   }
 
-  // Scope definitions
   async createScope(scope: Omit<DataScopeDefinition, 'id'>): Promise<DataScopeDefinition> {
     const newScope: DataScopeDefinition = {
       ...scope,
@@ -45,7 +43,7 @@ export class InMemoryDataScopeStore implements DataScopeStore {
     const updated: DataScopeDefinition = {
       ...existing,
       ...updates,
-      id, // Prevent ID change
+      id,
     };
 
     validateScopeDefinition(updated);
@@ -54,7 +52,6 @@ export class InMemoryDataScopeStore implements DataScopeStore {
   }
 
   async deleteScope(id: string): Promise<boolean> {
-    // Prevent deletion of predefined scopes
     if (Object.values(PREDEFINED_SCOPES).some(s => s.id === id)) {
       throw new Error('Cannot delete predefined scope');
     }
@@ -69,7 +66,6 @@ export class InMemoryDataScopeStore implements DataScopeStore {
     return Array.from(this.scopes.values());
   }
 
-  // Assignments
   async createAssignment(
     assignment: Omit<ScopeAssignment, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<ScopeAssignment> {
@@ -116,7 +112,6 @@ export class InMemoryDataScopeStore implements DataScopeStore {
     );
   }
 
-  // Utility
   clear(): void {
     this.assignments.clear();
     // Re-register predefined scopes
@@ -141,10 +136,9 @@ export class ScopeRegistry {
   }
 
   /**
-   * Get scope by ID
+   * 按ID获取范围
    */
   async getScope(id: string): Promise<DataScopeDefinition | null> {
-    // Check cache
     const cached = this.cache.get(id);
     if (cached && cached.expiresAt > Date.now()) {
       return cached.scope;
@@ -163,7 +157,7 @@ export class ScopeRegistry {
   }
 
   /**
-   * Get scopes for a subject in a tenant
+   * 获取租户中某个主体的作用域
    */
   async getScopesForSubject(
     tenantId: string,
@@ -173,7 +167,7 @@ export class ScopeRegistry {
     const scopes: DataScopeDefinition[] = [];
     const seenIds = new Set<string>();
 
-    // Get direct subject assignments
+    // 获取直接分配的
     const subjectAssignments = await this.store.getAssignmentsForTarget(
       tenantId,
       'subject',
@@ -190,7 +184,7 @@ export class ScopeRegistry {
       }
     }
 
-    // Get role-based assignments
+    // 获取基于角色的任务分配
     for (const role of roles) {
       const roleAssignments = await this.store.getAssignmentsForTarget(tenantId, 'role', role);
 
@@ -210,7 +204,7 @@ export class ScopeRegistry {
   }
 
   /**
-   * Get scope for a resource
+   * 获取资源范围
    */
   async getScopeForResource(
     tenantId: string,
@@ -228,14 +222,14 @@ export class ScopeRegistry {
   }
 
   /**
-   * Create scope
+   * 创建范围
    */
   async createScope(scope: Omit<DataScopeDefinition, 'id'>): Promise<DataScopeDefinition> {
     return this.store.createScope(scope);
   }
 
   /**
-   * Assign scope to target
+   * 将范围分配给目标
    */
   async assignScope(
     tenantId: string,
@@ -256,7 +250,7 @@ export class ScopeRegistry {
   }
 
   /**
-   * Clear cache
+   * 清除缓存
    */
   clearCache(): void {
     this.cache.clear();

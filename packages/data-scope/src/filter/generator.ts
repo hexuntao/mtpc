@@ -85,14 +85,14 @@ export async function generateFiltersFromScope(
 ): Promise<FilterCondition[]> {
   const filters: FilterCondition[] = [];
 
-  // Handle predefined scope types
+  // 处理预定义范围类型
   switch (scope.type) {
     case 'all':
-      // No filters
+      // 无过滤器
       return [];
 
     case 'tenant':
-      // Add tenant filter
+      // 添加租户过滤器
       filters.push({
         field: 'tenantId',
         operator: 'eq',
@@ -105,7 +105,7 @@ export async function generateFiltersFromScope(
     case 'team':
     case 'subordinates':
     case 'custom':
-      // Process conditions
+      // 处理条件
       if (scope.conditions) {
         for (const condition of scope.conditions) {
           const filter = await generateFilterFromCondition(condition, ctx);

@@ -379,7 +379,7 @@ export class PermissionExplainer {
         const conditionResults: ConditionResult[] = [];
 
         // 检查规则是否适用
-        const applies = 
+        const applies =
           rule.permissions.includes(context.permission.code) ||
           rule.permissions.includes('*') ||
           rule.permissions.includes(`${context.permission.resource}:*`);
@@ -414,9 +414,9 @@ export class PermissionExplainer {
    */
   private getPriorityValue(priority: string): number {
     const values: Record<string, number> = {
-      low: 10,      // 低优先级
-      normal: 50,   // 正常优先级
-      high: 100,    // 高优先级
+      low: 10, // 低优先级
+      normal: 50, // 正常优先级
+      high: 100, // 高优先级
       critical: 1000, // 关键优先级
     };
     return values[priority] ?? 50; // 默认正常优先级
