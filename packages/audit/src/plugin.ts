@@ -1,9 +1,13 @@
+// @mtpc/audit - MTPC 的审计日志插件
+
 import type { MTPCContext, PluginContext, PluginDefinition } from '@mtpc/core';
 import { InMemoryAuditStore } from './store/memory-store.js';
 import type { AuditEntry, AuditOptions, AuditPluginState, AuditStore } from './types.js';
 
 /**
- * Normalize MTPC context into audit context fields
+ * 将 MTPC 上下文转换为审计上下文字段
+ * @param ctx MTPC 上下文对象
+ * @returns 规范化的审计上下文字段
  */
 function normalizeContext(ctx: MTPCContext): {
   tenantId: string;
@@ -28,13 +32,17 @@ function normalizeContext(ctx: MTPCContext): {
 }
 
 /**
- * Create audit plugin
+ * 创建审计日志插件
+ * @param options 审计配置选项
+ * @returns 审计插件定义和状态
  */
 export function createAuditPlugin(
   options: AuditOptions = {}
 ): PluginDefinition & { state: AuditPluginState } {
+  // 如果没有提供存储，则使用内存存储（仅用于测试/演示）
   const store: AuditStore = options.store ?? new InMemoryAuditStore();
 
+  // 处理包含选项，确保所有选项都有默认值
   const include = {
     permissionChecks: options.include?.permissionChecks ?? true,
     resourceOperations: options.include?.resourceOperations ?? true,
@@ -42,31 +50,44 @@ export function createAuditPlugin(
     policyChanges: options.include?.policyChanges ?? true,
   };
 
+  // 插件状态
   const state: AuditPluginState = {
     store,
     options,
   };
 
+  /**
+   * 记录审计日志条目
+   * @param entry 审计日志条目
+   */
   const logEntry = async (entry: AuditEntry): Promise<void> => {
+    // 应用掩码（如果配置了）
     const masked = options.mask ? options.mask(entry) : entry;
     if (options.async) {
-      // Fire and forget
+      // 异步记录（即发即弃）
       void store.log(masked);
     } else {
+      // 同步记录
       await store.log(masked);
     }
   };
 
+  // 返回插件定义
   return {
     name: '@mtpc/audit',
     version: '0.1.0',
-    description: 'Audit logging extension for MTPC',
+    description: 'MTPC 的审计日志扩展',
 
     state,
 
+    /**
+     * 安装插件
+     * @param context 插件上下文
+     */
     async install(context: PluginContext): Promise<void> {
-      // Register global hooks to capture resource operations
+      // 注册全局钩子来捕获资源操作
       context.registerGlobalHooks({
+        // 在任何资源操作之前调用
         beforeAny: [
           async (mtpcCtx, operation, resourceName) => {
             if (!include.resourceOperations) {
@@ -98,12 +119,14 @@ export function createAuditPlugin(
             return { proceed: true };
           },
         ],
+        // 在任何资源操作之后调用
         afterAny: [
           async (mtpcCtx, operation, resourceName, result) => {
-            // Optionally, we could log after with result, but beforeAny already logged the operation
-            // This hook can be tailored by consumer if needed
+            // 可选：我们可以在这里记录结果，但 beforeAny 已经记录了操作
+            // 消费者可以根据需要定制此钩子
           },
         ],
+        // 当操作发生错误时调用
         onError: [
           async (mtpcCtx, operation, resourceName, error) => {
             if (!include.resourceOperations) {
@@ -140,12 +163,18 @@ export function createAuditPlugin(
       });
     },
 
+    /**
+     * 插件初始化时调用
+     */
     onInit(): void {
-      console.log('Audit plugin initialized');
+      console.log('审计日志插件已初始化');
     },
 
+    /**
+     * 插件销毁时调用
+     */
     async onDestroy(): Promise<void> {
-      // No-op for now; store cleanup is up to consumer
+      // 目前不需要特殊清理，存储清理由消费者负责
     },
   };
 }
