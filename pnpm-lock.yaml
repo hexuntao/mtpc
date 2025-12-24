@@ -189,6 +189,25 @@ importers:
         specifier: ^1.6.0
         version: 1.6.1(@types/node@20.19.27)
 
+  packages/data-scope:
+    dependencies:
+      '@mtpc/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mtpc/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.27
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.27)
+
   packages/explain:
     dependencies:
       '@mtpc/core':
