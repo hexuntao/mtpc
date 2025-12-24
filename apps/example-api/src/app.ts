@@ -10,8 +10,8 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { jwtAuth } from './middleware/jwt-auth.js';
 import { mtpc, rbac } from './mtpc.js';
-import { authRoutes } from './routes/auth.js';
 import { auditRoutes } from './routes/audit.js';
+import { authRoutes } from './routes/auth.js';
 import { cacheRoutes } from './routes/cache.js';
 import { apiRoutes } from './routes/index.js';
 

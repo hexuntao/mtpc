@@ -1,9 +1,9 @@
+import { PermissionProvider } from '@mtpc/adapter-react';
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
-import { ToastProvider } from './components/ui';
-import { PermissionProvider } from '@mtpc/adapter-react';
 import { createAuthClient } from './api/rpc-client';
+import { ToastProvider } from './components/ui';
 import './styles.css';
 
 /**
@@ -13,22 +13,15 @@ import './styles.css';
 const createPermissionFetcher = (userId: string) => {
   return async () => {
     const client = createAuthClient(userId, 'default');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rpcClient = client as any;
-    const response = await rpcClient.api.permissions.$get();
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    const response = await client['/api/permissions'].get({});
 
     // 从后端响应中提取权限和角色
     // 后端返回格式: { success: true, data: { permissions: string[], roles: string[] } }
-    if (data.success && data.data) {
+    if (response.success && response.data) {
       return {
-        permissions: data.data.permissions || [],
-        roles: data.data.roles || [],
+        permissions: response.data.permissions || [],
+        roles: response.data.roles || [],
       };
     }
 

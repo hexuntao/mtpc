@@ -15,7 +15,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "composite": true
+    "composite": true,
+    "baseUrl": ".",
+    "paths": {
+      "example-api/*": ["../example-api/src/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [{ "path": "../example-api" }]
 }
