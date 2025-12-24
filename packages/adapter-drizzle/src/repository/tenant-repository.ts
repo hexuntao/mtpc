@@ -2,7 +2,7 @@ import type { MTPCContext, PaginatedResult, QueryOptions } from '@mtpc/core';
 import { and, eq, sql } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import type { DrizzleDB } from '../types.js';
-import { BaseRepository } from './base-repository.js';
+import { BaseRepository, type RepositoryOptions } from './base-repository.js';
 
 /**
  * 租户仓储类
@@ -15,8 +15,8 @@ import { BaseRepository } from './base-repository.js';
  * - 包含已删除数据的查询
  */
 export class TenantRepository<T extends Record<string, unknown>> extends BaseRepository<T> {
-  constructor(db: DrizzleDB, table: PgTable, tableName: string) {
-    super(db, table, tableName);
+  constructor(db: DrizzleDB, table: PgTable, tableName: string, options: RepositoryOptions = {}) {
+    super(db, table, tableName, options);
   }
 
   /**

@@ -20,6 +20,8 @@ export function createSoftDeletePlugin(): PluginDefinition & {
   // 存储所有资源的软删除配置
   const configs = new Map<string, SoftDeleteConfig>();
 
+  let ctxRef: PluginContext | null = null;
+
   // 插件状态，包含配置存储和配置方法
   const state: SoftDeletePluginState & {
     configureResource: (config: SoftDeleteConfig, context: PluginContext) => void;
@@ -52,10 +54,15 @@ export function createSoftDeletePlugin(): PluginDefinition & {
      * 插件安装方法
      * 目前不做全局自动接管，由使用方手动配置每个资源更安全可控
      *
-     * @param _context 插件上下文
+     * @param context 插件上下文
      */
-    install(_context: PluginContext): void {
+    install(context: PluginContext): void {
       // 暂不做全局自动接管，由使用方手动配置每个资源更安全可控
+      ctxRef = context;
+      // 已有配置需要在 install 时应用一次
+      for (const config of configs.values()) {
+        context.extendResourceHooks(config.resourceName, createSoftDeleteHooks(config));
+      }
     },
 
     /**
@@ -71,6 +78,7 @@ export function createSoftDeletePlugin(): PluginDefinition & {
      */
     onDestroy(): void {
       configs.clear();
+      ctxRef = null;
     },
   };
 }

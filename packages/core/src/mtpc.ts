@@ -90,6 +90,12 @@ export class MTPC {
   /** 标记 MTPC 实例是否已初始化（防止重复初始化） */
   private initialized = false;
 
+  /***
+   * PermissionChecker 当前使用的权限解析器。
+   * 可通过 setPermissionResolver 在运行时进行覆盖。
+   */
+  // private permissionResolver: (tenantId: string, subjectId: string) => Promise<Set<string>>;
+
   /**
    * 构造函数
    * 初始化所有子系统并建立依赖关系
@@ -107,19 +113,19 @@ export class MTPC {
   constructor(options: MTPCOptions = {}) {
     this.options = options;
 
-    // 步骤1: 创建统一注册表（所有资源的单一事实源）
+    // 创建统一注册表（所有资源的单一事实源）
     this.registry = createUnifiedRegistry();
 
-    // 步骤2: 创建策略引擎（负责权限策略评估）
+    // 创建策略引擎（负责权限策略评估）
     this.policyEngine = new DefaultPolicyEngine();
 
-    // 步骤3: 创建全局钩子管理器（横切关注点）
+    // 创建全局钩子管理器（横切关注点）
     this.globalHooks = createGlobalHooksManager();
 
-    // 步骤4: 创建租户管理器（多租户支持）
+    // 创建租户管理器（多租户支持）
     this.tenants = createTenantManager();
 
-    // 步骤5: 创建插件上下文和插件管理器
+    // 创建插件上下文和插件管理器
     // 插件上下文提供插件与系统交互的接口
     const pluginContext = createPluginContext(
       this.registry,
@@ -129,11 +135,20 @@ export class MTPC {
     );
     this.plugins = new DefaultPluginManager(pluginContext);
 
-    // 步骤6: 创建权限检查器
+    // 创建权限检查器
     // 注入权限解析器：用户提供的或默认的基于策略的解析器
     this.permissionChecker = new PermissionChecker(
       this.options.defaultPermissionResolver ?? this.defaultPermissionResolver.bind(this)
     );
+
+    // 初始化 permissionResolver（如果外部没有提供，则用 naivePolicyResolver）
+    // this.permissionResolver =
+    //   options.defaultPermissionResolver ?? this.naivePolicyResolver.bind(this);
+
+    // PermissionChecker 始终通过当前 resolver 工作
+    // this.permissionChecker = new PermissionChecker(
+    //   async (tenantId, subjectId) => this.permissionResolver(tenantId, subjectId)
+    // );
   }
 
   // ========== 资源注册方法 ==========
@@ -360,6 +375,25 @@ export class MTPC {
     });
   }
 
+  /**
+   * 设置 PermissionChecker 使用的权限解析器。
+   *
+   * 这允许扩展（例如 RBAC、ABAC、ACL）提供自己的解析器，
+   * 将（租户，主体）映射到 Set<permissionCode>
+   */
+  // setPermissionResolver(
+  //   resolver: (tenantId: string, subjectId: string) => Promise<Set<string>>
+  // ): void {
+  //   this.permissionResolver = resolver;
+  // }
+
+  /**
+   * 获取当前权限解析器
+   */
+  // getPermissionResolver(): (tenantId: string, subjectId: string) => Promise<Set<string>> {
+  //   return this.permissionResolver;
+  // }
+
   // ========== 权限检查方法 ==========
 
   /**
@@ -552,6 +586,37 @@ export class MTPC {
 
     return permissions;
   }
+
+  /**
+   * 基于策略的简单权限解析器。
+   *
+   * 重要提示：
+   * - 此解析器仅从“允许”规则中获取权限。
+   * - 它完全忽略：
+   *   - 策略条件（字段/时间/自定义）
+   *   - 拒绝规则
+   *   - 特定于主体的属性
+   *
+   * 这仅适用于非常简单的、无条件的允许策略。
+   * 对于基于角色的访问控制 (RBAC)、基于属性的访问控制 (ABAC)、访问控制列表 (ACL) 或任何条件策略，您必须提供您自己的解析器。
+   * 通过 MTPC#setPermissionResolver 或 MTPCOptions.defaultPermissionResolver。
+   */
+  // private async naivePolicyResolver(tenantId: string, _subjectId: string): Promise<Set<string>> {
+  //   const permissions = new Set<string>();
+  //   const policies = this.registry.policies.getForTenant(tenantId);
+
+  //   for (const policy of policies) {
+  //     for (const rule of policy.rules) {
+  //       if (rule.effect === 'allow') {
+  //         for (const perm of rule.permissions) {
+  //           permissions.add(perm);
+  //         }
+  //       }
+  //     }
+  //   }
+
+  //   return permissions;
+  // }
 
   /**
    * 检查规则是否适用于指定主体

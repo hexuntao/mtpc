@@ -509,7 +509,11 @@ export class RBAC {
 
   /**
    * 创建权限解析器
-   * 返回一个可用于 MTPC 的权限解析函数
+   *
+   * 将 (tenantId, subjectId) 映射到 Set<permissionCode>。
+   *
+   * 此解析器旨在通过以下方式集成到 MTPC 中：
+   * mtpc.setPermissionResolver(rbac.createPermissionResolver());
    *
    * @returns 权限解析函数
    *
@@ -618,8 +622,8 @@ export function createRBAC(options?: RBACOptions): RBAC {
  * 将 RBAC 与 MTPC 集成
  * 为已存在的 MTPC 实例添加 RBAC 支持
  *
- * @param _mtpc MTPC 实例
- * @param _rbac RBAC 实例
+ * @param mtpc MTPC 实例
+ * @param rbac RBAC 实例
  *
  * @example
  * ```typescript
@@ -628,8 +632,6 @@ export function createRBAC(options?: RBACOptions): RBAC {
  * integrateWithMTPC(mtpc, rbac);
  * ```
  */
-export function integrateWithMTPC(_mtpc: MTPC, _rbac: RBAC): void {
-  // RBAC 权限解析器可在创建 MTPC 时使用
-  // 此函数为方便已存在的 MTPC 实例而提供
-  console.log('RBAC integrated with MTPC');
+export function integrateWithMTPC(mtpc: MTPC, rbac: RBAC): void {
+  mtpc.setPermissionResolver(rbac.createPermissionResolver());
 }

@@ -10,6 +10,14 @@ import type { PgTable } from 'drizzle-orm/pg-core';
 import type { DrizzleDB, Repository } from '../types.js';
 
 /**
+ * 允许自定义 tenantColumn，默认仍为 tenantId
+ */
+export interface RepositoryOptions {
+  /** default: "tenantId" */
+  tenantColumn?: string;
+}
+
+/**
  * 基础仓储类
  * 实现通用的数据访问层 CRUD 操作
  *
@@ -28,11 +36,14 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
   protected table: PgTable;
   /** 表名 */
   protected tableName: string;
+  /** 表列 */
+  protected tenantColumn: string;
 
-  constructor(db: DrizzleDB, table: PgTable, tableName: string) {
+  constructor(db: DrizzleDB, table: PgTable, tableName: string, options: RepositoryOptions = {}) {
     this.db = db;
     this.table = table;
     this.tableName = tableName;
+    this.tenantColumn = options.tenantColumn ?? 'tenantId';
   }
 
   /**
@@ -44,11 +55,12 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
    */
   async findById(ctx: MTPCContext, id: string): Promise<T | null> {
     const tableAny = this.table as any;
+    const tenantCol = tableAny[this.tenantColumn];
 
     const result = await this.db
       .select()
       .from(this.table)
-      .where(and(eq(tableAny.id, id), eq(tableAny.tenantId, ctx.tenant.id)))
+      .where(and(eq(tableAny.id, id), eq(tenantCol, ctx.tenant.id)))
       .limit(1);
 
     return (result[0] as T) ?? null;
@@ -135,6 +147,7 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
    */
   async update(ctx: MTPCContext, id: string, data: Partial<T>): Promise<T | null> {
     const tableAny = this.table as any;
+    const tenantCol = tableAny[this.tenantColumn];
 
     const updateData = {
       ...data,
@@ -145,7 +158,7 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
     const result = await this.db
       .update(this.table)
       .set(updateData as any)
-      .where(and(eq(tableAny.id, id), eq(tableAny.tenantId, ctx.tenant.id)))
+      .where(and(eq(tableAny.id, id), eq(tenantCol, ctx.tenant.id)))
       .returning();
 
     return (result[0] as T) ?? null;
@@ -160,10 +173,11 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
    */
   async delete(ctx: MTPCContext, id: string): Promise<boolean> {
     const tableAny = this.table as any;
+    const tenantCol = tableAny[this.tenantColumn];
 
     const result = await this.db
       .delete(this.table)
-      .where(and(eq(tableAny.id, id), eq(tableAny.tenantId, ctx.tenant.id)))
+      .where(and(eq(tableAny.id, id), eq(tenantCol, ctx.tenant.id)))
       .returning();
 
     return result.length > 0;
@@ -178,6 +192,7 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
    */
   async softDelete(ctx: MTPCContext, id: string): Promise<boolean> {
     const tableAny = this.table as any;
+    const tenantCol = tableAny[this.tenantColumn];
 
     const result = await this.db
       .update(this.table)
@@ -185,7 +200,7 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
         deletedAt: new Date(),
         deletedBy: ctx.subject.id,
       } as any)
-      .where(and(eq(tableAny.id, id), eq(tableAny.tenantId, ctx.tenant.id)))
+      .where(and(eq(tableAny.id, id), eq(tenantCol, ctx.tenant.id)))
       .returning();
 
     return result.length > 0;
@@ -231,11 +246,12 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
    */
   async exists(ctx: MTPCContext, id: string): Promise<boolean> {
     const tableAny = this.table as any;
+    const tenantCol = tableAny[this.tenantColumn];
 
     const result = await this.db
       .select({ count: count() })
       .from(this.table)
-      .where(and(eq(tableAny.id, id), eq(tableAny.tenantId, ctx.tenant.id)));
+      .where(and(eq(tableAny.id, id), eq(tenantCol, ctx.tenant.id)));
 
     return Number(result[0]?.count ?? 0) > 0;
   }
@@ -264,12 +280,17 @@ export class BaseRepository<T extends Record<string, unknown>> implements Reposi
    */
   protected buildWhereConditions(ctx: MTPCContext, filters: FilterCondition[]) {
     const tableAny = this.table as any;
-    const conditions: any[] = [eq(tableAny.tenantId, ctx.tenant.id)];
+    const tenantCol = tableAny[this.tenantColumn];
 
-    // 默认排除已软删除的记录
-    if (tableAny.deletedAt) {
-      conditions.push(isNull(tableAny.deletedAt));
-    }
+    const conditions: any[] = [eq(tenantCol, ctx.tenant.id)];
+
+    /**
+     * Repository 只负责“执行 FilterCondition / tenant 过滤”，不掺入软删除业务逻辑；
+     * 软删除一律靠 @mtpc/soft-delete 插件完成。
+     */
+    // if (tableAny.deletedAt) {
+    //   conditions.push(isNull(tableAny.deletedAt));
+    // }
 
     for (const filter of filters) {
       const column = tableAny[filter.field];

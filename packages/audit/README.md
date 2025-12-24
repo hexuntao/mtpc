@@ -265,6 +265,13 @@ interface AuditEntry {
 }
 ```
 
+## 注意事项：
+
+plugin.install 只靠 beforeAny/afterAny/onError 记录资源操作，对权限检查/策略变化没 hook。
+
+- @mtpc/audit 默认只记录资源级操作（create/update/delete），不自动记录每次 permission check；
+- 若需要记录 checkPermission，可以在消费者系统中，通过 mtpc.checkPermission 包装一层显式调用 audit.logPermissionCheck
+
 ## 示例
 
 ### 完整示例

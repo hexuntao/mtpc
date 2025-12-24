@@ -5,9 +5,9 @@
  * 实现真正的类型推导，无需手动重复定义
  */
 
+import type { ClientOptions } from '@mtpc/adapter-hono/rpc';
 import { createTypedRPCClient } from '@mtpc/adapter-hono/rpc';
 import type { ApiRoutes } from 'example-api/api-types';
-import type { ClientOptions } from '@mtpc/adapter-hono/rpc';
 
 // ==================== 客户端创建 ====================
 
