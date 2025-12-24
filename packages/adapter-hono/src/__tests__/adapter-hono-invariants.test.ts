@@ -10,7 +10,7 @@
  */
 
 import type { Context } from 'hono';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Mock Hono 上下文
 function createMockContext(
@@ -111,12 +111,8 @@ describe('TC-HONO-001: Tenant 解析失败时拒绝 [架构级测试 - Fail-safe
     await middleware(ctx, next);
 
     // 验证废弃警告被触发
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[MTPC Deprecation Warning]')
-    );
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('defaultTenantId is deprecated')
-    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[MTPC Deprecation Warning]'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('defaultTenantId is deprecated'));
 
     warnSpy.mockRestore();
   });
