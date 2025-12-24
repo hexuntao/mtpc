@@ -10,6 +10,20 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createExplainPlugin } from '../plugin.js';
 import type { PluginContext } from '@mtpc/core';
 
+// ========== Mock PluginContext ==========
+
+function createMockPluginContext(overrides: Partial<PluginContext> = {}): PluginContext {
+  return {
+    registerResource: () => {},
+    registerPolicy: () => {},
+    registerGlobalHooks: () => {},
+    extendResourceHooks: () => {},
+    getResource: () => undefined,
+    getPolicy: () => undefined,
+    ...overrides,
+  };
+}
+
 // ========== Fixtures ==========
 
 describe('TC-EXPLAIN-001: 开关不影响判定结果 [架构级测试 - Non-decisive]', () => {
@@ -38,9 +52,19 @@ describe('TC-EXPLAIN-001: 开关不影响判定结果 [架构级测试 - Non-dec
     const plugin = createExplainPlugin();
 
     // 没有 policyEngine 应该抛出错误
-    await expect(
-      plugin.onInit({} as PluginContext)
-    ).rejects.toThrow('Explain plugin requires policyEngine');
+    let errorThrown = false;
+    let caughtError: Error | null = null;
+
+    try {
+      await plugin.onInit(createMockPluginContext());
+    } catch (e) {
+      errorThrown = true;
+      caughtError = e as Error;
+    }
+
+    expect(errorThrown).toBe(true);
+    expect(caughtError).not.toBeNull();
+    expect(caughtError!.message).toContain('policyEngine');
   });
 
   it('should require permissionResolver in onInit', async () => {
@@ -49,9 +73,19 @@ describe('TC-EXPLAIN-001: 开关不影响判定结果 [架构级测试 - Non-dec
     });
 
     // 只有 policyEngine，没有 permissionResolver 应该抛出错误
-    await expect(
-      plugin.onInit({ policyEngine: {} } as PluginContext)
-    ).rejects.toThrow('Explain plugin requires permissionResolver');
+    let errorThrown = false;
+    let caughtError: Error | null = null;
+
+    try {
+      await plugin.onInit(createMockPluginContext({ policyEngine: {} as any }));
+    } catch (e) {
+      errorThrown = true;
+      caughtError = e as Error;
+    }
+
+    expect(errorThrown).toBe(true);
+    expect(caughtError).not.toBeNull();
+    expect(caughtError!.message).toContain('permissionResolver');
   });
 });
 
