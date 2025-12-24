@@ -1,5 +1,4 @@
 import {
-  authMiddleware,
   mtpcErrorHandler,
   mtpcMiddleware,
   notFoundHandler,
@@ -8,7 +7,9 @@ import {
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { jwtAuth } from './middleware/jwt-auth.js';
 import { mtpc, rbac } from './mtpc.js';
+import { authRoutes } from './routes/auth.js';
 import { apiRoutes } from './routes/index.js';
 
 // 创建 Hono 应用
@@ -32,18 +33,8 @@ app.use(
   '/api/*',
   tenantMiddleware({
     headerName: 'x-tenant-id',
-    required: true,
-    defaultTenantId: 'default',
-  })
-);
-
-// API 路由的认证中间件
-app.use(
-  '/api/*',
-  authMiddleware({
-    headerName: 'x-user-id',
-    roleHeaderName: 'x-user-roles',
     required: false,
+    defaultTenantId: 'default',
   })
 );
 
@@ -55,6 +46,12 @@ app.get('/health', c => {
     mtpc: mtpc.getSummary(),
   });
 });
+
+// 认证路由（无需 JWT 认证）
+app.route('/api/auth', authRoutes);
+
+// API 路由的认证中间件（可选认证）
+app.use('/api/*', jwtAuth({ required: false }));
 
 // 挂载 API 路由
 app.route('/api', apiRoutes);
@@ -68,18 +65,20 @@ app.get('/api/metadata', c => {
 // 权限端点
 app.get('/api/permissions', async c => {
   const tenantId = c.req.header('x-tenant-id') ?? 'default';
-  const userId = c.req.header('x-user-id');
+  const userId = c.get('userId');
 
   if (!userId) {
-    return c.json({ success: true, data: { permissions: [] } });
+    return c.json({ success: true, data: { permissions: [], roles: [] } });
   }
 
   const permissions = await rbac.getPermissions(tenantId, 'user', userId);
+  const bindings = await rbac.getSubjectRoles(tenantId, 'user', userId);
+
   return c.json({
     success: true,
     data: {
       permissions: Array.from(permissions),
-      roles: (await rbac.getSubjectRoles(tenantId, 'user', userId)).map(b => b.roleId),
+      roles: bindings.map(b => b.roleId),
     },
   });
 });
