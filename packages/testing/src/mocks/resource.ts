@@ -10,7 +10,7 @@ export function createMockResource(
     actions?: string[];
     features?: Partial<ResourceDefinition['features']>;
   } = {}
-): ResourceDefinition {
+) {
   const { actions = ['create', 'read', 'update', 'delete', 'list'], features } = options;
 
   return defineResource({
@@ -43,7 +43,7 @@ export function createMockResource(
 /**
  * 创建标准测试资源
  */
-export function createTestResources(): ResourceDefinition[] {
+export function createTestResources() {
   return [
     createMockResource('product'),
     createMockResource('order', {
