@@ -1,5 +1,6 @@
 import type { MTPCContext, ResourceHooks } from '@mtpc/core';
-import type { VersioningConfig } from './types.js';
+import type { VersioningConfig } from './types';
+// import type { VersioningConfig } from './types.js';
 
 /**
  * 创建乐观锁 / 版本控制相关的 Hooks
@@ -15,10 +16,10 @@ import type { VersioningConfig } from './types.js';
  * @returns 资源钩子的部分实现，包含版本控制相关的钩子
  */
 export function createVersioningHooks<T extends Record<string, unknown>>(
-  config: VersioningConfig
+  _config: VersioningConfig
 ): Partial<ResourceHooks<T>> {
   // 默认的版本字段名
-  const versionField = config.versionField ?? 'version';
+  // const versionField = config.versionField ?? 'version';
 
   return {
     /**
