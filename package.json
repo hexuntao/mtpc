@@ -1,6 +1,9 @@
 {
   "name": "mtpc",
   "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",

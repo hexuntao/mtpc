@@ -1,6 +1,7 @@
 import { zValidator } from '@hono/zod-validator';
 import { DrizzleCRUDHandler, getMTPCContext, requirePermission } from '@mtpc/adapter-hono';
 import { Hono } from 'hono';
+import { eq, and, isNull } from 'drizzle-orm';
 import { orderResource } from '../resources.js';
 import { db } from '../db/connection.js';
 import { order } from '../db/schema.js';
@@ -118,4 +119,49 @@ orderRoutes.post('/:id/cancel', requirePermission('order:cancel'), async c => {
   }
 
   return c.json({ success: true, data: result });
+});
+
+// 删除订单（软删除）
+orderRoutes.delete('/:id', requirePermission('order', 'delete'), async c => {
+  const ctx = getMTPCContext(c);
+  const id = c.req.param('id');
+  const userId = ctx.subject.id;
+
+  // 使用软删除
+  const result = await db
+    .update(order)
+    .set({
+      deletedAt: new Date(),
+      deletedBy: userId,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(order.id, id), isNull(order.deletedAt)))
+    .returning();
+
+  if (result.length === 0) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: '订单未找到或已被删除' } }, 404);
+  }
+
+  return c.json({ success: true, data: { deleted: true, id: result[0].id } });
+});
+
+// 恢复已删除的订单
+orderRoutes.post('/:id/restore', requirePermission('order', 'delete'), async c => {
+  const id = c.req.param('id');
+
+  const result = await db
+    .update(order)
+    .set({
+      deletedAt: null,
+      deletedBy: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(order.id, id))
+    .returning();
+
+  if (result.length === 0) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: '订单未找到' } }, 404);
+  }
+
+  return c.json({ success: true, data: result[0] });
 });

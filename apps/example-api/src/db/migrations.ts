@@ -107,7 +107,8 @@ migrationRunner.register({
           created_by TEXT,
           updated_by TEXT,
           deleted_at TIMESTAMP WITH TIME ZONE,
-          deleted_by TEXT
+          deleted_by TEXT,
+          version INTEGER DEFAULT 1 NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS products_tenant_idx ON products(tenant_id);
@@ -131,7 +132,8 @@ migrationRunner.register({
           created_by TEXT,
           updated_by TEXT,
           deleted_at TIMESTAMP WITH TIME ZONE,
-          deleted_by TEXT
+          deleted_by TEXT,
+          version INTEGER DEFAULT 1 NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS orders_tenant_idx ON orders(tenant_id);
@@ -155,7 +157,8 @@ migrationRunner.register({
           created_by TEXT,
           updated_by TEXT,
           deleted_at TIMESTAMP WITH TIME ZONE,
-          deleted_by TEXT
+          deleted_by TEXT,
+          version INTEGER DEFAULT 1 NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS customers_tenant_idx ON customers(tenant_id);
@@ -173,6 +176,56 @@ migrationRunner.register({
         DROP TABLE IF EXISTS products CASCADE;
       `)
     );
+  },
+});
+
+// 注册版本字段迁移（在资源表之后）
+migrationRunner.register({
+  id: '0003_1_version_fields',
+  name: 'Add version fields to resource tables',
+  async up(db) {
+    await db.execute(
+      sql.raw(`
+        -- 为 products 表添加 version 字段（如果不存在）
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'products' AND column_name = 'version'
+          ) THEN
+            ALTER TABLE products ADD COLUMN version INTEGER DEFAULT 1 NOT NULL;
+          END IF;
+        END $$;
+
+        -- 为 orders 表添加 version 字段（如果不存在）
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'orders' AND column_name = 'version'
+          ) THEN
+            ALTER TABLE orders ADD COLUMN version INTEGER DEFAULT 1 NOT NULL;
+          END IF;
+        END $$;
+
+        -- 为 customers 表添加 version 字段（如果不存在）
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'customers' AND column_name = 'version'
+          ) THEN
+            ALTER TABLE customers ADD COLUMN version INTEGER DEFAULT 1 NOT NULL;
+          END IF;
+        END $$;
+      `)
+    );
+  },
+  async down(db) {
+    // 删除 version 字段
+    await db.execute(sql.raw(`ALTER TABLE products DROP COLUMN IF EXISTS version;`));
+    await db.execute(sql.raw(`ALTER TABLE orders DROP COLUMN IF EXISTS version;`));
+    await db.execute(sql.raw(`ALTER TABLE customers DROP COLUMN IF EXISTS version;`));
   },
 });
 

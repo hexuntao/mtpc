@@ -1,6 +1,7 @@
 import { zValidator } from '@hono/zod-validator';
 import { DrizzleCRUDHandler, getMTPCContext, requirePermission } from '@mtpc/adapter-hono';
 import { Hono } from 'hono';
+import { eq, and, isNull } from 'drizzle-orm';
 import { customerResource } from '../resources.js';
 import { db } from '../db/connection.js';
 import { customer } from '../db/schema.js';
@@ -78,19 +79,47 @@ customerRoutes.put(
   }
 );
 
-// 删除客户
+// 删除客户（软删除）
 customerRoutes.delete('/:id', requirePermission('customer', 'delete'), async c => {
   const ctx = getMTPCContext(c);
   const id = c.req.param('id');
+  const userId = ctx.subject.id;
 
-  const result = await handler.delete(ctx, id);
+  // 使用软删除
+  const result = await db
+    .update(customer)
+    .set({
+      deletedAt: new Date(),
+      deletedBy: userId,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(customer.id, id), isNull(customer.deletedAt)))
+    .returning();
 
-  if (!result) {
-    return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: '客户未找到' } },
-      404
-    );
+  if (result.length === 0) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: '客户未找到或已被删除' } }, 404);
   }
 
-  return c.json({ success: true, data: { deleted: true } });
+  return c.json({ success: true, data: { deleted: true, id: result[0].id } });
+});
+
+// 恢复已删除的客户
+customerRoutes.post('/:id/restore', requirePermission('customer', 'delete'), async c => {
+  const id = c.req.param('id');
+
+  const result = await db
+    .update(customer)
+    .set({
+      deletedAt: null,
+      deletedBy: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(customer.id, id))
+    .returning();
+
+  if (result.length === 0) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: '客户未找到' } }, 404);
+  }
+
+  return c.json({ success: true, data: result[0] });
 });

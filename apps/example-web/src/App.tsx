@@ -1,10 +1,9 @@
 import type React from 'react';
 import { useEffect, useState } from 'react';
-import { setCurrentUser } from './api/client';
 import { PermissionsView } from './components/PermissionsView';
 import { ResourceView } from './components/ResourceView';
 import { RolesView } from './components/RolesView';
-import { usePermissions } from './hooks/usePermissions';
+import { usePermissions, useRoles, usePermissionContext } from '@mtpc/adapter-react';
 
 type View = 'products' | 'orders' | 'customers' | 'roles' | 'permissions';
 
@@ -18,11 +17,16 @@ const DEMO_USERS = [
 export function App() {
   const [currentView, setCurrentView] = useState<View>('products');
   const [currentUser, setUser] = useState(DEMO_USERS[0]);
-  const { permissions, loading, canAccess } = usePermissions();
 
+  // 使用 @mtpc/adapter-react 的钩子
+  const { permissions, loading } = usePermissions();
+  const roles = useRoles();
+  const ctx = usePermissionContext(); // 获取完整的上下文以使用 can 方法
+
+  // 通知 PermissionProvider 用户变化
   useEffect(() => {
-    setCurrentUser(currentUser.id);
-  }, [currentUser]);
+    window.dispatchEvent(new CustomEvent('user-change', { detail: currentUser.id }));
+  }, [currentUser.id]);
 
   const handleUserChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const user = DEMO_USERS.find(u => u.id === e.target.value);
@@ -63,7 +67,7 @@ export function App() {
             <h3>Navigation</h3>
             <ul className="nav-list">
               {navItems.map(item => {
-                const canView = item.permission === null || canAccess(item.permission);
+                const canView = item.permission === null || ctx.can(item.permission);
                 return (
                   <li key={item.id}>
                     <button
@@ -84,6 +88,8 @@ export function App() {
               <strong>ID:</strong> {currentUser.id}
               <br />
               <strong>Role:</strong> {currentUser.role}
+              <br />
+              <strong>Roles:</strong> {roles.join(', ') || 'None'}
             </p>
           </aside>
 

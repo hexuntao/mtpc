@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@mtpc/adapter-react": "workspace:*",
+    "hono": "^4.11.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

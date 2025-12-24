@@ -4,6 +4,7 @@ import {
   notFoundHandler,
   tenantMiddleware,
 } from '@mtpc/adapter-hono';
+import { VersionConflictError } from '@mtpc/versioning';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -92,5 +93,29 @@ app.get('/api/permissions', async c => {
 });
 
 // 错误处理
-app.onError(mtpcErrorHandler({ includeStack: process.env.NODE_ENV !== 'production' }));
+app.onError((err, c) => {
+  // 处理版本冲突错误
+  if (err instanceof VersionConflictError) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'VERSION_CONFLICT',
+          message: '数据已被其他人修改，请刷新后重试',
+          details: {
+            expected: err.expected,
+            actual: err.actual,
+          },
+        },
+      },
+      409
+    );
+  }
+
+  // 其他错误使用 MTPC 错误处理器
+  return mtpcErrorHandler({ includeStack: process.env.NODE_ENV !== 'production' })(err, c);
+});
 app.notFound(notFoundHandler);
+
+// 导出 AppType 供前端 RPC 客户端使用
+export type AppType = typeof app;

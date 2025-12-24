@@ -1,10 +1,13 @@
-import { createMTPC } from '@mtpc/core';
-import { createRBAC, role } from '@mtpc/rbac';
 import { createAuditPlugin } from '@mtpc/audit';
+import { createMTPC } from '@mtpc/core';
 import { createPolicyCachePlugin } from '@mtpc/policy-cache';
+import { createRBAC, role } from '@mtpc/rbac';
+import { createSoftDeletePlugin } from '@mtpc/soft-delete';
+import { createVersioningPlugin, VersionConflictError } from '@mtpc/versioning';
+import { createDataScopePlugin } from '@mtpc/data-scope';
 import { resources } from './resources.js';
-import { DatabaseRBACStore } from './store/database-rbac-store.js';
 import { DatabaseAuditStore } from './store/audit-store.js';
+import { DatabaseRBACStore } from './store/database-rbac-store.js';
 
 // 创建数据库存储实例
 const dbStore = new DatabaseRBACStore();
@@ -94,10 +97,92 @@ mtpc.use(
   })
 );
 
+// 注册软删除插件
+const softDeletePlugin = createSoftDeletePlugin();
+mtpc.use(softDeletePlugin);
+
+// 注册版本控制插件
+const versioningPlugin = createVersioningPlugin();
+mtpc.use(versioningPlugin);
+
+// 注册数据范围插件
+const dataScopePlugin = createDataScopePlugin({
+  // 管理员角色无数据限制
+  adminRoles: ['admin'],
+  // 默认范围类型（租户隔离）
+  defaultScope: 'tenant',
+});
+mtpc.use(dataScopePlugin);
+
 // 初始化 MTPC
 await mtpc.init();
+
+// 获取插件上下文，用于配置资源钩子
+const pluginContext = mtpc['plugins'].getContext();
+
+// 为所有资源配置软删除
+softDeletePlugin.state.configureResource(
+  {
+    resourceName: 'product',
+    deletedAtField: 'deletedAt',
+    deletedByField: 'deletedBy',
+    autoFilter: true,
+  },
+  pluginContext
+);
+
+softDeletePlugin.state.configureResource(
+  {
+    resourceName: 'order',
+    deletedAtField: 'deletedAt',
+    deletedByField: 'deletedBy',
+    autoFilter: true,
+  },
+  pluginContext
+);
+
+softDeletePlugin.state.configureResource(
+  {
+    resourceName: 'customer',
+    deletedAtField: 'deletedAt',
+    deletedByField: 'deletedBy',
+    autoFilter: true,
+  },
+  pluginContext
+);
+
+// 为所有资源配置版本控制
+versioningPlugin.state.configureResource(
+  {
+    resourceName: 'product',
+    versionField: 'version',
+  },
+  pluginContext
+);
+
+versioningPlugin.state.configureResource(
+  {
+    resourceName: 'order',
+    versionField: 'version',
+  },
+  pluginContext
+);
+
+versioningPlugin.state.configureResource(
+  {
+    resourceName: 'customer',
+    versionField: 'version',
+  },
+  pluginContext
+);
+
+// 导出版本冲突错误类供路由使用
+export { VersionConflictError };
 
 console.log('✅ MTPC 初始化完成，摘要:', mtpc.getSummary());
 console.log('✅ RBAC 使用数据库存储');
 console.log('✅ 审计日志插件已启用');
 console.log('✅ 权限缓存插件已启用');
+console.log('✅ 软删除插件已启用');
+console.log('✅ 版本控制插件已启用');
+console.log('✅ 数据范围插件已启用（管理员无限制，其他角色租户隔离）');
