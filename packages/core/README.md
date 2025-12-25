@@ -22,7 +22,11 @@ pnpm add zod
 
 ```typescript
 import { createMTPC, defineResource } from '@mtpc/core';
+import { createRBACPlugin } from '@mtpc/rbac';
 import { z } from 'zod';
+
+// 创建 RBAC 插件
+const rbacPlugin = createRBACPlugin();
 
 // 创建 MTPC 实例
 const mtpc = createMTPC({
@@ -33,17 +37,12 @@ const mtpc = createMTPC({
     // 租户ID解析器（可选）
     tenantResolver: (req) => req.headers['x-tenant-id'] as string
   },
-  // 默认权限解析器（从外部系统获取权限）
-  defaultPermissionResolver: async (tenantId, subjectId) => {
-    // 从数据库或外部服务加载权限
-    // 示例：从静态映射获取
-    const permissionsMap = new Map([
-      ['user-123', new Set(['user:read', 'user:update'])],
-      ['user-456', new Set(['*'])] // 超级管理员权限
-    ]);
-    return permissionsMap.get(subjectId) || new Set();
-  }
+  // 使用 RBAC 插件的权限解析器
+  defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(rbacPlugin.state.evaluator)
 });
+
+// 注册 RBAC 插件（可选，用于访问插件状态）
+mtpc.use(rbacPlugin);
 ```
 
 ## 3. 基础 API 调用示例
@@ -291,6 +290,17 @@ const auditPlugin = {
 
 // 注册插件
 mtpc.use(auditPlugin);
+
+// 初始化 MTPC
+await mtpc.init();
+
+// 获取已安装的插件实例
+const audit = mtpc.getPlugin('audit-log');
+if (audit) {
+  console.log('审计插件已安装:', audit.installed);
+  console.log('插件状态:', audit.state);
+}
+```
 
 // 注册资源级钩子
 const orderResource = defineResource({
@@ -808,6 +818,9 @@ async function debugPermissionIssue(permissionContext) {
 | `mtpc.use(plugin)` | 使用插件 |
 | `mtpc.init()` | 初始化 MTPC 实例 |
 | `mtpc.isInitialized()` | 检查是否已初始化 |
+| `mtpc.getPlugin(name)` | 获取已安装的插件实例 |
+| `mtpc.setPermissionResolver(resolver)` | 设置权限解析器 |
+| `mtpc.getPermissionResolver()` | 获取当前权限解析器 |
 | `mtpc.createContext(tenant, subject)` | 创建上下文 |
 | `mtpc.checkPermission(context)` | 检查权限 |
 | `mtpc.requirePermission(context)` | 检查权限并在无权限时抛出异常 |

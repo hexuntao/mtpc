@@ -76,7 +76,7 @@ export class ResourceRegistry {
     }
 
     if (this.frozen) {
-      throw new Error('Registry is frozen. Cannot register new resources.');
+      throw new Error('注册表已冻结，无法注册新资源');
     }
 
     if (this.resources.has(resource.name)) {
@@ -304,7 +304,7 @@ export class ResourceRegistry {
    */
   clear(): void {
     if (this.frozen) {
-      throw new Error('Registry is frozen. Cannot clear resources.');
+      throw new Error('注册表已冻结，无法清空资源');
     }
     this.resources.clear();
   }

@@ -1,5 +1,5 @@
 import type { GlobalHooks, ResourceHooks } from './hooks.js';
-import type { PolicyDefinition, PolicyEngine } from './policy.js';
+import type { PolicyDefinition } from './policy.js';
 import type { ResourceDefinition } from './resource.js';
 
 /**
@@ -163,10 +163,6 @@ export interface PluginContext {
    * ```
    */
   onResourceRegistered(callback: (resource: ResourceDefinition) => void): () => void;
-  /** 策略引擎实例（可选） */
-  policyEngine?: PolicyEngine;
-  /** 权限解析器函数（可选） */
-  permissionResolver?: (tenantId: string, subjectId: string) => Promise<Set<string>>;
 }
 
 /**
@@ -261,6 +257,8 @@ export interface PluginLifecycle {
 export interface PluginDefinition extends PluginMetadata, PluginLifecycle {
   /** 安装方法 - 必须实现 */
   install(context: PluginContext): void | Promise<void>;
+  /** 插件自定义状态（可选），可在 getPlugin 返回的实例中访问 */
+  state?: unknown;
 }
 
 /**
@@ -295,6 +293,8 @@ export interface PluginInstance {
   readonly installed: boolean;
   /** 是否已初始化 */
   readonly initialized: boolean;
+  /** 插件自定义状态 */
+  readonly state?: unknown;
 }
 
 /**

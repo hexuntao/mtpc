@@ -74,7 +74,7 @@ export class PermissionRegistry {
     }
 
     if (this.frozen) {
-      throw new Error('Registry is frozen. Cannot register new permissions.');
+      throw new Error('注册表已冻结，无法注册新权限');
     }
 
     const permission = compilePermission(resourceName, definition);
@@ -331,7 +331,7 @@ export class PermissionRegistry {
    */
   clear(): void {
     if (this.frozen) {
-      throw new Error('Registry is frozen. Cannot clear permissions.');
+      throw new Error('注册表已冻结，无法清空权限');
     }
     this.permissions.clear();
     this.byResource.clear();

@@ -143,6 +143,7 @@ export class DefaultPluginManager implements PluginManager {
       },
       installed: false,
       initialized: false,
+      state: plugin.state,
     });
 
     // 触发 onRegister 回调

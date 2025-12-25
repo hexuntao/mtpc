@@ -88,16 +88,19 @@ if (result.allowed) {
 import { createMTPC } from '@mtpc/core';
 import { createRBACPlugin } from '@mtpc/rbac';
 
-// 创建 MTPC 实例，集成 RBAC 插件
-const mtpc = createMTPC({
-  // 使用 RBAC 权限解析器
-  defaultPermissionResolver: createRBAC({}).createPermissionResolver()
+// 创建 RBAC 插件
+const rbacPlugin = createRBACPlugin({
+  cacheTTL: 60000 // 1分钟缓存
 });
 
-// 或者使用插件形式
-mtpc.use(createRBACPlugin({
-  cacheTTL: 60000 // 1分钟缓存
-}));
+// 创建 MTPC 实例，集成 RBAC 插件
+const mtpc = createMTPC({
+  // 使用 RBAC 插件的权限解析器
+  defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(rbacPlugin.state.evaluator)
+});
+
+// 注册插件（可选，用于访问插件状态）
+mtpc.use(rbacPlugin);
 
 await mtpc.init();
 
@@ -108,6 +111,21 @@ const result = await mtpc.checkPermission({
   resource: 'content',
   action: 'write'
 });
+
+// 访问 RBAC 功能
+const rbac = mtpc.getPlugin('@mtpc/rbac');
+if (rbac?.state) {
+  const { roles, bindings } = rbac.state as {
+    roles: import('@mtpc/rbac').RoleManager;
+    bindings: import('@mtpc/rbac').BindingManager;
+  };
+
+  // 创建角色
+  await roles.createRole('tenant-001', {
+    name: 'editor',
+    permissions: ['content:read', 'content:write']
+  });
+}
 ```
 
 ## 4. 核心 API 详解
@@ -673,10 +691,18 @@ A: 对于大量角色和用户，建议：
 A: 可以结合 `@mtpc/core` 的策略引擎，实现基于条件的动态权限：
 
 ```typescript
+import { createMTPC } from '@mtpc/core';
+import { createRBACPlugin } from '@mtpc/rbac';
+
+// 创建 RBAC 插件
+const rbacPlugin = createRBACPlugin();
+
 // 使用 MTPC 的策略引擎
 const mtpc = createMTPC({
-  defaultPermissionResolver: rbac.createPermissionResolver()
+  defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(rbacPlugin.state.evaluator)
 });
+
+mtpc.use(rbacPlugin);
 
 // 注册策略
 mtpc.registerPolicy({
@@ -692,6 +718,8 @@ mtpc.registerPolicy({
     }]
   }]
 });
+
+await mtpc.init();
 
 // 检查权限，结合 RBAC 和策略
 const result = await mtpc.checkPermission({

@@ -70,29 +70,29 @@ export interface RBACPluginState {
  * import { createMTPC } from '@mtpc/core';
  * import { createRBACPlugin } from '@mtpc/rbac';
  *
- * // 使用默认配置
+ * // 创建 RBAC 插件
+ * const rbacPlugin = createRBACPlugin();
+ *
+ * // 创建 MTPC 实例
  * const mtpc = createMTPC({
- *   plugins: [
- *     createRBACPlugin()
- *   ]
+ *   // 必须提供 defaultPermissionResolver，或后续通过 setPermissionResolver 设置
+ *   defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(rbacPlugin.state.evaluator)
  * });
  *
- * // 自定义配置
- * const mtpc = createMTPC({
- *   plugins: [
- *     createRBACPlugin({
- *       cacheTTL: 300000,
- *       store: new DatabaseRBACStore()
- *     })
- *   ]
- * });
+ * // 注册插件（可选，用于访问插件状态）
+ * mtpc.use(rbacPlugin);
+ *
+ * // 初始化
+ * await mtpc.init();
  *
  * // 访问 RBAC 功能
- * const rbacPlugin = mtpc.getPlugin('@mtpc/rbac');
- * await rbacPlugin.state.roles.createRole('tenant-001', {
- *   name: 'editor',
- *   permissions: ['content:read', 'content:write']
- * });
+ * const rbac = mtpc.getPlugin('@mtpc/rbac');
+ * if (rbac?.state) {
+ *   await rbac.state.roles.createRole('tenant-001', {
+ *     name: 'editor',
+ *     permissions: ['content:read', 'content:write']
+ *   });
+ * }
  * ```
  */
 export function createRBACPlugin(
@@ -134,7 +134,8 @@ export function createRBACPlugin(
     version: '0.1.0',
     description: 'Role-Based Access Control extension for MTPC',
 
-    state,
+    // 使用类型断言来满足 PluginDefinition.state 类型
+    state: state as unknown as NonNullable<typeof state>,
 
     /**
      * 插件安装钩子
@@ -144,11 +145,11 @@ export function createRBACPlugin(
      * - 注册全局钩子用于权限检查
      * - 集成到 MTPC 的请求处理流程
      *
-     * @param _context 插件上下文
+     * @param context 插件上下文
      */
-    install(_context: PluginContext): void {
+    install(context: PluginContext): void {
       // 注册全局钩子用于权限检查
-      _context.registerGlobalHooks({
+      context.registerGlobalHooks({
         beforeAny: [
           async () => {
             // 此钩子可用于注入基于 RBAC 的权限检查
