@@ -45,7 +45,7 @@ pnpm add @mtpc/adapter-hono @mtpc/core hono
 
 ```typescript
 import { createMTPC } from '@mtpc/core';
-import { createMTPCApp } from '@mtpc/adapter-hono';
+import { createMTPCApp, createRBACPlugin } from '@mtpc/adapter-hono';
 import { defineResource } from '@mtpc/core';
 import { z } from 'zod';
 
@@ -72,11 +72,19 @@ const userResource = defineResource({
   ],
 });
 
-// 创建 MTPC 实例
-const mtpc = createMTPC();
+// 创建 RBAC 插件
+const rbacPlugin = createRBACPlugin();
+
+// 创建 MTPC 实例（必须提供 defaultPermissionResolver）
+const mtpc = createMTPC({
+  defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(rbacPlugin.state.evaluator)
+});
 
 // 注册资源
 mtpc.registerResource(userResource);
+
+// 注册插件（可选，用于访问插件状态）
+mtpc.use(rbacPlugin);
 
 // 初始化 MTPC
 await mtpc.init();
@@ -98,11 +106,18 @@ app.fire(3000);
 
 ```typescript
 import { createMTPC } from '@mtpc/core';
-import { createMinimalMTPCApp } from '@mtpc/adapter-hono';
+import { createMinimalMTPCApp, createRBACPlugin } from '@mtpc/adapter-hono';
 import { z } from 'zod';
 
-// 创建 MTPC 实例
-const mtpc = createMTPC();
+// 创建 RBAC 插件
+const rbacPlugin = createRBACPlugin();
+
+// 创建 MTPC 实例（必须提供 defaultPermissionResolver）
+const mtpc = createMTPC({
+  defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(rbacPlugin.state.evaluator)
+});
+
+mtpc.use(rbacPlugin);
 await mtpc.init();
 
 // 创建最小化的 MTPC Hono 应用
@@ -115,7 +130,7 @@ const app = createMinimalMTPCApp(mtpc, {
 app.get('/custom-route', async (c) => {
   // 从上下文获取 MTPC 实例
   const mtpcInstance = c.get('mtpc');
-  
+
   // 使用 MTPC 实例进行权限检查
   const checkResult = await mtpcInstance.checkPermission({
     tenant: c.get('tenant'),
@@ -123,11 +138,11 @@ app.get('/custom-route', async (c) => {
     resource: 'user',
     action: 'read',
   });
-  
+
   if (!checkResult.allowed) {
     return c.json({ success: false, message: 'Permission denied' }, 403);
   }
-  
+
   return c.json({ success: true, data: { message: 'Custom route accessed' } });
 });
 
@@ -139,11 +154,18 @@ app.fire(3000);
 
 ```typescript
 import { createMTPC } from '@mtpc/core';
-import { mountMTPC } from '@mtpc/adapter-hono';
+import { mountMTPC, createRBACPlugin } from '@mtpc/adapter-hono';
 import { Hono } from 'hono';
 
-// 创建 MTPC 实例
-const mtpc = createMTPC();
+// 创建 RBAC 插件
+const rbacPlugin = createRBACPlugin();
+
+// 创建 MTPC 实例（必须提供 defaultPermissionResolver）
+const mtpc = createMTPC({
+  defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(rbacPlugin.state.evaluator)
+});
+
+mtpc.use(rbacPlugin);
 await mtpc.init();
 
 // 创建现有 Hono 应用

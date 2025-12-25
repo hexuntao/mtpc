@@ -21,6 +21,20 @@ import type { ApiResponse, CRUDHandlers, MTPCAppOptions, MTPCEnv } from './types
  *
  * @example
  * ```typescript
+ * import { createRBACPlugin } from '@mtpc/rbac';
+ *
+ * // 创建 RBAC 插件
+ * const rbacPlugin = createRBACPlugin();
+ *
+ * // 创建 MTPC 实例（必须提供 defaultPermissionResolver）
+ * const mtpc = createMTPC({
+ *   defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(rbacPlugin.state.evaluator)
+ * });
+ *
+ * mtpc.use(rbacPlugin);
+ * await mtpc.init();
+ *
+ * // 创建 Hono 应用
  * const app = createMTPCApp<User>(mtpc, {
  *   prefix: '/api',
  *   logging: true,
