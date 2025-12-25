@@ -622,14 +622,28 @@ export function createRBAC(options?: RBACOptions): RBAC {
  * 将 RBAC 与 MTPC 集成
  * 为已存在的 MTPC 实例添加 RBAC 支持
  *
+ * **注意**：推荐使用 createRBACPlugin 方式集成，此函数用于兼容旧的独立 RBAC 实例
+ *
  * @param mtpc MTPC 实例
  * @param rbac RBAC 实例
  *
  * @example
  * ```typescript
- * const mtpc = new MTPC();
- * const rbac = new RBAC();
+ * import { createMTPC, createRBAC } from '@mtpc/rbac';
+ *
+ * // 方式 1：使用独立 RBAC 实例（旧方式，仍支持）
+ * const rbac = createRBAC();
+ * const mtpc = createMTPC();
  * integrateWithMTPC(mtpc, rbac);
+ * await mtpc.init();
+ *
+ * // 方式 2：推荐使用 createRBACPlugin
+ * const rbacPlugin = createRBACPlugin();
+ * const mtpc = createMTPC({
+ *   defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(rbacPlugin.state.evaluator)
+ * });
+ * mtpc.use(rbacPlugin);
+ * await mtpc.init();
  * ```
  */
 export function integrateWithMTPC(mtpc: MTPC, rbac: RBAC): void {

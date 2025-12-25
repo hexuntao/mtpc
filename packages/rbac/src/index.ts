@@ -52,11 +52,18 @@
  * import { createMTPC } from '@mtpc/core';
  * import { createRBACPlugin } from '@mtpc/rbac';
  *
+ * // 创建 RBAC 插件
+ * const rbacPlugin = createRBACPlugin({ cacheTTL: 60000 });
+ *
+ * // 创建 MTPC 实例并集成
  * const mtpc = createMTPC({
- *   plugins: [
- *     createRBACPlugin({ cacheTTL: 60000 })
- *   ]
+ *   defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(rbacPlugin.state.evaluator)
  * });
+ *
+ * // 注册插件（可选，用于访问插件状态）
+ * mtpc.use(rbacPlugin);
+ *
+ * await mtpc.init();
  * ```
  *
  * @packageDocumentation
