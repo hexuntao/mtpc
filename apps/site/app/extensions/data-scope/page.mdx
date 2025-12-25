@@ -1,0 +1,304 @@
+---
+title: mtpc/data-scope 数据范围控制扩展
+description: MTPC 数据范围控制扩展概览
+---
+
+# @mtpc/data-scope 数据范围控制扩展
+
+`@mtpc/data-scope` 提供**数据范围控制**功能，实现行级权限控制，支持多部门、多层级组织的系统。
+
+## 扩展概述
+
+### 什么是数据范围控制
+
+数据范围控制（Data Scope）是一种**行级权限控制**机制，允许根据用户的组织关系（如部门、团队）限制其可访问的数据范围。
+
+### 为什么需要数据范围控制
+
+在多部门、多层级的企业组织中，传统的角色权限控制（RBAC）无法满足以下需求：
+
+- 用户只能查看自己部门的数据
+- 用户可以查看下属部门的数据
+- 管理员可以查看所有数据
+- 不同部门之间的数据需要隔离
+
+### 适用场景
+
+- 多部门企业系统
+- 多层级组织结构
+- 需要行级权限控制的 SaaS 应用
+- 需要数据隔离的内部系统
+
+## 核心功能
+
+### 范围类型
+
+| 范围类型 | 描述 | 使用场景 |
+|----------|------|----------|
+| `tenant` | 租户级别 | 租户管理员、跨租户操作 |
+| `department` | 部门级别 | 部门隔离、部门管理 |
+| `team` | 团队级别 | 团队协作、项目管理 |
+| `self` | 个人级别 | 个人数据、用户资料 |
+| `subordinates` | 下属级别 | 管理员查看下属数据 |
+| `custom` | 自定义级别 | 自定义业务逻辑 |
+
+### 范围定义
+
+```ts
+interface DataScopeDefinition {
+  type: DataScopeType;
+  name: string;
+  description?: string;
+  rules: DataScopeRule[];
+}
+
+interface DataScopeRule {
+  field: string;
+  operator: string;
+  value: unknown;
+}
+```
+
+### 范围解析
+
+```ts
+interface ScopeResolver {
+  resolve(
+    ctx: MTPCContext,
+    resource: ResourceDefinition,
+    subject: SubjectContext
+  ): Promise<DataScope>;
+}
+```
+
+### 查询过滤
+
+```ts
+interface FilterGenerator {
+  generate(
+    ctx: MTPCContext,
+    resource: ResourceDefinition,
+    query: unknown
+  ): Promise<unknown>;
+}
+```
+
+## API 参考
+
+### DataScopePlugin 类
+
+```ts
+class DataScopePlugin {
+  constructor(options?: DataScopeOptions)
+  
+  // 添加范围定义
+  addScope(definition: DataScopeDefinition): void;
+  
+  // 解析范围
+  resolveScope(
+    ctx: MTPCContext,
+    resource: ResourceDefinition,
+    subject: SubjectContext
+  ): Promise<DataScope>;
+  
+  // 生成查询过滤
+  generateFilter(
+    ctx: MTPCContext,
+    resource: ResourceDefinition,
+    query: unknown
+  ): Promise<unknown>;
+}
+```
+
+### DataScopeOptions
+
+```ts
+interface DataScopeOptions {
+  enabled?: boolean;              // 默认 true
+  defaultScope?: DataScopeType;  // 默认 'tenant'
+  adminBypass?: boolean;         // 默认 false
+}
+```
+
+## 使用示例
+
+### 定义资源范围
+
+```ts
+import { defineResource } from '@mtpc/core'
+import { createDataScopePlugin } from '@mtpc/data-scope'
+
+export const orderResource = defineResource({
+  name: 'order',
+  schema: z.object({
+    id: z.string(),
+    customerId: z.string(),
+    amount: z.number(),
+    status: z.enum(['pending', 'completed', 'cancelled']),
+    departmentId: z.string(),
+    teamId: z.string(),
+    ownerId: z.string(),
+  }),
+  metadata: {
+    displayName: '订单',
+    dataScope: {
+      enabled: true,
+      defaultScope: 'department',
+      adminBypass: true,
+    },
+  },
+})
+```
+
+### 创建范围定义
+
+```ts
+import { createDataScopePlugin } from '@mtpc/data-scope'
+
+const scopePlugin = createDataScopePlugin()
+
+// 添加部门范围
+scopePlugin.addScope({
+  type: 'department',
+  name: 'department',
+  description: '部门级别数据范围',
+  rules: [
+    {
+      field: 'departmentId',
+      operator: 'eq',
+      value: 'subject.departmentId',
+    },
+  ],
+})
+
+// 添加团队范围
+scopePlugin.addScope({
+  type: 'team',
+  name: 'team',
+  description: '团队级别数据范围',
+  rules: [
+    {
+      field: 'teamId',
+      operator: 'eq',
+      value: 'subject.teamId',
+    },
+  ],
+})
+
+// 添加个人范围
+scopePlugin.addScope({
+  type: 'self',
+  name: 'self',
+  description: '个人数据范围',
+  rules: [
+    {
+      field: 'ownerId',
+      operator: 'eq',
+      value: 'subject.id',
+    },
+  ],
+})
+```
+
+### 集成到 MTPC
+
+```ts
+import { createMTPC } from '@mtpc/core'
+import { createDataScopePlugin } from '@mtpc/data-scope'
+
+// 创建数据范围插件
+const scopePlugin = createDataScopePlugin({
+  defaultScope: 'department',
+  adminBypass: true,
+})
+
+// 创建 MTPC 实例
+const mtpc = createMTPC()
+
+// 注册插件
+mtpc.use(scopePlugin)
+
+await mtpc.init()
+```
+
+### 实现部门隔离
+
+```ts
+import { createMTPC } from '@mtpc/core'
+import { createDataScopePlugin } from '@mtpc/data-scope'
+
+// 创建数据范围插件
+const scopePlugin = createDataScopePlugin({
+  defaultScope: 'department',
+})
+
+// 创建 MTPC 实例
+const mtpc = createMTPC()
+mtpc.use(scopePlugin)
+await mtpc.init()
+
+// 用户查询订单时自动应用部门过滤
+const orders = await db.query.orders
+  // 自动添加：WHERE department_id = ?
+```
+
+### 实现个人数据隔离
+
+```ts
+import { createMTPC } from '@mtpc/core'
+import { createDataScopePlugin } from '@mtpc/data-scope'
+
+// 创建数据范围插件
+const scopePlugin = createDataScopePlugin({
+  defaultScope: 'self',
+})
+
+const mtpc = createMTPC()
+mtpc.use(scopePlugin)
+await mtpc.init()
+
+// 用户只能查看自己的数据
+const userOrders = await db.query.orders
+  // 自动添加：WHERE owner_id = ?
+```
+
+### 管理员绕过
+
+```ts
+import { createDataScopePlugin } from '@mtpc/data-scope'
+
+const scopePlugin = createDataScopePlugin({
+  adminBypass: true, // 管理员可以查看所有数据
+})
+
+// 管理员查询时不受范围限制
+if (user.roles.includes('admin')) {
+  const allOrders = await db.query.orders
+  // 无 WHERE 条件
+}
+```
+
+## 最佳实践
+
+### 范围设计原则
+
+1. **层级清晰**：范围类型应该有明确的层级关系
+2. **避免重叠**：不同范围之间不应该有歧义
+3. **合理默认值**：为大多数用户设置合理的默认范围
+4. **管理员绕过**：为管理员提供绕过机制
+
+### 性能优化
+
+1. **索引优化**：为范围字段添加索引
+2. **查询优化**：使用高效的 SQL 查询
+3. **缓存策略**：缓存范围解析结果
+
+### 安全考虑
+
+1. **默认拒绝**：未匹配范围时拒绝访问
+2. **验证输入**：验证范围规则的有效性
+3. **审计日志**：记录范围检查结果
+
+---
+
+**继续学习：** [@mtpc/soft-delete](/docs/extensions/soft-delete) →

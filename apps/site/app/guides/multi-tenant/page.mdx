@@ -1,0 +1,635 @@
+---
+title: 多租户实现指南
+description: 如何实现多租户隔离
+---
+
+# 多租户实现指南
+
+本指南介绍如何使用 MTPC 实现多租户隔离，包括租户模型设计、数据隔离策略、租户上下文管理等。
+
+## 多租户架构概述
+
+### 什么是多租户
+
+多租户是一种软件架构，允许单个应用实例同时服务多个租户（客户），每个租户的数据和配置相互隔离。
+
+### 多租户隔离级别
+
+| 隔离级别 | 描述 | 优点 | 缺点 |
+|---------|------|------|------|
+| 共享数据库，共享 Schema | 所有租户共享数据库和表 | 成本最低 | 隔离性最差 |
+| 共享数据库，独立 Schema | 每个租户有独立的 Schema | 隔离性较好 | 配置复杂 |
+| 独立数据库 | 每个租户有独立的数据库 | 隔离性最好 | 成本最高 |
+
+### MTPC 的多租户支持
+
+MTPC 支持所有三种隔离级别，推荐使用 **共享数据库，共享 Schema** 配合 **行级隔离**。
+
+## 租户模型设计
+
+### 租户实体
+
+```typescript
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+const tenantSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100),
+  slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/),
+  status: z.enum(['active', 'suspended', 'cancelled']),
+  plan: z.enum(['free', 'pro', 'enterprise']),
+  settings: z.record(z.unknown()).optional(),
+  metadata: z.record(z.unknown()).optional(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+})
+
+export const tenantResource = defineResource({
+  name: 'tenant',
+  schema: tenantSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: false,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建租户', scope: 'global' },
+    { action: 'read', description: '查看租户', scope: 'global' },
+    { action: 'update', description: '更新租户', scope: 'global' },
+    { action: 'list', description: '列出租户', scope: 'global' },
+  ],
+  metadata: {
+    displayName: '租户',
+    pluralName: '租户列表',
+    group: 'tenant-management',
+  },
+})
+```
+
+### 租户用户关联
+
+```typescript
+const userSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  name: z.string().min(1).max(100),
+  role: z.enum(['admin', 'user', 'viewer']),
+  tenantId: z.string().uuid(), // 租户 ID
+  isActive: z.boolean(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+})
+
+export const userResource = defineResource({
+  name: 'user',
+  schema: userSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: false,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建用户', scope: 'tenant' },
+    { action: 'read', description: '查看用户', scope: 'tenant' },
+    { action: 'update', description: '更新用户', scope: 'tenant' },
+    { action: 'list', description: '列出用户', scope: 'tenant' },
+  ],
+  metadata: {
+    displayName: '用户',
+    pluralName: '用户列表',
+    group: 'user-management',
+  },
+})
+```
+
+## 数据隔离策略
+
+### 行级隔离
+
+所有表都包含 `tenant_id` 字段，查询时自动过滤。
+
+```typescript
+import { pgTable, uuid, text, timestamp } from 'drizzle-orm/pg-core'
+
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull(),
+  name: text('name').notNull(),
+  tenantId: uuid('tenant_id').notNull(), // 租户 ID
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+```
+
+### 自动租户过滤
+
+使用 `@mtpc/adapter-drizzle` 的自动租户过滤功能。
+
+```typescript
+import { createTenantRepository } from '@mtpc/adapter-drizzle/repository'
+
+const userRepository = createTenantRepository(db, users)
+
+// 查询时自动添加 tenant_id 过滤
+const users = await userRepository.findMany(ctx, {
+  page: 1,
+  pageSize: 20,
+})
+
+// 生成的 SQL:
+// SELECT * FROM users WHERE tenant_id = $1 LIMIT 20
+```
+
+### 租户隔离中间件
+
+创建租户隔离中间件，确保所有请求都在租户上下文中执行。
+
+```typescript
+import { tenantMiddleware } from '@mtpc/adapter-hono'
+
+app.use('*', tenantMiddleware({
+  headerName: 'x-tenant-id',
+  required: true,
+  validate: async (tenant) => {
+    // 验证租户状态
+    if (tenant.status !== 'active') {
+      throw new Error('Tenant is not active')
+    }
+    return true
+  },
+}))
+```
+
+## 租户上下文管理
+
+### 租户上下文接口
+
+```typescript
+interface TenantContext {
+  id: string;
+  name: string;
+  slug: string;
+  status: 'active' | 'suspended' | 'cancelled';
+  plan: 'free' | 'pro' | 'enterprise';
+  settings?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+```
+
+### 创建租户上下文
+
+```typescript
+import { createContext } from '@mtpc/core'
+
+const ctx = createContext({
+  tenant: {
+    id: 'tenant-001',
+    name: 'Acme Corp',
+    slug: 'acme-corp',
+    status: 'active',
+    plan: 'pro',
+    settings: {
+      maxUsers: 100,
+      maxStorage: 10240,
+    },
+  },
+  subject: {
+    id: 'user-123',
+    type: 'user',
+  },
+})
+```
+
+### 从请求中提取租户
+
+```typescript
+import { Hono } from 'hono'
+
+const app = new Hono()
+
+app.use('*', async (c, next) => {
+  // 从请求头中提取租户 ID
+  const tenantId = c.req.header('x-tenant-id')
+  
+  if (!tenantId) {
+    return c.json({ error: 'Tenant ID is required' }, 400)
+  }
+  
+  // 查询租户信息
+  const tenant = await getTenantById(tenantId)
+  
+  if (!tenant) {
+    return c.json({ error: 'Tenant not found' }, 404)
+  }
+  
+  // 设置租户上下文
+  c.set('tenant', tenant)
+  
+  await next()
+})
+```
+
+### 使用 JWT 传递租户
+
+```typescript
+import jwt from 'jsonwebtoken'
+
+// 生成包含租户信息的 JWT
+const token = jwt.sign(
+  {
+    userId: 'user-123',
+    tenantId: 'tenant-001',
+    roles: ['admin'],
+  },
+  process.env.JWT_SECRET,
+  { expiresIn: '7d' }
+)
+
+// 验证 JWT 并提取租户信息
+const decoded = jwt.verify(token, process.env.JWT_SECRET) as {
+  userId: string;
+  tenantId: string;
+  roles: string[];
+}
+```
+
+## 租户隔离实现
+
+### 数据库 Schema 设计
+
+```typescript
+import { pgTable, uuid, text, timestamp, index } from 'drizzle-orm/pg-core'
+
+// 租户表
+export const tenants = pgTable('tenants', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  status: text('status').notNull().default('active'),
+  plan: text('plan').notNull().default('free'),
+  settings: text('settings').$type<Record<string, unknown>>(),
+  metadata: text('metadata').$type<Record<string, unknown>>(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+// 用户表（带租户 ID）
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull(),
+  name: text('name').notNull(),
+  role: text('role').notNull().default('user'),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  isActive: text('is_active').notNull().default('true'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  tenantIdIdx: index('tenant_id_idx').on(table.tenantId),
+}))
+```
+
+### 租户隔离的 Repository
+
+```typescript
+import { BaseRepository } from '@mtpc/adapter-drizzle/repository'
+
+class TenantAwareRepository<T> extends BaseRepository<T> {
+  async findMany(
+    ctx: MTPCContext,
+    options?: QueryOptions
+  ): Promise<PaginatedResult<T>> {
+    // 自动添加租户过滤
+    const query = this.db
+      .select()
+      .from(this.table)
+      .where(eq(this.table.tenantId, ctx.tenant.id))
+    
+    return await this.applyQueryOptions(query, options)
+  }
+  
+  async create(
+    ctx: MTPCContext,
+    data: Partial<T>
+  ): Promise<T> {
+    // 自动添加租户 ID
+    const dataWithTenant = {
+      ...data,
+      tenantId: ctx.tenant.id,
+    }
+    
+    return super.create(ctx, dataWithTenant)
+  }
+}
+```
+
+### 租户隔离的中间件
+
+```typescript
+import { MTPCContext } from '@mtpc/core'
+
+export function tenantIsolationMiddleware() {
+  return async (c: any, next: any) => {
+    const tenant = c.get('tenant')
+    const subject = c.get('subject')
+    
+    // 创建 MTPC 上下文
+    const ctx: MTPCContext = {
+      tenant,
+      subject,
+    }
+    
+    // 设置上下文
+    c.set('mtpcContext', ctx)
+    
+    await next()
+  }
+}
+```
+
+## 租户级别功能限制
+
+### 基于计划的限制
+
+```typescript
+const planLimits = {
+  free: {
+    maxUsers: 5,
+    maxStorage: 1024, // MB
+    maxApiCalls: 1000, // 每天
+  },
+  pro: {
+    maxUsers: 50,
+    maxStorage: 10240, // MB
+    maxApiCalls: 10000, // 每天
+  },
+  enterprise: {
+    maxUsers: -1, // 无限制
+    maxStorage: -1, // 无限制
+    maxApiCalls: -1, // 无限制
+  },
+}
+
+export function checkPlanLimit(
+  tenant: TenantContext,
+  resource: string,
+  action: string
+): boolean {
+  const plan = tenant.plan
+  const limits = planLimits[plan]
+  
+  // 检查用户数量限制
+  if (resource === 'user' && action === 'create') {
+    if (limits.maxUsers !== -1) {
+      const userCount = await getUserCount(tenant.id)
+      if (userCount >= limits.maxUsers) {
+        return false
+      }
+    }
+  }
+  
+  return true
+}
+```
+
+### 租户配额管理
+
+```typescript
+interface TenantQuota {
+  tenantId: string;
+  resource: string;
+  used: number;
+  limit: number;
+  resetAt: Date;
+}
+
+export async function checkQuota(
+  tenantId: string,
+  resource: string,
+  amount: number
+): Promise<boolean> {
+  const quota = await getQuota(tenantId, resource)
+  
+  if (quota.used + amount > quota.limit) {
+    return false
+  }
+  
+  // 更新配额
+  await updateQuota(tenantId, resource, amount)
+  
+  return true
+}
+```
+
+## 租户数据迁移
+
+### 租户数据导出
+
+```typescript
+export async function exportTenantData(tenantId: string) {
+  const data = {
+    users: await db.select().from(users).where(eq(users.tenantId, tenantId)),
+    orders: await db.select().from(orders).where(eq(orders.tenantId, tenantId)),
+    products: await db.select().from(products).where(eq(products.tenantId, tenantId)),
+  }
+  
+  return JSON.stringify(data, null, 2)
+}
+```
+
+### 租户数据导入
+
+```typescript
+export async function importTenantData(tenantId: string, data: string) {
+  const parsed = JSON.parse(data)
+  
+  // 导入用户
+  for (const user of parsed.users) {
+    await db.insert(users).values({
+      ...user,
+      tenantId,
+    })
+  }
+  
+  // 导入订单
+  for (const order of parsed.orders) {
+    await db.insert(orders).values({
+      ...order,
+      tenantId,
+    })
+  }
+  
+  // 导入商品
+  for (const product of parsed.products) {
+    await db.insert(products).values({
+      ...product,
+      tenantId,
+    })
+  }
+}
+```
+
+## 租户安全
+
+### 租户隔离验证
+
+```typescript
+export function validateTenantIsolation(
+  ctx: MTPCContext,
+  resourceId: string
+): boolean {
+  // 确保资源属于当前租户
+  const resource = await getResourceById(resourceId)
+  
+  if (resource.tenantId !== ctx.tenant.id) {
+    return false
+  }
+  
+  return true
+}
+```
+
+### 跨租户访问保护
+
+```typescript
+export function preventCrossTenantAccess(
+  ctx: MTPCContext,
+  targetTenantId: string
+): void {
+  if (ctx.tenant.id !== targetTenantId) {
+    throw new Error('Cross-tenant access is not allowed')
+  }
+}
+```
+
+## 租户监控
+
+### 租户使用统计
+
+```typescript
+export async function getTenantUsageStats(tenantId: string) {
+  const stats = {
+    userCount: await getUserCount(tenantId),
+    storageUsed: await getStorageUsed(tenantId),
+    apiCalls: await getApiCalls(tenantId),
+    activeUsers: await getActiveUsers(tenantId),
+  }
+  
+  return stats
+}
+```
+
+### 租户性能监控
+
+```typescript
+export async function monitorTenantPerformance(tenantId: string) {
+  const metrics = {
+    avgResponseTime: await getAvgResponseTime(tenantId),
+    errorRate: await getErrorRate(tenantId),
+    requestCount: await getRequestCount(tenantId),
+    slowQueries: await getSlowQueries(tenantId),
+  }
+  
+  return metrics
+}
+```
+
+## 最佳实践
+
+### 1. 始终验证租户上下文
+
+```typescript
+app.use('*', async (c, next) => {
+  const tenant = c.get('tenant')
+  
+  if (!tenant) {
+    return c.json({ error: 'Tenant context is required' }, 400)
+  }
+  
+  if (tenant.status !== 'active') {
+    return c.json({ error: 'Tenant is not active' }, 403)
+  }
+  
+  await next()
+})
+```
+
+### 2. 使用租户隔离的 Repository
+
+```typescript
+const userRepository = new TenantAwareRepository(db, users)
+
+// 所有查询自动添加租户过滤
+const users = await userRepository.findMany(ctx)
+```
+
+### 3. 为租户字段添加索引
+
+```typescript
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull(),
+  tenantId: uuid('tenant_id').notNull(),
+}, (table) => ({
+  tenantIdIdx: index('tenant_id_idx').on(table.tenantId),
+}))
+```
+
+### 4. 定期清理过期数据
+
+```typescript
+export async function cleanupExpiredData() {
+  // 清理已取消租户的数据
+  const expiredTenants = await db.select().from(tenants)
+    .where(eq(tenants.status, 'cancelled'))
+    .where(lte(tenants.updatedAt, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)))
+  
+  for (const tenant of expiredTenants) {
+    await deleteTenantData(tenant.id)
+  }
+}
+```
+
+### 5. 监控租户资源使用
+
+```typescript
+export async function monitorTenantResources() {
+  const tenants = await db.select().from(tenants)
+  
+  for (const tenant of tenants) {
+    const stats = await getTenantUsageStats(tenant.id)
+    const limits = planLimits[tenant.plan]
+    
+    // 检查是否超限
+    if (limits.maxUsers !== -1 && stats.userCount > limits.maxUsers) {
+      await notifyTenant(tenant.id, 'user_limit_exceeded')
+    }
+  }
+}
+```
+
+## 常见问题
+
+### Q: 如何处理租户之间的数据迁移？
+
+A: 使用租户数据导出和导入功能。
+
+### Q: 如何实现租户级别的配置？
+
+A: 在租户表中添加 `settings` 字段，存储 JSON 格式的配置。
+
+### Q: 如何处理租户的计费？
+
+A: 创建订阅资源，记录租户的订阅信息和计费周期。
+
+### Q: 如何实现租户的备份和恢复？
+
+A: 使用数据库的备份工具，按租户 ID 过导出数据。
+
+---
+
+**继续学习：** [插件开发指南](/docs/guides/plugin-development) →

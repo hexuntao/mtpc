@@ -1,0 +1,760 @@
+---
+title: 多租户 SaaS 教程
+description: 使用 MTPC 构建多租户 SaaS 应用
+---
+
+# 多租户 SaaS 教程
+
+本教程将指导您使用 MTPC 构建一个完整的多租户 SaaS 应用，包括租户管理、数据隔离、权限控制和计费管理。
+
+## 项目概述
+
+我们将构建一个具有以下功能的多租户 SaaS 应用：
+
+- 租户注册和管理
+- 数据隔离
+- 用户和角色管理
+- 权限控制
+- 计费和订阅管理
+
+## 技术栈
+
+- **MTPC**: 权限和资源管理
+- **Hono**: Web 框架
+- **Drizzle ORM**: 数据库 ORM
+- **PostgreSQL**: 数据库
+- **Zod**: 数据验证
+
+## 项目结构
+
+```
+multi-tenant-saas/
+├── src/
+│   ├── config/
+│   │   └── config.ts
+│   ├── db/
+│   │   ├── schema.ts
+│   │   └── connection.ts
+│   ├── resources/
+│   │   ├── tenant.ts
+│   │   ├── user.ts
+│   │   └── subscription.ts
+│   ├── routes/
+│   │   ├── tenants.ts
+│   │   ├── users.ts
+│   │   └── subscriptions.ts
+│   └── index.ts
+├── package.json
+└── tsconfig.json
+```
+
+## 步骤 1: 项目初始化
+
+### 安装依赖
+
+```bash
+pnpm init
+pnpm add @mtpc/core @mtpc/rbac @mtpc/adapter-hono @mtpc/adapter-drizzle
+pnpm add hono drizzle-orm postgres
+pnpm add zod bcryptjs jsonwebtoken
+pnpm add -D @types/bcryptjs @types/jsonwebtoken typescript
+```
+
+### 配置 TypeScript
+
+创建 `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}
+```
+
+## 步骤 2: 数据库配置
+
+### 创建数据库连接
+
+创建 `src/db/connection.ts`:
+
+```typescript
+import { drizzle } from 'drizzle-orm/postgres-js'
+import postgres from 'postgres'
+
+const connectionString = process.env.DATABASE_URL || 'postgresql://localhost/saas'
+
+export const db = drizzle(postgres(connectionString))
+```
+
+### 定义数据库 Schema
+
+创建 `src/db/schema.ts`:
+
+```typescript
+import { pgTable, serial, text, timestamp, uuid, integer, decimal, boolean } from 'drizzle-orm/pg-core'
+
+export const tenants = pgTable('tenants', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  status: text('status').notNull().default('active'),
+  plan: text('plan').notNull().default('free'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull().unique(),
+  password: text('password').notNull(),
+  name: text('name').notNull(),
+  role: text('role').notNull().default('user'),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const subscriptions = pgTable('subscriptions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
+  plan: text('plan').notNull(),
+  status: text('status').notNull().default('active'),
+  startDate: timestamp('start_date').notNull(),
+  endDate: timestamp('end_date'),
+  maxUsers: integer('max_users').notNull().default(5),
+  maxStorage: integer('max_storage').notNull().default(1024), // MB
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+```
+
+## 步骤 3: 定义资源
+
+### 租户资源
+
+创建 `src/resources/tenant.ts`:
+
+```typescript
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+const tenantSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100),
+  slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/),
+  status: z.enum(['active', 'suspended', 'cancelled']),
+  plan: z.enum(['free', 'pro', 'enterprise']),
+})
+
+export const tenantResource = defineResource({
+  name: 'tenant',
+  schema: tenantSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: false,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建租户', scope: 'global' },
+    { action: 'read', description: '查看租户', scope: 'global' },
+    { action: 'update', description: '更新租户', scope: 'own' },
+    { action: 'list', description: '列出租户', scope: 'global' },
+  ],
+  metadata: {
+    displayName: '租户',
+    pluralName: '租户列表',
+    group: 'tenant-management',
+  },
+})
+```
+
+### 用户资源
+
+创建 `src/resources/user.ts`:
+
+```typescript
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+const userSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  name: z.string().min(1).max(100),
+  role: z.enum(['admin', 'user', 'viewer']),
+  tenantId: z.string().uuid(),
+  isActive: z.boolean(),
+})
+
+export const userResource = defineResource({
+  name: 'user',
+  schema: userSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: false,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建用户', scope: 'tenant' },
+    { action: 'read', description: '查看用户', scope: 'tenant' },
+    { action: 'update', description: '更新用户', scope: 'tenant' },
+    { action: 'list', description: '列出用户', scope: 'tenant' },
+  ],
+  metadata: {
+    displayName: '用户',
+    pluralName: '用户列表',
+    group: 'user-management',
+  },
+})
+```
+
+### 订阅资源
+
+创建 `src/resources/subscription.ts`:
+
+```typescript
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+const subscriptionSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  plan: z.enum(['free', 'pro', 'enterprise']),
+  status: z.enum(['active', 'suspended', 'cancelled']),
+  startDate: z.date(),
+  endDate: z.date().optional(),
+  maxUsers: z.number().min(1),
+  maxStorage: z.number().min(1),
+})
+
+export const subscriptionResource = defineResource({
+  name: 'subscription',
+  schema: subscriptionSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: false,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建订阅', scope: 'global' },
+    { action: 'read', description: '查看订阅', scope: 'own' },
+    { action: 'update', description: '更新订阅', scope: 'own' },
+    { action: 'list', description: '列出订阅', scope: 'global' },
+    { action: 'upgrade', description: '升级订阅', scope: 'own' },
+    { action: 'downgrade', description: '降级订阅', scope: 'own' },
+  ],
+  metadata: {
+    displayName: '订阅',
+    pluralName: '订阅列表',
+    group: 'subscription-management',
+  },
+  relations: [{
+    name: 'tenant',
+    type: 'belongsTo',
+    target: 'tenant',
+    foreignKey: 'tenantId',
+    description: '所属租户',
+  }],
+})
+```
+
+## 步骤 4: 配置 MTPC
+
+创建 `src/config/config.ts`:
+
+```typescript
+import { createMTPC } from '@mtpc/core'
+import { createRBACPlugin } from '@mtpc/rbac'
+import { tenantResource, userResource, subscriptionResource } from '../resources'
+
+const mtpc = createMTPC({
+  registry: {
+    resources: [tenantResource, userResource, subscriptionResource],
+  },
+})
+
+const rbacPlugin = createRBACPlugin()
+mtpc.use(rbacPlugin)
+
+export async function initMTPC() {
+  await mtpc.init()
+
+  // 创建超级管理员角色（全局）
+  await rbacPlugin.createRole('super_admin', {
+    permissions: [
+      { resource: 'tenant', action: 'create' },
+      { resource: 'tenant', action: 'read' },
+      { resource: 'tenant', action: 'update' },
+      { resource: 'tenant', action: 'list' },
+      { resource: 'subscription', action: 'create' },
+      { resource: 'subscription', action: 'read' },
+      { resource: 'subscription', action: 'update' },
+      { resource: 'subscription', action: 'list' },
+    ],
+  })
+
+  // 创建租户管理员角色（租户级别）
+  await rbacPlugin.createRole('tenant_admin', {
+    permissions: [
+      { resource: 'user', action: 'create' },
+      { resource: 'user', action: 'read' },
+      { resource: 'user', action: 'update' },
+      { resource: 'user', action: 'list' },
+      { resource: 'subscription', action: 'read', scope: 'own' },
+      { resource: 'subscription', action: 'update', scope: 'own' },
+      { resource: 'subscription', action: 'upgrade', scope: 'own' },
+      { resource: 'subscription', action: 'downgrade', scope: 'own' },
+    ],
+  })
+
+  // 创建普通用户角色
+  await rbacPlugin.createRole('user', {
+    permissions: [
+      { resource: 'user', action: 'read', scope: 'own' },
+      { resource: 'user', action: 'update', scope: 'own' },
+      { resource: 'subscription', action: 'read', scope: 'own' },
+    ],
+  })
+}
+
+export { mtpc, rbacPlugin }
+```
+
+## 步骤 5: 创建路由
+
+### 租户路由
+
+创建 `src/routes/tenants.ts`:
+
+```typescript
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
+import { db } from '../db/connection'
+import { tenants } from '../db/schema'
+import { eq, and } from 'drizzle-orm'
+import { createContext } from '@mtpc/core'
+import { mtpc } from '../config/config'
+
+const tenantsRouter = new Hono()
+
+const authMiddleware = async (c: any, next: any) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any
+    c.set('user', decoded)
+    await next()
+  } catch (error) {
+    return c.json({ error: 'Invalid token' }, 401)
+  }
+}
+
+tenantsRouter.use(authMiddleware)
+
+const createTenantSchema = z.object({
+  name: z.string().min(1).max(100),
+  slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/),
+  plan: z.enum(['free', 'pro', 'enterprise']).default('free'),
+})
+
+tenantsRouter.post('/', zValidator('json', createTenantSchema), async (c) => {
+  const user = c.get('user')
+  const data = c.req.valid('json')
+
+  // 检查权限
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'tenant', 'create')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  // 创建租户
+  const [newTenant] = await db.insert(tenants).values({
+    ...data,
+    status: 'active',
+  }).returning()
+
+  return c.json(newTenant)
+})
+
+tenantsRouter.get('/', async (c) => {
+  const user = c.get('user')
+
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'tenant', 'list')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  const allTenants = await db.select().from(tenants)
+
+  return c.json(allTenants)
+})
+
+tenantsRouter.get('/:id', async (c) => {
+  const user = c.get('user')
+  const id = c.req.param('id')
+
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+    resource: { id },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'tenant', 'read')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id))
+
+  if (!tenant) {
+    return c.json({ error: 'Tenant not found' }, 404)
+  }
+
+  return c.json(tenant)
+})
+
+export { tenantsRouter }
+```
+
+### 用户路由
+
+创建 `src/routes/users.ts`:
+
+```typescript
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
+import { db } from '../db/connection'
+import { users } from '../db/schema'
+import { eq, and } from 'drizzle-orm'
+import { createContext } from '@mtpc/core'
+import { mtpc } from '../config/config'
+
+const usersRouter = new Hono()
+
+const authMiddleware = async (c: any, next: any) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any
+    c.set('user', decoded)
+    await next()
+  } catch (error) {
+    return c.json({ error: 'Invalid token' }, 401)
+  }
+}
+
+usersRouter.use(authMiddleware)
+
+const createUserSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  name: z.string().min(1).max(100),
+  role: z.enum(['admin', 'user', 'viewer']).default('user'),
+})
+
+usersRouter.post('/', zValidator('json', createUserSchema), async (c) => {
+  const user = c.get('user')
+  const data = c.req.valid('json')
+
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'user', 'create')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  // 加密密码
+  const hashedPassword = await bcrypt.hash(data.password, 10)
+
+  // 创建用户
+  const [newUser] = await db.insert(users).values({
+    ...data,
+    password: hashedPassword,
+    tenantId: user.tenantId,
+    isActive: true,
+  }).returning()
+
+  // 绑定角色
+  await rbacPlugin.bindRole(newUser.id, data.role)
+
+  return c.json({ id: newUser.id, email: newUser.email, name: newUser.name, role: data.role })
+})
+
+usersRouter.get('/', async (c) => {
+  const user = c.get('user')
+
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'user', 'list')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  const allUsers = await db.select().from(users).where(eq(users.tenantId, user.tenantId))
+
+  return c.json(allUsers)
+})
+
+export { usersRouter }
+```
+
+### 订阅路由
+
+创建 `src/routes/subscriptions.ts`:
+
+```typescript
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
+import { db } from '../db/connection'
+import { subscriptions } from '../db/schema'
+import { eq, and } from 'drizzle-orm'
+import { createContext } from '@mtpc/core'
+import { mtpc } from '../config/config'
+
+const subscriptionsRouter = new Hono()
+
+const authMiddleware = async (c: any, next: any) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any
+    c.set('user', decoded)
+    await next()
+  } catch (error) {
+    return c.json({ error: 'Invalid token' }, 401)
+  }
+}
+
+subscriptionsRouter.use(authMiddleware)
+
+const planConfig = {
+  free: { maxUsers: 5, maxStorage: 1024 },
+  pro: { maxUsers: 50, maxStorage: 10240 },
+  enterprise: { maxUsers: -1, maxStorage: -1 }, // 无限制
+}
+
+subscriptionsRouter.post('/', zValidator('json', z.object({
+  tenantId: z.string().uuid(),
+  plan: z.enum(['free', 'pro', 'enterprise']),
+})), async (c) => {
+  const user = c.get('user')
+  const { tenantId, plan } = c.req.valid('json')
+
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'subscription', 'create')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  const config = planConfig[plan]
+  const startDate = new Date()
+  const endDate = plan === 'free' ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 天
+
+  const [newSubscription] = await db.insert(subscriptions).values({
+    tenantId,
+    plan,
+    status: 'active',
+    startDate,
+    endDate,
+    maxUsers: config.maxUsers,
+    maxStorage: config.maxStorage,
+  }).returning()
+
+  return c.json(newSubscription)
+})
+
+subscriptionsRouter.patch('/:id/upgrade', zValidator('json', z.object({
+  plan: z.enum(['pro', 'enterprise']),
+})), async (c) => {
+  const user = c.get('user')
+  const id = c.req.param('id')
+  const { plan } = c.req.valid('json')
+
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+    resource: { id },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'subscription', 'upgrade')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  const config = planConfig[plan]
+  const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+
+  const [updatedSubscription] = await db.update(subscriptions)
+    .set({ plan, maxUsers: config.maxUsers, maxStorage: config.maxStorage, endDate, updatedAt: new Date() })
+    .where(eq(subscriptions.id, id))
+    .returning()
+
+  return c.json(updatedSubscription)
+})
+
+export { subscriptionsRouter }
+```
+
+## 步骤 6: 创建应用
+
+创建 `src/index.ts`:
+
+```typescript
+import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import { initMTPC } from './config/config'
+import { tenantsRouter } from './routes/tenants'
+import { usersRouter } from './routes/users'
+import { subscriptionsRouter } from './routes/subscriptions'
+
+const app = new Hono()
+
+app.use('*', cors())
+
+app.route('/tenants', tenantsRouter)
+app.route('/users', usersRouter)
+app.route('/subscriptions', subscriptionsRouter)
+
+app.get('/', (c) => {
+  return c.json({ message: 'Multi-tenant SaaS API' })
+})
+
+async function main() {
+  await initMTPC()
+
+  Bun.serve({
+    fetch: app.fetch,
+    port: 3000,
+  })
+
+  console.log('Server running on http://localhost:3000')
+}
+
+main()
+```
+
+## 步骤 7: 运行应用
+
+```bash
+pnpm dev
+```
+
+## 测试 API
+
+### 创建租户
+
+```bash
+curl -X POST http://localhost:3000/tenants \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "name": "My Company",
+    "slug": "my-company",
+    "plan": "pro"
+  }'
+```
+
+### 创建用户
+
+```bash
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "email": "user@example.com",
+    "password": "password123",
+    "name": "John Doe",
+    "role": "user"
+  }'
+```
+
+### 创建订阅
+
+```bash
+curl -X POST http://localhost:3000/subscriptions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "tenantId": "tenant-id",
+    "plan": "pro"
+  }'
+```
+
+### 升级订阅
+
+```bash
+curl -X PATCH http://localhost:3000/subscriptions/subscription-id/upgrade \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "plan": "enterprise"
+  }'
+```
+
+## 总结
+
+本教程展示了如何使用 MTPC 构建一个完整的多租户 SaaS 应用，包括：
+
+1. 项目初始化和依赖安装
+2. 数据库配置和 Schema 定义
+3. 资源定义（租户、用户、订阅）
+4. MTPC 配置和 RBAC 设置
+5. 路由创建和权限检查
+6. API 测试
+
+您可以根据需要扩展此项目，添加更多功能，如：
+
+- 租户级别的数据隔离
+- 计费和支付集成
+- 使用分析和报告
+- 白标功能
+- API 密钥管理
+
+---
+
+**继续学习：** [常见问题](/docs/troubleshooting/faq) →

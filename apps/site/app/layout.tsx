@@ -1,15 +1,15 @@
-import { getEnhancedPageMap } from '@components/get-page-map'
-import { NextraLogo, VercelLogo } from '@components/icons'
-import { ChatButton } from '@components/inkeep-chat-button'
-import cn from 'clsx'
-import type { Metadata } from 'next'
-import NextImage from 'next/image'
-import { Footer, Layout, Link, Navbar } from 'nextra-theme-docs'
-import { Anchor, Banner, Head } from 'nextra/components'
-import type { FC } from 'react'
-import inkeep from './showcase/_logos/inkeep.png'
-import xyflow from './showcase/_logos/xyflow.png'
-import './globals.css'
+import { getEnhancedPageMap } from '@components/get-page-map';
+import { NextraLogo, VercelLogo } from '@components/icons';
+import { ChatButton } from '@components/inkeep-chat-button';
+import cn from 'clsx';
+import type { Metadata } from 'next';
+// import NextImage from 'next/image';
+import {  Banner, Head } from 'nextra/components';
+import { Footer, Layout, Link, Navbar } from 'nextra-theme-docs';
+import type { FC } from 'react';
+// import inkeep from './showcase/_logos/inkeep.png';
+// import xyflow from './showcase/_logos/xyflow.png';
+import './globals.css';
 
 export const metadata: Metadata = {
   description: 'Make beautiful websites with Next.js & MDX.',
@@ -21,35 +21,35 @@ export const metadata: Metadata = {
     'JavaScript',
     'MDX',
     'Markdown',
-    'Static Site Generator'
+    'Static Site Generator',
   ],
   generator: 'Next.js',
   applicationName: 'Nextra',
   appleWebApp: {
-    title: 'Nextra'
+    title: 'Nextra',
   },
   title: {
     default: 'Nextra – Next.js Static Site Generator',
-    template: '%s | Nextra'
+    template: '%s | Nextra',
   },
   openGraph: {
     // https://github.com/vercel/next.js/discussions/50189#discussioncomment-10826632
     url: './',
     siteName: 'Nextra',
     locale: 'en_US',
-    type: 'website'
+    type: 'website',
   },
   other: {
-    'msapplication-TileColor': '#fff'
+    'msapplication-TileColor': '#fff',
   },
   twitter: {
-    site: 'https://nextra.site'
+    site: 'https://nextra.site',
   },
   alternates: {
     // https://github.com/vercel/next.js/discussions/50189#discussioncomment-10826632
-    canonical: './'
-  }
-}
+    canonical: './',
+  },
+};
 
 const banner = (
   <Banner>
@@ -58,7 +58,7 @@ const banner = (
       Read blogpost
     </Link>
   </Banner>
-)
+);
 const navbar = (
   <Navbar
     logo={
@@ -73,7 +73,7 @@ const navbar = (
     }
     projectLink="https://github.com/shuding/nextra"
   />
-)
+);
 const footer = (
   <Footer className="flex-col items-center md:items-start">
     <a
@@ -86,21 +86,19 @@ const footer = (
       Powered by
       <VercelLogo height="20" />
     </a>
-    <p className="mt-6 text-xs">
-      © {new Date().getFullYear()} The Nextra Project.
-    </p>
+    <p className="mt-6 text-xs">© {new Date().getFullYear()} The Nextra Project.</p>
   </Footer>
-)
+);
 
-const RootLayout: FC<LayoutProps<'/'>> = async ({ children }) => {
-  const pageMap = await getEnhancedPageMap()
+const RootLayout: FC<any> = async ({ children }) => {
+  const pageMap = await getEnhancedPageMap();
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <Head />
       <body>
         <ChatButton />
         <Layout
-          banner={banner}
+          // banner={banner}
           navbar={navbar}
           pageMap={pageMap}
           docsRepositoryBase="https://github.com/shuding/nextra/tree/main/docs"
@@ -111,17 +109,17 @@ const RootLayout: FC<LayoutProps<'/'>> = async ({ children }) => {
             extraContent: (
               <>
                 <b className="mt-2 text-xs">Sponsored by:</b>
-                {[
+                {/* {[
                   {
                     url: 'https://inkeep.com',
                     alt: 'AI Agents that get real work done',
-                    img: inkeep
+                    img: inkeep,
                   },
                   {
                     url: 'https://xyflow.com',
                     alt: 'Wire your ideas with xyflow!',
-                    img: xyflow
-                  }
+                    img: xyflow,
+                  },
                 ].map(o => (
                   <Anchor
                     key={o.url}
@@ -134,16 +132,16 @@ const RootLayout: FC<LayoutProps<'/'>> = async ({ children }) => {
                       className="nextra-border rounded-sm border"
                     />
                   </Anchor>
-                ))}
+                ))} */}
               </>
-            )
+            ),
           }}
         >
           {children}
         </Layout>
       </body>
     </html>
-  )
-}
+  );
+};
 
-export default RootLayout
+export default RootLayout;

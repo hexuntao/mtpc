@@ -1,0 +1,723 @@
+---
+title: mtpc/rbac 基于角色的访问控制
+description: 详细介绍 RBAC 扩展的功能、API 和使用方法
+---
+
+# @mtpc/rbac 基于角色的访问控制
+
+`@mtpc/rbac` 是构建在 MTPC Core 之上的一种**官方权限组织方式**，提供完整的 RBAC（Role-Based Access Control）功能。
+
+## 包概述
+
+### 职责和定位
+
+- 提供完整的 RBAC 功能，包括角色管理、角色绑定、权限检查
+- 支持角色继承、临时权限、多租户隔离
+- 作为 MTPC 的官方扩展，而非 Core 的一部分
+
+### 依赖关系
+
+```json
+{
+  "dependencies": {
+    "@mtpc/core": "workspace:*",
+    "@mtpc/shared": "workspace:*",
+    "zod": "^3.23.0"
+  }
+}
+```
+
+### 安装方法
+
+```bash
+npm install @mtpc/rbac
+```
+
+## RBAC 概述
+
+### RBAC vs ABAC vs ACL
+
+| 模型 | 描述 | MTPC 支持 |
+|------|------|-----------|
+| RBAC | 基于角色的访问控制 | ✅ `@mtpc/rbac` |
+| ABAC | 基于属性的访问控制 | ✅ 通过 Policy Engine |
+| ACL | 访问控制列表 | ✅ 通过自定义实现 |
+
+### 为什么 RBAC 是扩展而非 Core
+
+- RBAC **不是 Core 的一部分**
+- RBAC 只是 Policy 的一种具体实现
+- Core 的 Permission / Policy Engine 可同时支持多种模型
+
+### 适用场景
+
+- 需要角色权限控制的系统
+- 需要权限继承的场景
+- 需要临时权限授予的场景
+- 多租户 SaaS 应用
+
+## 核心概念
+
+### Role（角色）
+
+#### RoleDefinition 接口
+
+```ts
+interface RoleDefinition {
+  id: string;
+  tenantId: string;
+  name: string;
+  displayName?: string;
+  description?: string;
+  type: RoleType;
+  status: RoleStatus;
+  permissions: string[];
+  inherits?: string[];
+  metadata?: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy?: string;
+}
+```
+
+#### 角色类型
+
+```ts
+type RoleType = 'system' | 'custom' | 'template';
+```
+
+- `system`：系统预定义角色，由系统初始化时创建，不可修改和删除
+- `custom`：用户自定义角色，由用户创建和管理
+- `template`：角色模板，用于快速创建相似角色的基础模板
+
+#### 角色状态
+
+```ts
+type RoleStatus = 'active' | 'inactive' | 'archived';
+```
+
+- `active`：角色处于活动状态，可以正常分配和使用
+- `inactive`：角色被停用，暂时不可使用但保留数据
+- `archived`：角色已归档，仅保留历史记录
+
+### RoleBinding（角色绑定）
+
+#### RoleBinding 接口
+
+```ts
+interface RoleBinding {
+  id: string;
+  tenantId: string;
+  roleId: string;
+  subjectType: BindingSubjectType;
+  subjectId: string;
+  expiresAt?: Date;
+  metadata?: Record<string, unknown>;
+  createdAt: Date;
+  createdBy?: string;
+}
+```
+
+#### 主体类型
+
+```ts
+type BindingSubjectType = 'user' | 'group' | 'service';
+```
+
+- `user`：用户，系统中的单个用户账号
+- `group`：用户组，多个用户的集合
+- `service`：服务，系统服务或应用程序账号
+
+#### 临时权限
+
+```ts
+const binding: RoleBinding = {
+  id: 'bind-001',
+  tenantId: 'tenant-001',
+  roleId: 'role-001',
+  subjectType: 'user',
+  subjectId: 'user-123',
+  expiresAt: new Date('2025-12-31'), // 30 天后过期
+  createdAt: new Date(),
+  createdBy: 'admin',
+}
+```
+
+### EffectivePermissions（有效权限）
+
+#### EffectivePermissions 接口
+
+```ts
+interface EffectivePermissions {
+  tenantId: string;
+  subjectId: string;
+  subjectType: BindingSubjectType;
+  roles: string[];
+  permissions: Set<string>;
+  computedAt: Date;
+  expiresAt?: Date;
+}
+```
+
+#### 权限计算逻辑
+
+1. 获取主体的所有有效角色绑定
+2. 解析所有角色（包括继承角色）
+3. 合并所有角色的权限
+4. 返回权限集合
+
+## RBAC API
+
+### RBAC 类
+
+```ts
+class RBAC {
+  // 角色管理
+  async createRole(
+    tenantId: string,
+    input: RoleCreateInput,
+    createdBy?: string
+  ): Promise<RoleDefinition>
+  
+  async updateRole(
+    tenantId: string,
+    roleId: string,
+    input: RoleUpdateInput
+  ): Promise<RoleDefinition | null>
+  
+  async deleteRole(
+    tenantId: string,
+    roleId: string
+  ): Promise<boolean>
+  
+  async getRole(
+    tenantId: string,
+    roleId: string
+  ): Promise<RoleDefinition | null>
+  
+  async listRoles(
+    tenantId: string
+  ): Promise<RoleDefinition[]>
+  
+  // 角色绑定
+  async assignRole(
+    tenantId: string,
+    roleId: string,
+    subjectType: BindingSubjectType,
+    subjectId: string,
+    options?: { expiresAt?: Date; createdBy?: string }
+  ): Promise<RoleBinding>
+  
+  async revokeRole(
+    tenantId: string,
+    roleId: string,
+    subjectType: BindingSubjectType,
+    subjectId: string
+  ): Promise<boolean>
+  
+  async getSubjectRoles(
+    tenantId: string,
+    subjectType: BindingSubjectType,
+    subjectId: string
+  ): Promise<RoleBinding[]>
+  
+  async hasRole(
+    tenantId: string,
+    roleId: string,
+    subjectType: BindingSubjectType,
+    subjectId: string
+  ): Promise<boolean>
+  
+  // 权限检查
+  async checkPermission(
+    context: RBACCheckContext
+  ): Promise<RBACCheckResult>
+  
+  async check(
+    tenant: TenantContext,
+    subject: SubjectContext,
+    permission: string
+  ): Promise<RBACCheckResult>
+  
+  async getEffectivePermissions(
+    tenantId: string,
+    subjectType: BindingSubjectType,
+    subjectId: string
+  ): Promise<EffectivePermissions>
+  
+  async getPermissions(
+    tenantId: string,
+    subjectType: BindingSubjectType,
+    subjectId: string
+  ): Promise<string[]>
+  
+  // 缓存管理
+  invalidateCache(tenantId: string, subjectId?: string): void
+  clearCache(): void
+  
+  // 访问器
+  get roles(): RoleManager
+  get bindings(): BindingManager
+  getStore(): RBACStore
+}
+```
+
+### RoleManager 类
+
+```ts
+class RoleManager {
+  async createRole(
+    tenantId: string,
+    input: RoleCreateInput,
+    createdBy?: string
+  ): Promise<RoleDefinition>
+  
+  async updateRole(
+    tenantId: string,
+    roleId: string,
+    input: RoleUpdateInput
+  ): Promise<RoleDefinition | null>
+  
+  async deleteRole(
+    tenantId: string,
+    roleId: string
+  ): Promise<boolean>
+  
+  async getRole(
+    tenantId: string,
+    roleId: string
+  ): Promise<RoleDefinition | null>
+  
+  async getRoleByName(
+    tenantId: string,
+    name: string
+  ): Promise<RoleDefinition | null>
+  
+  async listRoles(
+    tenantId: string,
+    options?: { status?: RoleStatus; type?: RoleType }
+  ): Promise<RoleDefinition[]>
+}
+```
+
+### BindingManager 类
+
+```ts
+class BindingManager {
+  async assignRole(
+    tenantId: string,
+    input: RoleBindingCreateInput,
+    createdBy?: string
+  ): Promise<RoleBinding>
+  
+  async revokeRole(
+    tenantId: string,
+    roleId: string,
+    subjectType: BindingSubjectType,
+    subjectId: string
+  ): Promise<boolean>
+  
+  async getBinding(
+    tenantId: string,
+    bindingId: string
+  ): Promise<RoleBinding | null>
+  
+  async listBindings(
+    tenantId: string,
+    options?: { roleId?: string; subjectId?: string; subjectType?: BindingSubjectType }
+  ): Promise<RoleBinding[]>
+  
+  async getSubjectRoles(
+    tenantId: string,
+    subjectType: BindingSubjectType,
+    subjectId: string
+  ): Promise<RoleBinding[]>
+  
+  async hasRole(
+    tenantId: string,
+    roleId: string,
+    subjectType: BindingSubjectType,
+    subjectId: string
+  ): Promise<boolean>
+}
+```
+
+### RBACEvaluator 类
+
+```ts
+class RBACEvaluator {
+  async check(
+    context: RBACCheckContext
+  ): Promise<RBACCheckResult>
+  
+  async getEffectivePermissions(
+    tenantId: string,
+    subjectType: BindingSubjectType,
+    subjectId: string
+  ): Promise<EffectivePermissions>
+  
+  async getPermissions(
+    tenantId: string,
+    subjectType: BindingSubjectType,
+    subjectId: string
+  ): Promise<string[]>
+  
+  invalidate(tenantId: string, subjectId?: string): void
+  clearCache(): void
+}
+```
+
+## 系统角色
+
+### 默认系统角色
+
+| 角色名 | 权限 | 描述 |
+|--------|------|------|
+| `super_admin` | `*` | 超级管理员，拥有所有权限 |
+| `tenant_admin` | `*` | 租户管理员，完全的租户访问权限 |
+| `viewer` | `*:read` | 访客角色，只读权限 |
+
+### 自定义系统角色
+
+```ts
+import { createRBAC } from '@mtpc/rbac'
+
+const rbac = createRBAC({
+  systemRoles: [
+    {
+      id: 'custom-super-admin',
+      name: 'custom_super_admin',
+      displayName: '自定义超级管理员',
+      description: '自定义的超级管理员角色',
+      type: 'system',
+      status: 'active',
+      permissions: ['*'],
+      inherits: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ],
+})
+```
+
+## 与 MTPC Core 集成
+
+### 方式 1：作为独立 RBAC 实例
+
+```ts
+import { createRBAC } from '@mtpc/rbac'
+
+// 创建 RBAC 实例
+const rbac = createRBAC({
+  cacheTTL: 300000, // 5 分钟缓存
+})
+
+// 使用 RBAC
+await rbac.createRole('tenant-001', {
+  name: 'editor',
+  displayName: 'Content Editor',
+  permissions: ['content:read', 'content:write'],
+})
+
+await rbac.assignRole('tenant-001', 'editor', 'user', 'user-123')
+
+const result = await rbac.check(
+  { id: 'tenant-001' },
+  { id: 'user-123', type: 'user' },
+  'content:write'
+)
+```
+
+### 方式 2：作为 MTPC 插件（推荐）
+
+```ts
+import { createMTPC } from '@mtpc/core'
+import { createRBACPlugin } from '@mtpc/rbac'
+
+// 创建 RBAC 插件
+const rbacPlugin = createRBACPlugin({
+  cacheTTL: 300000,
+})
+
+// 创建 MTPC 实例并集成
+const mtpc = createMTPC({
+  defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(
+    rbacPlugin.state.evaluator
+  ),
+})
+
+// 注册插件（可选，用于访问插件状态）
+mtpc.use(rbacPlugin)
+
+await mtpc.init()
+
+// 现在可以使用 MTPC 的权限检查
+const result = await mtpc.checkPermission({
+  tenant: { id: 'tenant-001' },
+  subject: { id: 'user-123', type: 'user' },
+  resource: 'content',
+  action: 'write',
+})
+```
+
+### createRBACPlugin() 函数
+
+```ts
+function createRBACPlugin(options?: {
+  cacheTTL?: number;
+  systemRoles?: RoleDefinition[];
+}): {
+  name: string;
+  state: {
+    rbac: RBAC;
+    evaluator: RBACEvaluator;
+  };
+  install: (registry: Registry) => void;
+}
+```
+
+## RBAC Store 接口
+
+### RBACStore 接口定义
+
+```ts
+interface RBACStore {
+  // 角色管理
+  createRole(
+    tenantId: string,
+    input: RoleCreateInput,
+    createdBy?: string
+  ): Promise<RoleDefinition>
+  
+  updateRole(
+    tenantId: string,
+    roleId: string,
+    input: RoleUpdateInput
+  ): Promise<RoleDefinition | null>
+  
+  deleteRole(
+    tenantId: string,
+    roleId: string
+  ): Promise<boolean>
+  
+  getRole(
+    tenantId: string,
+    roleId: string
+  ): Promise<RoleDefinition | null>
+  
+  getRoleByName(
+    tenantId: string,
+    name: string
+  ): Promise<RoleDefinition | null>
+  
+  listRoles(
+    tenantId: string,
+    options?: { status?: RoleStatus; type?: RoleType }
+  ): Promise<RoleDefinition[]>
+  
+  // 角色绑定
+  createBinding(
+    tenantId: string,
+    input: RoleBindingCreateInput,
+    createdBy?: string
+  ): Promise<RoleBinding>
+  
+  deleteBinding(
+    tenantId: string,
+    bindingId: string
+  ): Promise<boolean>
+  
+  getBinding(
+    tenantId: string,
+    bindingId: string
+  ): Promise<RoleBinding | null>
+  
+  listBindings(
+    tenantId: string,
+    options?: { roleId?: string; subjectId?: string; subjectType?: BindingSubjectType }
+  ): Promise<RoleBinding[]>
+  
+  getSubjectBindings(
+    tenantId: string,
+    subjectType: BindingSubjectType,
+    subjectId: string
+  ): Promise<RoleBinding[]>
+  
+  // 有效权限
+  getEffectivePermissions(
+    tenantId: string,
+    subjectType: BindingSubjectType,
+    subjectId: string
+  ): Promise<EffectivePermissions>
+  
+  // 缓存失效
+  invalidatePermissions(
+    tenantId: string,
+    subjectId?: string
+  ): Promise<void>
+}
+```
+
+### InMemoryRBACStore 实现
+
+```ts
+import { InMemoryRBACStore } from '@mtpc/rbac'
+
+const store = new InMemoryRBACStore()
+
+// 使用自定义存储
+const rbac = createRBAC({
+  store: store,
+  cacheTTL: 300000,
+})
+```
+
+### 自定义 Store 实现
+
+```ts
+import { RBACStore } from '@mtpc/rbac'
+
+class DatabaseRBACStore implements RBACStore {
+  async createRole(
+    tenantId: string,
+    input: RoleCreateInput,
+    createdBy?: string
+  ): Promise<RoleDefinition> {
+    // 实现数据库存储逻辑
+    return await db.roles.create({ tenantId, ...input, createdBy })
+  }
+  
+  // 实现其他方法...
+}
+
+const rbac = createRBAC({
+  store: new DatabaseRBACStore(),
+})
+```
+
+## 使用示例
+
+### 创建 RBAC 实例
+
+```ts
+import { createRBAC } from '@mtpc/rbac'
+
+const rbac = createRBAC({
+  cacheTTL: 300000, // 5 分钟缓存
+})
+```
+
+### 创建自定义角色
+
+```ts
+const editorRole = await rbac.createRole('tenant-001', {
+  name: 'editor',
+  displayName: 'Content Editor',
+  description: 'Can edit and publish content',
+  permissions: ['content:read', 'content:write', 'content:publish'],
+  inherits: ['viewer'], // 继承 viewer 角色的权限
+}, 'admin')
+
+console.log('角色已创建:', editorRole)
+```
+
+### 分配角色
+
+```ts
+// 永久分配
+const binding = await rbac.assignRole(
+  'tenant-001',
+  'editor',
+  'user',
+  'user-123'
+)
+
+// 临时分配（30 天后过期）
+const tempBinding = await rbac.assignRole(
+  'tenant-001',
+  'editor',
+  'user',
+  'user-456',
+  { expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) }
+)
+
+console.log('角色已分配:', binding)
+```
+
+### 检查权限
+
+```ts
+const result = await rbac.check(
+  { id: 'tenant-001' },
+  { id: 'user-123', type: 'user' },
+  'content:write'
+)
+
+if (result.allowed) {
+  console.log('允许操作')
+  console.log('权限来源角色:', result.matchedRoles)
+} else {
+  console.log('拒绝操作:', result.reason)
+}
+```
+
+### 获取有效权限
+
+```ts
+const effective = await rbac.getEffectivePermissions(
+  'tenant-001',
+  'user',
+  'user-123'
+)
+
+console.log('权限来源角色:', effective.roles)
+console.log('权限数量:', effective.permissions.size)
+console.log('所有权限:', Array.from(effective.permissions))
+```
+
+### 角色继承示例
+
+```ts
+// 创建基础角色
+await rbac.createRole('tenant-001', {
+  name: 'viewer',
+  displayName: '访客',
+  permissions: ['*:read'],
+})
+
+// 创建继承角色
+await rbac.createRole('tenant-001', {
+  name: 'editor',
+  displayName: '编辑者',
+  permissions: ['content:write', 'content:publish'],
+  inherits: ['viewer'], // 继承 viewer 的所有权限
+})
+
+// 分配 editor 角色的用户将拥有：
+// - viewer 的所有权限（*:read）
+// - editor 的所有权限（content:write, content:publish）
+```
+
+## 最佳实践
+
+### 角色设计原则
+
+1. **职责分离**：每个角色只负责一组相关的权限
+2. **角色继承**：使用继承避免重复定义权限
+3. **角色数量控制**：避免创建过多角色，增加管理复杂度
+
+### 权限粒度控制
+
+- 使用通配符权限减少重复：`*:read`、`content:*`
+- 避免过细粒度的权限：如 `content:publish:draft`、`content:publish:review`
+- 合理的权限分组：按模块、功能分组
+
+### 缓存策略
+
+- 设置合适的缓存 TTL：根据权限变更频率调整
+- 及时使缓存失效：角色变更后立即清除相关缓存
+- 使用批量检查：减少权限检查次数
+
+---
+
+**继续学习：** [@mtpc/adapter-hono](/docs/packages/adapter-hono) →

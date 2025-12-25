@@ -1,0 +1,340 @@
+---
+title: 调试指南
+description: 如何调试 MTPC 应用
+---
+
+# 调试指南
+
+本文档介绍如何调试 MTPC 应用，包括日志记录、错误处理和性能分析。
+
+## 启用调试日志
+
+### 环境变量配置
+
+MTPC 支持通过环境变量控制日志级别：
+
+```bash
+# 设置日志级别
+DEBUG=mtpc:*                    # 启用所有日志
+DEBUG=mtpc:core                 # 仅启用核心日志
+DEBUG=mtpc:rbac                 # 仅启用 RBAC 日志
+DEBUG=mtpc:adapter:*            # 启用所有适配器日志
+```
+
+### 日志级别
+
+| 级别 | 描述 | 用途 |
+|------|------|------|
+| `error` | 错误信息 | 生产环境 |
+| `warn` | 警告信息 | 生产环境 |
+| `info` | 一般信息 | 开发环境 |
+| `debug` | 调试信息 | 开发环境 |
+| `trace` | 详细跟踪信息 | 深度调试 |
+
+## 权限决策调试
+
+### 使用 Explain 扩展
+
+`@mtpc/explain` 扩展提供了权限决策的详细解释。
+
+```typescript
+import { createExplainPlugin } from '@mtpc/explain'
+
+const plugin = createExplainPlugin()
+
+const mtpc = createMTPC()
+mtpc.use(plugin)
+await mtpc.init()
+
+// 检查权限并获取解释
+const result = await mtpc.checkPermission(ctx, 'user', 'create')
+
+if (!result.allowed) {
+  console.log('Permission denied:', result.explanation)
+}
+```
+
+### 解释输出示例
+
+```json
+{
+  "allowed": false,
+  "explanation": {
+    "decision": "deny",
+    "reason": "No matching policy found",
+    "path": [
+      {
+        "step": "check_policies",
+        "result": "no_match"
+      },
+      {
+        "step": "check_fallback",
+        "result": "deny"
+      }
+    ]
+  }
+}
+```
+
+## 审计日志
+
+### 使用 Audit 扩展
+
+`@mtpc/audit` 扩展记录所有权限检查和资源操作。
+
+```typescript
+import { createAuditPlugin } from '@mtpc/audit'
+
+const plugin = createAuditPlugin({
+  store: auditStore,
+})
+
+const mtpc = createMTPC()
+mtpc.use(plugin)
+await mtpc.init()
+```
+
+### 审计事件类型
+
+| 事件类型 | 描述 | 数据 |
+|----------|------|------|
+| `permission.check` | 权限检查 | resource, action, subject, result |
+| `permission.grant` | 权限授予 | resource, action, subject, policy |
+| `permission.revoke` | 权限撤销 | resource, action, subject, policy |
+| `resource.create` | 资源创建 | resource, data, subject |
+| `resource.update` | 资源更新 | resource, id, data, subject |
+| `resource.delete` | 资源删除 | resource, id, subject |
+
+## 性能分析
+
+### 使用性能监控
+
+MTPC 内置了性能监控功能：
+
+```typescript
+const mtpc = createMTPC({
+  performance: {
+    enabled: true,
+    threshold: 100, // 超过 100ms 记录警告
+  },
+})
+```
+
+### 性能指标
+
+| 指标 | 描述 | 阈值 |
+|------|------|------|
+| `permission_check_duration` | 权限检查耗时 | < 10ms |
+| `policy_evaluation_duration` | 策略评估耗时 | < 5ms |
+| `resource_operation_duration` | 资源操作耗时 | < 50ms |
+| `cache_hit_rate` | 缓存命中率 | > 90% |
+
+### 性能分析工具
+
+```typescript
+// 获取性能统计
+const stats = mtpc.getPerformanceStats()
+
+console.log('Average permission check time:', stats.avgPermissionCheckTime)
+console.log('Cache hit rate:', stats.cacheHitRate)
+console.log('Total operations:', stats.totalOperations)
+```
+
+## 错误处理
+
+### 常见错误类型
+
+| 错误类型 | 描述 | 处理方法 |
+|----------|------|----------|
+| `ResourceNotFoundError` | 资源未找到 | 检查资源注册 |
+| `PermissionDeniedError` | 权限拒绝 | 检查角色和策略 |
+| `ValidationError` | 数据验证失败 | 检查 Schema 和数据 |
+| `PolicyError` | 策略错误 | 检查策略定义 |
+| `CacheError` | 缓存错误 | 检查缓存配置 |
+
+### 错误捕获
+
+```typescript
+try {
+  await mtpc.checkPermission(ctx, 'user', 'create')
+} catch (error) {
+  if (error instanceof ResourceNotFoundError) {
+    console.error('Resource not found:', error.resourceName)
+  } else if (error instanceof PermissionDeniedError) {
+    console.error('Permission denied:', error.details)
+  } else {
+    console.error('Unknown error:', error)
+  }
+}
+```
+
+## 调试工具
+
+### VS Code 调试配置
+
+创建 `.vscode/launch.json`：
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug MTPC App",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "DEBUG": "mtpc:*"
+      }
+    }
+  ]
+}
+```
+
+### Chrome DevTools
+
+```typescript
+// 启用 Chrome DevTools 支持
+const mtpc = createMTPC({
+  debug: {
+    enabled: true,
+    devtools: true,
+  },
+})
+```
+
+## 调试技巧
+
+### 1. 分步调试
+
+```typescript
+// 1. 检查资源是否注册
+const resource = mtpc.registry.getResource('user')
+console.log('Resource:', resource)
+
+// 2. 检查权限是否定义
+const permissions = resource.permissions
+console.log('Permissions:', permissions)
+
+// 3. 检查策略是否加载
+const policies = await mtpc.policyEngine.getPolicies()
+console.log('Policies:', policies)
+
+// 4. 检查角色绑定
+const bindings = await rbacStore.getRoleBindings(ctx.subject.id)
+console.log('Role bindings:', bindings)
+```
+
+### 2. 使用日志断点
+
+```typescript
+// 在关键位置添加日志
+console.log('[DEBUG] Checking permission:', { resource, action, subject })
+
+const result = await mtpc.checkPermission(ctx, resource, action)
+
+console.log('[DEBUG] Permission result:', result)
+```
+
+### 3. 使用条件断点
+
+```typescript
+// 仅在特定条件下断点
+if (ctx.subject.id === 'specific-user-id') {
+  debugger
+}
+```
+
+## 常见问题排查
+
+### 问题：权限检查总是返回 false
+
+**排查步骤：**
+
+1. 检查资源是否注册：
+   ```typescript
+   const resource = mtpc.registry.getResource('user')
+   console.log('Resource:', resource)
+   ```
+
+2. 检查权限是否定义：
+   ```typescript
+   const permissions = resource.permissions
+   console.log('Permissions:', permissions)
+   ```
+
+3. 检查策略是否加载：
+   ```typescript
+   const policies = await mtpc.policyEngine.getPolicies()
+   console.log('Policies:', policies)
+   ```
+
+4. 检查角色绑定：
+   ```typescript
+   const bindings = await rbacStore.getRoleBindings(ctx.subject.id)
+   console.log('Role bindings:', bindings)
+   ```
+
+### 问题：性能问题
+
+**排查步骤：**
+
+1. 启用性能监控：
+   ```typescript
+   const mtpc = createMTPC({
+     performance: {
+       enabled: true,
+       threshold: 100,
+     },
+   })
+   ```
+
+2. 检查性能统计：
+   ```typescript
+   const stats = mtpc.getPerformanceStats()
+   console.log('Performance stats:', stats)
+   ```
+
+3. 检查缓存命中率：
+   ```typescript
+   const cacheStats = mtpc.cache.getStats()
+   console.log('Cache stats:', cacheStats)
+   ```
+
+4. 使用 Explain 扩展分析决策路径：
+   ```typescript
+   const result = await mtpc.checkPermission(ctx, 'user', 'create')
+   console.log('Explanation:', result.explanation)
+   ```
+
+### 问题：数据库连接问题
+
+**排查步骤：**
+
+1. 检查数据库配置：
+   ```typescript
+   const db = drizzle({ connection: dbConfig })
+   console.log('Database config:', dbConfig)
+   ```
+
+2. 测试数据库连接：
+   ```typescript
+   await db.execute('SELECT 1')
+   console.log('Database connection OK')
+   ```
+
+3. 检查数据库权限：
+   ```sql
+   SHOW GRANTS FOR CURRENT_USER;
+   ```
+
+4. 检查数据库日志：
+   ```bash
+   tail -f /var/log/postgresql/postgresql.log
+   ```
+
+---
+
+**继续学习：** [从其他系统迁移](/docs/migration/from-other-systems) →

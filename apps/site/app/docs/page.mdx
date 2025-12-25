@@ -1,73 +1,142 @@
 ---
-description:
-  Nextra is a framework built on top of Next.js that enables the creation of
-  content-focused websites. It combines the robust features of Next.js with
-  enhanced capabilities for crafting Markdown-based content.
+title: 概述
+description: MTPC (Multi-Tenant Permission Core) 是一个业务无关、可嵌入、可组合的多租户权限内核。
 ---
 
-import { Cards, Image } from 'nextra/components'
-import { cloneElement } from 'react'
+import { Cards } from 'nextra/components'
+import { Code } from 'nextra/components'
 
-export default function MdxLayout(props) {
-  return cloneElement(props.children, {
-    components: {
-      img: Image
-    }
-  })
-}
+# MTPC 文档
 
-# Introduction
+欢迎使用 **MTPC** (Multi-Tenant Permission Core) 文档。MTPC 是一个业务无关、可嵌入、可组合的多租户权限内核。
 
-**Nextra** is a framework on top of Next.js, that lets you build content focused
-websites. It has all the great features from Next.js, plus extra power to create
-Markdown-based content with ease.
+## 什么是 MTPC？
 
-## Quick start
+MTPC 不是一个可直接部署的系统，也不包含任何具体业务、UI 或运行态应用；而是一个 **权限基础设施内核**，用于被真实业务系统（SaaS、内部后台、B 端系统等）作为依赖引入。
 
-To start using Nextra, you need to select a theme first:
+### 核心特性
 
-<Cards num={2}>
-  <Cards.Card arrow title="Documentation theme" href="/docs/docs-theme/start">
-    <>![Documentation theme screenshot](/assets/docs-theme.png)</>
-  </Cards.Card>
-  <Cards.Card arrow title="Blog theme" href="/docs/blog-theme/start">
-    <>![Blog theme screenshot](/assets/blog-theme.png)</>
-  </Cards.Card>
+- **业务无关**：核心不包含 Department / User / Role / Menu 等具体业务模型
+- **单一事实源**：Resource Definition 是唯一权威来源，其它一切均由其派生
+- **编译期优先**：能在编译期生成的内容绝不推迟到运行期
+- **库而非服务**：MTPC 以内嵌库方式运行，不是独立微服务
+- **可扩展优先**：所有企业级能力通过插件、钩子与策略扩展
+- **默认拒绝**：权限校验失败即拒绝访问，不存在"隐式放行"
+
+## 快速开始
+
+### 安装
+
+```bash
+npm install @mtpc/core
+```
+
+### 基础用法
+
+```tsx
+import { createMTPC, defineResource } from '@mtpc/core'
+
+// 创建 MTPC 实例
+const mtpc = createMTPC()
+
+// 定义资源
+const userResource = defineResource({
+  name: 'user',
+  schema: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().email()
+  }),
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: true
+  }
+})
+
+// 注册资源
+mtpc.registerResource(userResource)
+
+// 初始化
+await mtpc.init()
+```
+
+## 文档导航
+
+<Cards>
+  <Cards.Card
+    title="快速开始"
+    href="/docs/getting-started"
+    description="5 分钟快速上手 MTPC"
+  />
+  <Cards.Card
+    title="架构概览"
+    href="/docs/architecture"
+    description="深入了解 MTPC 的设计理念和架构"
+  />
+  <Cards.Card
+    title="核心包"
+    href="/docs/packages"
+    description="了解 @mtpc/core、@mtpc/rbac 等核心包"
+  />
+  <Cards.Card
+    title="官方扩展"
+    href="/docs/extensions"
+    description="策略缓存、审计日志等官方扩展"
+  />
+  <Cards.Card
+    title="开发指南"
+    href="/docs/guides"
+    description="资源定义、权限设计、多租户实现等"
+  />
+  <Cards.Card
+    title="API 参考"
+    href="/docs/api"
+    description="完整的 API 文档"
+  />
+  <Cards.Card
+    title="示例教程"
+    href="/docs/tutorials"
+    description="博客 API、电商系统、多租户 SaaS 等教程"
+  />
+  <Cards.Card
+    title="故障排除"
+    href="/docs/troubleshooting"
+    description="常见问题和调试指南"
+  />
 </Cards>
 
-If you want to use Nextra without using these built-in themes, you can follow
-the [Custom Theme](/docs/custom-theme) docs.
+## 核心包
 
-## FAQ
+| 包名 | 描述 |
+|------|------|
+| [`@mtpc/core`](/docs/packages/core) | 多租户权限核心，提供 Resource、Permission、Policy 等基础能力 |
+| [`@mtpc/rbac`](/docs/packages/rbac) | 基于角色的访问控制扩展 |
+| [`@mtpc/adapter-hono`](/docs/packages/adapter-hono) | Hono 框架适配器 |
+| [`@mtpc/adapter-drizzle`](/docs/packages/adapter-drizzle) | Drizzle ORM 适配器 |
 
-The Nextra FAQ is a collection of useful questions and answers about the
-project. If you have a question that isn't answered here, please
-[open a discussion](https://github.com/shuding/nextra/discussions).
+## 官方扩展
 
-<details>
-  {/* prettier-ignore */}
-  <summary>Can I use Nextra with Next.js `pages` router?</summary>
-Nextra 4 only works with the `app` router. Only Nextra 1/2/3 supports the
-`pages` router.
+| 包名 | 描述 |
+|------|------|
+| [`@mtpc/policy-cache`](/docs/extensions/policy-cache) | 策略缓存扩展，优化权限检查性能 |
+| [`@mtpc/explain`](/docs/extensions/explain) | 权限决策解释扩展，用于调试和审计 |
+| [`@mtpc/audit`](/docs/extensions/audit) | 审计日志扩展，记录权限操作 |
+| [`@mtpc/data-scope`](/docs/extensions/data-scope) | 数据范围控制扩展，实现行级权限 |
+| [`@mtpc/soft-delete`](/docs/extensions/soft-delete) | 软删除扩展，支持数据恢复 |
 
-</details>
+## 示例项目
 
-<details>
-  <summary>Can I use X with Nextra?</summary>
-The answer is "yes" for most things. Since Nextra is just a Next.js plugin, almost all the things
-that can be done with React can be done with Nextra. Here are some examples and guides:
+- **[example-api](https://github.com/your-org/mtpc/tree/main/apps/example-api)** - 完整的 API 示例
+- **[example-web](https://github.com/your-org/mtpc/tree/main/apps/example-web)** - 前端集成示例
 
-- [Use Tailwind CSS](/docs/guide/tailwind-css)
-- [Use custom CSS and Sass](/docs/guide/custom-css)
-- [Use custom fonts](https://nextjs.org/docs/basic-features/font-optimization)
+## 下一步
 
-</details>
+- 阅读快速开始指南
+- 了解架构概览
+- 查看示例教程
 
-<details>
-  {/* prettier-ignore */}
-  <summary>How can I add a live coding component in Nextra?</summary>
-There are libraries like [Sandpack](https://sandpack.codesandbox.io) and
-[react-live](https://github.com/FormidableLabs/react-live) that can help you
-add live coding components to your MDX.
+## 贡献
 
-</details>
+欢迎贡献！请查看[贡献指南](/docs/contributing)了解如何参与 MTPC 的开发。

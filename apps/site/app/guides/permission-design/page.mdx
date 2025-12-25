@@ -1,0 +1,668 @@
+---
+title: 权限设计指南
+description: 如何设计合理的权限模型
+---
+
+# 权限设计指南
+
+本指南介绍如何设计合理的权限模型，包括权限命名规范、权限粒度控制、权限组合策略等。
+
+## 权限设计原则
+
+### 1. 最小权限原则
+
+只授予用户完成其工作所需的最小权限集。
+
+**示例：**
+
+```typescript
+// ❌ 错误：授予过多权限
+const adminRole = {
+  permissions: ['*'] // 所有权限
+}
+
+// ✅ 正确：授予具体权限
+const editorRole = {
+  permissions: [
+    'content:create',
+    'content:read',
+    'content:update',
+    'content:delete',
+  ]
+}
+```
+
+### 2. 职责分离原则
+
+将不同职责的权限分离到不同的角色中。
+
+**示例：**
+
+```typescript
+// ❌ 错误：一个角色承担多个职责
+const superRole = {
+  permissions: [
+    'user:create',
+    'user:delete',
+    'content:create',
+    'content:delete',
+    'billing:create',
+    'billing:delete',
+  ]
+}
+
+// ✅ 正确：分离职责
+const userAdminRole = {
+  permissions: [
+    'user:create',
+    'user:read',
+    'user:update',
+    'user:delete',
+  ]
+}
+
+const contentEditorRole = {
+  permissions: [
+    'content:create',
+    'content:read',
+    'content:update',
+    'content:delete',
+  ]
+}
+
+const billingManagerRole = {
+  permissions: [
+    'billing:create',
+    'billing:read',
+    'billing:update',
+    'billing:delete',
+  ]
+}
+```
+
+### 3. 可审计原则
+
+权限设计应支持审计和追溯。
+
+**示例：**
+
+```typescript
+// ✅ 使用明确的权限代码
+const permissions = [
+  'user:create',
+  'user:update',
+  'user:delete',
+  'user:reset-password', // 明确的密码重置权限
+  'user:export', // 明确的导出权限
+]
+
+// ❌ 使用模糊的权限代码
+const permissions = [
+  'user:manage', // 模糊，无法审计具体操作
+]
+```
+
+## 权限命名规范
+
+### 格式规范
+
+权限代码应遵循 `resource:action` 格式。
+
+| 格式 | 示例 | 说明 |
+|------|------|------|
+| `resource:action` | `user:create` | 标准格式 |
+| `resource:action:scope` | `user:create:tenant` | 带作用域 |
+| `resource:action:sub-action` | `content:publish:schedule` | 带子操作 |
+
+### 资源命名
+
+资源名称应使用单数、小写、连字符分隔。
+
+| 正确 | 错误 |
+|------|------|
+| `user` | `User`, `users`, `USER` |
+| `order-item` | `orderItem`, `OrderItem` |
+| `blog-post` | `blogPost`, `BlogPost` |
+
+### 动作命名
+
+动作名称应使用动词，描述对资源的操作。
+
+| 动作 | 描述 | 示例 |
+|------|------|------|
+| `create` | 创建资源 | `user:create` |
+| `read` | 读取资源 | `user:read` |
+| `update` | 更新资源 | `user:update` |
+| `delete` | 删除资源 | `user:delete` |
+| `list` | 列出资源 | `user:list` |
+| `export` | 导出资源 | `user:export` |
+| `import` | 导入资源 | `user:import` |
+| `publish` | 发布资源 | `content:publish` |
+| `archive` | 归档资源 | `content:archive` |
+
+### 自定义动作
+
+对于特定业务场景，可以定义自定义动作。
+
+```typescript
+const customPermissions = [
+  'content:publish', // 发布内容
+  'content:unpublish', // 取消发布
+  'content:schedule', // 定时发布
+  'content:approve', // 审核内容
+  'content:reject', // 拒绝内容
+  'order:cancel', // 取消订单
+  'order:refund', // 退款
+  'order:ship', // 发货
+  'order:complete', // 完成订单
+]
+```
+
+## 权限粒度控制
+
+### 粗粒度权限
+
+适用于简单的应用场景。
+
+```typescript
+const coarsePermissions = [
+  'user:manage', // 用户管理（包含创建、读取、更新、删除）
+  'content:manage', // 内容管理（包含创建、读取、更新、删除）
+  'settings:manage', // 设置管理（包含所有设置操作）
+]
+```
+
+**优点：**
+- 简单易用
+- 角色数量少
+
+**缺点：**
+- 灵活性低
+- 无法精细控制
+
+### 中粒度权限
+
+适用于大多数应用场景。
+
+```typescript
+const mediumPermissions = [
+  'user:create',
+  'user:read',
+  'user:update',
+  'user:delete',
+  'user:list',
+  'content:create',
+  'content:read',
+  'content:update',
+  'content:delete',
+  'content:list',
+  'content:publish',
+]
+```
+
+**优点：**
+- 平衡灵活性和复杂性
+- 满足大多数需求
+
+**缺点：**
+- 需要更多的角色定义
+
+### 细粒度权限
+
+适用于需要精细控制的复杂场景。
+
+```typescript
+const finePermissions = [
+  'user:create',
+  'user:read',
+  'user:update:basic', // 更新基本信息
+  'user:update:email', // 更新邮箱
+  'user:update:phone', // 更新电话
+  'user:update:password', // 更新密码
+  'user:update:role', // 更新角色
+  'user:delete',
+  'user:reset-password',
+  'user:export',
+  'user:import',
+]
+```
+
+**优点：**
+- 最大灵活性
+- 精细控制
+
+**缺点：**
+- 复杂度高
+- 角色数量多
+
+## 权限作用域
+
+### 全局作用域
+
+权限在整个系统中有效。
+
+```typescript
+const globalPermissions = [
+  'system:configure', // 系统配置
+  'tenant:create', // 创建租户
+  'tenant:delete', // 删除租户
+]
+```
+
+### 租户作用域
+
+权限在租户范围内有效。
+
+```typescript
+const tenantPermissions = [
+  'user:create:tenant', // 在租户内创建用户
+  'user:read:tenant', // 读取租户内用户
+  'content:create:tenant', // 在租户内创建内容
+]
+```
+
+### 自身作用域
+
+权限仅对自身数据有效。
+
+```typescript
+const selfPermissions = [
+  'user:update:self', // 更新自己的信息
+  'user:delete:self', // 删除自己的账号
+  'content:create:self', // 创建自己的内容
+]
+```
+
+### 部门作用域
+
+权限在部门范围内有效。
+
+```typescript
+const departmentPermissions = [
+  'user:read:department', // 读取部门内用户
+  'content:read:department', // 读取部门内内容
+]
+```
+
+## 权限组合策略
+
+### 角色继承
+
+通过角色继承减少权限重复。
+
+```typescript
+const baseRole = {
+  permissions: [
+    'content:read',
+    'content:list',
+  ]
+}
+
+const editorRole = {
+  inherits: ['base'],
+  permissions: [
+    'content:create',
+    'content:update',
+    'content:delete',
+  ]
+}
+
+// editorRole 拥有所有权限：
+// - content:read (继承)
+// - content:list (继承)
+// - content:create (自身)
+// - content:update (自身)
+// - content:delete (自身)
+```
+
+### 权限组
+
+将相关权限组合成组。
+
+```typescript
+const permissionGroups = {
+  userManagement: [
+    'user:create',
+    'user:read',
+    'user:update',
+    'user:delete',
+    'user:list',
+  ],
+  contentManagement: [
+    'content:create',
+    'content:read',
+    'content:update',
+    'content:delete',
+    'content:list',
+    'content:publish',
+  ],
+}
+
+const adminRole = {
+  permissions: [
+    ...permissionGroups.userManagement,
+    ...permissionGroups.contentManagement,
+  ]
+}
+```
+
+### 通配符权限
+
+使用通配符简化权限定义。
+
+```typescript
+const wildcardPermissions = [
+  'user:*', // 用户的所有权限
+  'content:*', // 内容的所有权限
+  'system:*', // 系统的所有权限
+]
+
+// 等价于：
+const explicitPermissions = [
+  'user:create',
+  'user:read',
+  'user:update',
+  'user:delete',
+  'user:list',
+  'content:create',
+  'content:read',
+  'content:update',
+  'content:delete',
+  'content:list',
+  'content:publish',
+  // ...
+]
+```
+
+## 权限设计示例
+
+### 博客系统
+
+```typescript
+const blogPermissions = {
+  // 文章权限
+  article: [
+    'article:create',
+    'article:read',
+    'article:update',
+    'article:delete',
+    'article:list',
+    'article:publish',
+    'article:unpublish',
+    'article:schedule',
+  ],
+  // 评论权限
+  comment: [
+    'comment:create',
+    'comment:read',
+    'comment:update',
+    'comment:delete',
+    'comment:moderate',
+  ],
+  // 分类权限
+  category: [
+    'category:create',
+    'category:read',
+    'category:update',
+    'category:delete',
+    'category:list',
+  ],
+  // 标签权限
+  tag: [
+    'tag:create',
+    'tag:read',
+    'tag:update',
+    'tag:delete',
+    'tag:list',
+  ],
+}
+
+const blogRoles = {
+  reader: {
+    permissions: [
+      'article:read',
+      'article:list',
+      'comment:create',
+      'comment:read',
+    ]
+  },
+  author: {
+    inherits: ['reader'],
+    permissions: [
+      'article:create',
+      'article:update:self',
+      'article:delete:self',
+      'article:publish:self',
+      'comment:update:self',
+      'comment:delete:self',
+    ]
+  },
+  editor: {
+    inherits: ['author'],
+    permissions: [
+      'article:update',
+      'article:delete',
+      'article:publish',
+      'comment:moderate',
+    ]
+  },
+  admin: {
+    permissions: [
+      'article:*',
+      'comment:*',
+      'category:*',
+      'tag:*',
+    ]
+  },
+}
+```
+
+### 电商系统
+
+```typescript
+const ecommercePermissions = {
+  // 商品权限
+  product: [
+    'product:create',
+    'product:read',
+    'product:update',
+    'product:delete',
+    'product:list',
+    'product:export',
+    'product:import',
+  ],
+  // 订单权限
+  order: [
+    'order:create',
+    'order:read',
+    'order:update',
+    'order:delete',
+    'order:list',
+    'order:cancel',
+    'order:refund',
+    'order:ship',
+    'order:complete',
+    'order:export',
+  ],
+  // 客户权限
+  customer: [
+    'customer:create',
+    'customer:read',
+    'customer:update',
+    'customer:delete',
+    'customer:list',
+    'customer:export',
+  ],
+  // 库存权限
+  inventory: [
+    'inventory:create',
+    'inventory:read',
+    'inventory:update',
+    'inventory:delete',
+    'inventory:list',
+    'inventory:adjust',
+  ],
+}
+
+const ecommerceRoles = {
+  customer: {
+    permissions: [
+      'product:read',
+      'product:list',
+      'order:create:self',
+      'order:read:self',
+      'order:cancel:self',
+      'customer:update:self',
+    ]
+  },
+  sales: {
+    permissions: [
+      'product:read',
+      'product:list',
+      'order:create',
+      'order:read',
+      'order:update',
+      'order:cancel',
+      'customer:create',
+      'customer:read',
+      'customer:update',
+      'customer:list',
+      'inventory:read',
+      'inventory:list',
+    ]
+  },
+  warehouse: {
+    permissions: [
+      'order:read',
+      'order:ship',
+      'inventory:create',
+      'inventory:read',
+      'inventory:update',
+      'inventory:delete',
+      'inventory:list',
+      'inventory:adjust',
+    ]
+  },
+  manager: {
+    permissions: [
+      'product:*',
+      'order:*',
+      'customer:*',
+      'inventory:*',
+    ]
+  },
+}
+```
+
+## 权限设计最佳实践
+
+### 1. 从业务需求出发
+
+不要从技术角度设计权限，而应从业务需求出发。
+
+**示例：**
+
+```typescript
+// ❌ 技术角度
+const permissions = [
+  'user:post',
+  'user:get',
+  'user:put',
+  'user:delete',
+]
+
+// ✅ 业务角度
+const permissions = [
+  'user:create', // 创建用户
+  'user:read', // 查看用户
+  'user:update', // 更新用户
+  'user:delete', // 删除用户
+]
+```
+
+### 2. 保持权限数量合理
+
+避免权限过多或过少。
+
+| 应用规模 | 推荐权限数量 | 推荐角色数量 |
+|---------|-------------|-------------|
+| 小型应用 | 10-30 | 3-5 |
+| 中型应用 | 30-100 | 5-10 |
+| 大型应用 | 100-300 | 10-20 |
+
+### 3. 使用有意义的权限名称
+
+权限名称应清晰表达其含义。
+
+**示例：**
+
+```typescript
+// ❌ 模糊的权限名称
+const permissions = [
+  'user:op1',
+  'user:op2',
+  'user:op3',
+]
+
+// ✅ 清晰的权限名称
+const permissions = [
+  'user:create',
+  'user:update',
+  'user:delete',
+]
+```
+
+### 4. 定期审查权限
+
+定期审查权限设计，移除不再需要的权限。
+
+### 5. 文档化权限
+
+为每个权限编写清晰的文档。
+
+```typescript
+const permissions = [
+  {
+    code: 'user:create',
+    description: '创建新用户',
+    scope: 'tenant',
+    risk: 'medium',
+    audit: true,
+  },
+  {
+    code: 'user:delete',
+    description: '删除用户',
+    scope: 'tenant',
+    risk: 'high',
+    audit: true,
+  },
+]
+```
+
+## 常见问题
+
+### Q: 如何处理临时权限？
+
+A: 使用临时角色绑定，设置过期时间。
+
+```typescript
+await rbac.assignRole('tenant-001', 'editor', 'user', 'user-123', {
+  expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 天后过期
+})
+```
+
+### Q: 如何处理权限继承冲突？
+
+A: 后定义的权限覆盖先定义的权限。
+
+### Q: 如何处理权限撤销？
+
+A: 使用 `revokeRole` 或 `revokePermission` 方法。
+
+```typescript
+await rbac.revokeRole('tenant-001', 'editor', 'user', 'user-123')
+```
+
+---
+
+**继续学习：** [多租户实现指南](/docs/guides/multi-tenant) →

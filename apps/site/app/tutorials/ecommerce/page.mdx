@@ -1,0 +1,763 @@
+---
+title: 电商系统教程
+description: 使用 MTPC 构建电商系统
+---
+
+# 电商系统教程
+
+本教程将指导您使用 MTPC 构建一个完整的电商系统，包括商品管理、订单处理、库存管理和多租户支持。
+
+## 项目概述
+
+我们将构建一个具有以下功能的电商系统：
+
+- 商品管理
+- 订单处理
+- 库存管理
+- 客户管理
+- 多租户支持
+- 角色和权限管理
+
+## 技术栈
+
+- **MTPC**: 权限和资源管理
+- **Hono**: Web 框架
+- **Drizzle ORM**: 数据库 ORM
+- **PostgreSQL**: 数据库
+- **Zod**: 数据验证
+
+## 项目结构
+
+```
+ecommerce/
+├── src/
+│   ├── config/
+│   │   └── config.ts
+│   ├── db/
+│   │   ├── schema.ts
+│   │   └── connection.ts
+│   ├── resources/
+│   │   ├── product.ts
+│   │   ├── order.ts
+│   │   ├── customer.ts
+│   │   └── inventory.ts
+│   ├── routes/
+│   │   ├── products.ts
+│   │   ├── orders.ts
+│   │   └── customers.ts
+│   └── index.ts
+├── package.json
+└── tsconfig.json
+```
+
+## 步骤 1: 项目初始化
+
+### 安装依赖
+
+```bash
+pnpm init
+pnpm add @mtpc/core @mtpc/rbac @mtpc/adapter-hono @mtpc/adapter-drizzle
+pnpm add hono drizzle-orm postgres
+pnpm add zod
+pnpm add -D typescript
+```
+
+### 配置 TypeScript
+
+创建 `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}
+```
+
+## 步骤 2: 数据库配置
+
+### 创建数据库连接
+
+创建 `src/db/connection.ts`:
+
+```typescript
+import { drizzle } from 'drizzle-orm/postgres-js'
+import postgres from 'postgres'
+
+const connectionString = process.env.DATABASE_URL || 'postgresql://localhost/ecommerce'
+
+export const db = drizzle(postgres(connectionString))
+```
+
+### 定义数据库 Schema
+
+创建 `src/db/schema.ts`:
+
+```typescript
+import { pgTable, serial, text, timestamp, uuid, integer, decimal } from 'drizzle-orm/pg-core'
+
+export const customers = pgTable('customers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  phone: text('phone'),
+  address: text('address'),
+  tenantId: uuid('tenant_id').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const products = pgTable('products', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  description: text('description'),
+  price: decimal('price', { precision: 10, scale: 2 }).notNull(),
+  sku: text('sku').notNull().unique(),
+  category: text('category'),
+  tenantId: uuid('tenant_id').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const inventories = pgTable('inventories', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  productId: uuid('product_id').notNull().references(() => products.id),
+  quantity: integer('quantity').notNull().default(0),
+  location: text('location'),
+  tenantId: uuid('tenant_id').notNull(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const orders = pgTable('orders', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  customerId: uuid('customer_id').notNull().references(() => customers.id),
+  status: text('status').notNull().default('pending'),
+  totalAmount: decimal('total_amount', { precision: 10, scale: 2 }).notNull(),
+  tenantId: uuid('tenant_id').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const orderItems = pgTable('order_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orderId: uuid('order_id').notNull().references(() => orders.id),
+  productId: uuid('product_id').notNull().references(() => products.id),
+  quantity: integer('quantity').notNull(),
+  price: decimal('price', { precision: 10, scale: 2 }).notNull(),
+})
+```
+
+## 步骤 3: 定义资源
+
+### 商品资源
+
+创建 `src/resources/product.ts`:
+
+```typescript
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+const productSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  description: z.string().optional(),
+  price: z.number().min(0),
+  sku: z.string().min(1),
+  category: z.string().optional(),
+  tenantId: z.string().uuid(),
+})
+
+export const productResource = defineResource({
+  name: 'product',
+  schema: productSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: true,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建商品', scope: 'tenant' },
+    { action: 'read', description: '查看商品', scope: 'tenant' },
+    { action: 'update', description: '更新商品', scope: 'tenant' },
+    { action: 'delete', description: '删除商品', scope: 'tenant' },
+    { action: 'list', description: '列出商品', scope: 'tenant' },
+  ],
+  metadata: {
+    displayName: '商品',
+    pluralName: '商品列表',
+    group: 'product-management',
+  },
+})
+```
+
+### 订单资源
+
+创建 `src/resources/order.ts`:
+
+```typescript
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+const orderSchema = z.object({
+  id: z.string().uuid(),
+  customerId: z.string().uuid(),
+  status: z.enum(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']),
+  totalAmount: z.number().min(0),
+  tenantId: z.string().uuid(),
+})
+
+export const orderResource = defineResource({
+  name: 'order',
+  schema: orderSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: false,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建订单', scope: 'tenant' },
+    { action: 'read', description: '查看订单', scope: 'tenant' },
+    { action: 'update', description: '更新订单', scope: 'tenant' },
+    { action: 'list', description: '列出订单', scope: 'tenant' },
+    { action: 'confirm', description: '确认订单', scope: 'tenant' },
+    { action: 'ship', description: '发货', scope: 'tenant' },
+    { action: 'cancel', description: '取消订单', scope: 'own' },
+  ],
+  metadata: {
+    displayName: '订单',
+    pluralName: '订单列表',
+    group: 'order-management',
+  },
+  relations: [{
+    name: 'customer',
+    type: 'belongsTo',
+    target: 'customer',
+    foreignKey: 'customerId',
+    description: '订单客户',
+  }],
+})
+```
+
+### 客户资源
+
+创建 `src/resources/customer.ts`:
+
+```typescript
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+const customerSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  name: z.string().min(1).max(100),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  tenantId: z.string().uuid(),
+})
+
+export const customerResource = defineResource({
+  name: 'customer',
+  schema: customerSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: false,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建客户', scope: 'tenant' },
+    { action: 'read', description: '查看客户', scope: 'tenant' },
+    { action: 'update', description: '更新客户', scope: 'tenant' },
+    { action: 'list', description: '列出客户', scope: 'tenant' },
+  ],
+  metadata: {
+    displayName: '客户',
+    pluralName: '客户列表',
+    group: 'customer-management',
+  },
+})
+```
+
+### 库存资源
+
+创建 `src/resources/inventory.ts`:
+
+```typescript
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+const inventorySchema = z.object({
+  id: z.string().uuid(),
+  productId: z.string().uuid(),
+  quantity: z.number().min(0),
+  location: z.string().optional(),
+  tenantId: z.string().uuid(),
+})
+
+export const inventoryResource = defineResource({
+  name: 'inventory',
+  schema: inventorySchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: true,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建库存', scope: 'tenant' },
+    { action: 'read', description: '查看库存', scope: 'tenant' },
+    { action: 'update', description: '更新库存', scope: 'tenant' },
+    { action: 'delete', description: '删除库存', scope: 'tenant' },
+    { action: 'list', description: '列出库存', scope: 'tenant' },
+    { action: 'adjust', description: '调整库存', scope: 'tenant' },
+  ],
+  metadata: {
+    displayName: '库存',
+    pluralName: '库存列表',
+    group: 'inventory-management',
+  },
+  relations: [{
+    name: 'product',
+    type: 'belongsTo',
+    target: 'product',
+    foreignKey: 'productId',
+    description: '关联商品',
+  }],
+})
+```
+
+## 步骤 4: 配置 MTPC
+
+创建 `src/config/config.ts`:
+
+```typescript
+import { createMTPC } from '@mtpc/core'
+import { createRBACPlugin } from '@mtpc/rbac'
+import { productResource, orderResource, customerResource, inventoryResource } from '../resources'
+
+const mtpc = createMTPC({
+  registry: {
+    resources: [productResource, orderResource, customerResource, inventoryResource],
+  },
+})
+
+const rbacPlugin = createRBACPlugin()
+mtpc.use(rbacPlugin)
+
+export async function initMTPC() {
+  await mtpc.init()
+
+  // 创建默认角色
+  await rbacPlugin.createRole('admin', {
+    permissions: [
+      { resource: 'product', action: 'create' },
+      { resource: 'product', action: 'read' },
+      { resource: 'product', action: 'update' },
+      { resource: 'product', action: 'delete' },
+      { resource: 'product', action: 'list' },
+      { resource: 'order', action: 'create' },
+      { resource: 'order', action: 'read' },
+      { resource: 'order', action: 'update' },
+      { resource: 'order', action: 'list' },
+      { resource: 'order', action: 'confirm' },
+      { resource: 'order', action: 'ship' },
+      { resource: 'order', action: 'cancel' },
+      { resource: 'customer', action: 'create' },
+      { resource: 'customer', action: 'read' },
+      { resource: 'customer', action: 'update' },
+      { resource: 'customer', action: 'list' },
+      { resource: 'inventory', action: 'create' },
+      { resource: 'inventory', action: 'read' },
+      { resource: 'inventory', action: 'update' },
+      { resource: 'inventory', action: 'delete' },
+      { resource: 'inventory', action: 'list' },
+      { resource: 'inventory', action: 'adjust' },
+    ],
+  })
+
+  await rbacPlugin.createRole('sales', {
+    permissions: [
+      { resource: 'product', action: 'read' },
+      { resource: 'product', action: 'list' },
+      { resource: 'order', action: 'create' },
+      { resource: 'order', action: 'read' },
+      { resource: 'order', action: 'list' },
+      { resource: 'order', action: 'cancel', scope: 'own' },
+      { resource: 'customer', action: 'create' },
+      { resource: 'customer', action: 'read' },
+      { resource: 'customer', action: 'update' },
+      { resource: 'customer', action: 'list' },
+      { resource: 'inventory', action: 'read' },
+      { resource: 'inventory', action: 'list' },
+    ],
+  })
+
+  await rbacPlugin.createRole('warehouse', {
+    permissions: [
+      { resource: 'product', action: 'read' },
+      { resource: 'product', action: 'list' },
+      { resource: 'order', action: 'read' },
+      { resource: 'order', action: 'list' },
+      { resource: 'order', action: 'ship' },
+      { resource: 'inventory', action: 'create' },
+      { resource: 'inventory', action: 'read' },
+      { resource: 'inventory', action: 'update' },
+      { resource: 'inventory', action: 'list' },
+      { resource: 'inventory', action: 'adjust' },
+    ],
+  })
+}
+
+export { mtpc, rbacPlugin }
+```
+
+## 步骤 5: 创建路由
+
+### 商品路由
+
+创建 `src/routes/products.ts`:
+
+```typescript
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
+import { db } from '../db/connection'
+import { products } from '../db/schema'
+import { eq, and } from 'drizzle-orm'
+import { createContext } from '@mtpc/core'
+import { mtpc } from '../config/config'
+
+const productsRouter = new Hono()
+
+const authMiddleware = async (c: any, next: any) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any
+    c.set('user', decoded)
+    await next()
+  } catch (error) {
+    return c.json({ error: 'Invalid token' }, 401)
+  }
+}
+
+productsRouter.use(authMiddleware)
+
+const createProductSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().optional(),
+  price: z.number().min(0),
+  sku: z.string().min(1),
+  category: z.string().optional(),
+})
+
+productsRouter.post('/', zValidator('json', createProductSchema), async (c) => {
+  const user = c.get('user')
+  const data = c.req.valid('json')
+
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'product', 'create')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  const [newProduct] = await db.insert(products).values({
+    ...data,
+    tenantId: user.tenantId,
+  }).returning()
+
+  return c.json(newProduct)
+})
+
+productsRouter.get('/', async (c) => {
+  const user = c.get('user')
+
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'product', 'list')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  const allProducts = await db.select().from(products).where(eq(products.tenantId, user.tenantId))
+
+  return c.json(allProducts)
+})
+
+productsRouter.get('/:id', async (c) => {
+  const user = c.get('user')
+  const id = c.req.param('id')
+
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'product', 'read')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  const [product] = await db.select().from(products).where(
+    and(eq(products.id, id), eq(products.tenantId, user.tenantId))
+  )
+
+  if (!product) {
+    return c.json({ error: 'Product not found' }, 404)
+  }
+
+  return c.json(product)
+})
+
+export { productsRouter }
+```
+
+### 订单路由
+
+创建 `src/routes/orders.ts`:
+
+```typescript
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
+import { db } from '../db/connection'
+import { orders, orderItems } from '../db/schema'
+import { eq, and } from 'drizzle-orm'
+import { createContext } from '@mtpc/core'
+import { mtpc } from '../config/config'
+
+const ordersRouter = new Hono()
+
+const authMiddleware = async (c: any, next: any) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any
+    c.set('user', decoded)
+    await next()
+  } catch (error) {
+    return c.json({ error: 'Invalid token' }, 401)
+  }
+}
+
+ordersRouter.use(authMiddleware)
+
+const createOrderSchema = z.object({
+  customerId: z.string().uuid(),
+  items: z.array(z.object({
+    productId: z.string().uuid(),
+    quantity: z.number().min(1),
+  })),
+})
+
+ordersRouter.post('/', zValidator('json', createOrderSchema), async (c) => {
+  const user = c.get('user')
+  const data = c.req.valid('json')
+
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'order', 'create')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  // 计算总金额
+  let totalAmount = 0
+  for (const item of data.items) {
+    const [product] = await db.select().from(products).where(eq(products.id, item.productId))
+    if (!product) {
+      return c.json({ error: `Product ${item.productId} not found` }, 404)
+    }
+    totalAmount += Number(product.price) * item.quantity
+  }
+
+  // 创建订单
+  const [newOrder] = await db.insert(orders).values({
+    customerId: data.customerId,
+    totalAmount,
+    tenantId: user.tenantId,
+  }).returning()
+
+  // 创建订单项
+  for (const item of data.items) {
+    const [product] = await db.select().from(products).where(eq(products.id, item.productId))
+    await db.insert(orderItems).values({
+      orderId: newOrder.id,
+      productId: item.productId,
+      quantity: item.quantity,
+      price: product.price,
+    })
+  }
+
+  return c.json(newOrder)
+})
+
+ordersRouter.patch('/:id/status', zValidator('json', z.object({
+  status: z.enum(['confirmed', 'shipped', 'delivered', 'cancelled']),
+})), async (c) => {
+  const user = c.get('user')
+  const id = c.req.param('id')
+  const { status } = c.req.valid('json')
+
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+  })
+
+  const action = status === 'confirmed' ? 'confirm' :
+                status === 'shipped' ? 'ship' :
+                status === 'cancelled' ? 'cancel' : 'update'
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'order', action)
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  const [updatedOrder] = await db.update(orders)
+    .set({ status, updatedAt: new Date() })
+    .where(and(eq(orders.id, id), eq(orders.tenantId, user.tenantId)))
+    .returning()
+
+  return c.json(updatedOrder)
+})
+
+export { ordersRouter }
+```
+
+## 步骤 6: 创建应用
+
+创建 `src/index.ts`:
+
+```typescript
+import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import { initMTPC } from './config/config'
+import { productsRouter } from './routes/products'
+import { ordersRouter } from './routes/orders'
+
+const app = new Hono()
+
+app.use('*', cors())
+
+app.route('/products', productsRouter)
+app.route('/orders', ordersRouter)
+
+app.get('/', (c) => {
+  return c.json({ message: 'Ecommerce API' })
+})
+
+async function main() {
+  await initMTPC()
+
+  Bun.serve({
+    fetch: app.fetch,
+    port: 3000,
+  })
+
+  console.log('Server running on http://localhost:3000')
+}
+
+main()
+```
+
+## 步骤 7: 运行应用
+
+```bash
+pnpm dev
+```
+
+## 测试 API
+
+### 创建商品
+
+```bash
+curl -X POST http://localhost:3000/products \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "name": "iPhone 15",
+    "description": "Apple iPhone 15",
+    "price": 5999,
+    "sku": "IPHONE15",
+    "category": "Electronics"
+  }'
+```
+
+### 创建订单
+
+```bash
+curl -X POST http://localhost:3000/orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "customerId": "customer-id",
+    "items": [
+      {
+        "productId": "product-id",
+        "quantity": 2
+      }
+    ]
+  }'
+```
+
+### 更新订单状态
+
+```bash
+curl -X PATCH http://localhost:3000/orders/order-id/status \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "status": "confirmed"
+  }'
+```
+
+## 总结
+
+本教程展示了如何使用 MTPC 构建一个完整的电商系统，包括：
+
+1. 项目初始化和依赖安装
+2. 数据库配置和 Schema 定义
+3. 资源定义（商品、订单、客户、库存）
+4. MTPC 配置和 RBAC 设置
+5. 路由创建和权限检查
+6. API 测试
+
+您可以根据需要扩展此项目，添加更多功能，如：
+
+- 支付集成
+- 优惠券系统
+- 会员系统
+- 物流跟踪
+- 数据分析
+
+---
+
+**继续学习：** [多租户 SaaS 教程](/docs/tutorials/multi-tenant-saas) →

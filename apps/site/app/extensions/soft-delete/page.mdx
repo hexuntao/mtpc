@@ -1,0 +1,357 @@
+---
+title: mtpc/soft-delete 潯删除扩展
+description: MTPC 潯删除扩展概览
+---
+
+# @mtpc/soft-delete 潯删除扩展
+
+`@mtpc/soft-delete` 提供**软删除**功能，支持数据恢复和数据审计。
+
+## 扩展概述
+
+### 为什么需要软删除
+
+软删除（Soft Delete）是一种数据删除方式，数据不会被真正从数据库中删除，而是标记为"已删除"状态。
+
+**软删除 vs 硬删除：**
+
+| 特性 | 软删除 | 硬删除 |
+|------|--------|--------|
+| 数据保留 | 数据保留在数据库中 | 数据被永久删除 |
+| 可恢复 | 可以恢复数据 | 无法恢复数据 |
+| 空间占用 | 占用存储空间 | 释放存储空间 |
+| 性能 | 查询需要过滤条件 | 查询更快 |
+| 审计 | 可以追踪删除操作 | 无法追踪删除操作 |
+| 用途 | 数据恢复、审计 | 不需要恢复的场景 |
+
+### 适用场景
+
+- 需要数据恢复功能的系统
+- 需要审计删除操作的系统
+- 合规性要求高的企业用户
+- 需要数据追溯的系统
+
+## 核心功能
+
+### 自动软删除
+
+自动标记数据为已删除状态。
+
+```ts
+import { createSoftDeletePlugin } from '@mtpc/soft-delete'
+
+const plugin = createSoftDeletePlugin({
+  enabled: true,
+  deletedAtColumn: 'deleted_at',
+  deletedByColumn: 'deleted_by',
+})
+```
+
+### 软删除查询过滤
+
+自动过滤已删除的数据，避免在查询结果中返回。
+
+```ts
+import { createSoftDeletePlugin } from '@mtpc/soft-delete'
+
+const plugin = createSoftDeletePlugin()
+
+// 查询时自动过滤已删除数据
+const users = await db.users.findMany({
+  // 自动添加：WHERE deleted_at IS NULL
+})
+```
+
+### 数据恢复
+
+提供恢复已删除数据的能力。
+
+```ts
+import { createSoftDeletePlugin } from '@mtpc/soft-delete'
+
+const plugin = createSoftDeletePlugin()
+
+// 恢复数据
+await plugin.restore('user', 'user-123')
+
+// 批量恢复
+await plugin.restoreMany('user', ['user-123', 'user-456'])
+```
+
+### 彻底删除
+
+提供彻底删除已删除数据的能力。
+
+```ts
+import { createSoftDeletePlugin } from '@mtpc/soft-delete'
+
+const plugin = createSoftDeletePlugin()
+
+// 彻底删除
+await plugin.hardDelete('user', 'user-123')
+
+// 批量彻底删除
+await plugin.hardDeleteMany('user', ['user-123', 'user-456'])
+```
+
+## API 参考
+
+### SoftDeletePlugin 类
+
+```ts
+class SoftDeletePlugin {
+  constructor(options?: SoftDeleteOptions)
+  
+  // 软删除数据
+  async softDelete(
+    resource: string,
+    id: string,
+    deletedBy?: string
+  ): Promise<boolean>
+  
+  async softDeleteMany(
+    resource: string,
+    ids: string[],
+    deletedBy?: string
+  ): Promise<number>
+  
+  // 恢复数据
+  async restore(
+    resource: string,
+    id: string
+  ): Promise<boolean>
+  
+  async restoreMany(
+    resource: string,
+    ids: string[]
+  ): Promise<number>
+  
+  // 彻底删除
+  async hardDelete(
+    resource: string,
+    id: string
+  ): Promise<boolean>
+  
+  async hardDeleteMany(
+    resource: string,
+    ids: string[]
+  ): Promise<number>
+  
+  // 查询已删除数据
+  async findDeleted(
+    resource: string,
+    options?: QueryOptions
+  ): Promise<PaginatedResult<unknown>>
+  
+  async countDeleted(resource: string): Promise<number>
+}
+```
+
+### SoftDeleteOptions
+
+```ts
+interface SoftDeleteOptions {
+  enabled?: boolean;              // 默认 true
+  deletedAtColumn?: string;       // 默认 'deleted_at'
+  deletedByColumn?: string;      // 默认 'deleted_by'
+  filterDeleted?: boolean;         // 默认 true
+  hardDeleteRequiresPermission?: string; // 默认 'hard_delete'
+}
+```
+
+### SoftDeleteHooks
+
+```ts
+interface SoftDeleteHooks {
+  beforeSoftDelete?: (ctx: MTPCContext, id: string) => Promise<void>;
+  afterSoftDelete?: (ctx: MTPCContext, id: string) => Promise<void>;
+  beforeRestore?: ( ctx: MTPCContext, id: string) => Promise<void>;
+  afterRestore?: (ctx: MTPCContext, id: string) => Promise<void>;
+  beforeHardDelete?: (ctx: MTPCContext, id: string) => Promise<void>;
+  afterHardDelete?: (ctx: MTPCContext, id: string) => Promise<void>;
+}
+```
+
+## 集成方式
+
+### 作为 MTPC 插件
+
+```ts
+import { createMTPC } from '@mtpc/core'
+import { createSoftDeletePlugin } from '@mtpc/soft-delete'
+
+// 创建软删除插件
+const plugin = createSoftDeletePlugin({
+  deletedAtColumn: 'deleted_at',
+  deletedByColumn: 'deleted_by',
+})
+
+// 创建 MTPC 实例
+const mtpc = createMTPC()
+
+// 注册插件
+mtpc.use(plugin)
+
+await mtpc.init()
+```
+
+### 配置资源软删除
+
+```ts
+import { defineResource } from '@mtpc/core'
+import { createSoftDeletePlugin } from '@mtpc/soft-delete'
+
+const plugin = createSoftDeletePlugin()
+
+const userResource = defineResource({
+  name: 'user',
+  schema: userSchema,
+  metadata: {
+    softDelete: {
+      enabled: true,
+      deletedAtColumn: 'deleted_at',
+      deletedByColumn: 'deleted_by',
+    },
+  },
+  hooks: {
+    beforeSoftDelete: async (ctx, id) => {
+      // 记录审计日志
+      await auditLog(ctx, {
+        action: 'soft_delete',
+        resource: 'user',
+        resourceId: id,
+      })
+    },
+  },
+})
+```
+
+## 使用示例
+
+### 启用软删除
+
+```ts
+import { createMTPC } from '@mtpc/core'
+import { createSoftDeletePlugin } from '@mtpc/soft-delete'
+
+// 创建软删除插件
+const plugin = createSoftDeletePlugin({
+  enabled: true,
+  deletedAtColumn: 'deleted_at',
+  deletedByColumn: 'deleted_by',
+})
+
+// 创建 MTPC 实例
+const mtpc = createMTPC()
+
+// 注册插件
+mtpc.use(plugin)
+
+await mtpc.init()
+```
+
+### 软删除数据
+
+```ts
+import { createMTPC } from '@mtpc/core'
+import { createSoftDeletePlugin } from '@mtpc/soft-delete'
+
+const plugin = createSoftDeletePlugin()
+const mtpc = createMTPC()
+mtpc.use(plugin)
+await mtpc.init()
+
+// 软删除用户
+await plugin.softDelete('user', 'user-123', 'admin')
+
+// 批量软删除
+await plugin.softDeleteMany('user', ['user-123', 'user-456', 'user-789'])
+```
+
+### 恢复数据
+
+```ts
+// 恢复单个用户
+await plugin.restore('user', 'user-123')
+
+// 批量恢复
+await plugin.restoreMany('user', ['user-123', 'user-456'])
+```
+
+### 查询已删除数据
+
+```ts
+// 查询已删除用户
+const deletedUsers = await plugin.findDeleted('user', {
+  page: 1,
+  pageSize: 20,
+})
+
+// 统计已删除用户数量
+const count = await plugin.countDeleted('user')
+
+console.log(`已删除用户数量: ${count}`)
+```
+
+### 彻底删除数据
+
+```ts
+// 彻底删除单个用户
+await plugin.hardDelete('user', 'user-123', 'admin')
+
+// 批量彻底删除
+await plugin.hardDeleteMany('user', ['user-123', 'user-456'])
+```
+
+### 集成审计日志
+
+```ts
+import { createMTPC } from '@mtpc/core'
+import { createSoftDeletePlugin } from '@mtpc/soft-delete'
+import { createAuditPlugin } from '@mtpc/audit'
+
+// 创建插件
+const softDeletePlugin = createSoftDeletePlugin()
+const auditPlugin = createAuditPlugin()
+
+// 创建 MTPC 实例
+const mtpc = createMTPC()
+
+// 注册插件
+mtpc.use(softDeletePlugin)
+mtpc.use(auditPlugin)
+
+await mtpc.init()
+
+// 软删除操作会自动记录审计日志
+await plugin.softDelete('user', 'user-123', 'admin')
+```
+
+## 最佳实践
+
+### 数据保留策略
+
+| 数据类型 | 推荐保留期 | 推荐清理策略 |
+|----------|-----------|---------------|
+| 用户数据 | 30-90 天 | 90 天后清理 |
+| 订单数据 | 1-3 年 | 3 年后清理 |
+| 日志数据 | 7-30 天 | 30 天后清理 |
+| 审计数据 | 1 年 | 1 年后归档 |
+
+### 性能优化
+
+1. **索引优化**：为软删除字段添加索引
+2. **查询优化**：使用过滤条件避免全表扫描
+3. **分区表**：按删除时间分区大表
+4. **定期清理**：定期清理过期数据
+
+### 安全考虑
+
+1. **权限控制**：彻底删除需要特殊权限
+2. **审计追踪**：记录所有删除操作
+3. **数据恢复**：限制恢复权限
+4. **数据隔离**：确保租户隔离
+
+---
+
+**继续学习：** [开发指南](/docs/guides) →

@@ -4,6 +4,7 @@ import type { FC, ReactNode } from 'react'
 import { useMDXComponents } from '../mdx-components'
 
 // eslint-disable-next-line react-hooks/rules-of-hooks -- isn't react hook
+// biome-ignore lint/correctness/useHookAtTopLevel: <1>
 const { code: Code } = useMDXComponents()
 
 const ExternalLink: FC<{ children: ReactNode }> = ({ children }) => {
@@ -109,97 +110,177 @@ export default {
     type: 'page',
     display: 'hidden'
   },
-  docs: {
+  docs:{
     type: 'page',
-    title: 'Documentation',
-    items: {
-      index: '',
-      'file-conventions': { items: FILE_CONVENTIONS },
-      guide: { items: GUIDE },
-      advanced: { items: ADVANCED },
-      'built-ins': '',
-      _: {
-        type: 'separator',
-        title: 'Themes'
+    title: '文档',
+    items:{
+      index:'',
+      'getting-started': {
+        title: '快速开始',
       },
-      'docs-theme': {
+      architecture: {
+        title: '架构概览',
+      },
+      packages: {
+        title: '核心包',
         items: {
-          start: '',
-          'built-ins': {
-            items: {
-              layout: ''
-            }
-          }
+          core: { title: '@mtpc/core' },
+          rbac: { title: '@mtpc/rbac' },
+          'adapter-hono': { title: '@mtpc/adapter-hono' },
+          'adapter-drizzle': { title: '@mtpc/adapter-drizzle' },
+        },
+      },
+      api:{
+        title:'API',
+        items:{
+          core: { title: 'Core API' },
+          rbac: { title: 'RBAC API' },
+          'adapter-hono': { title: 'Hono Adapter API' },
+          'adapter-drizzle': { title: 'Drizzle Adapter API' },
         }
       },
-      'blog-theme': { items: BLOG_THEME },
-      'custom-theme': '',
-      __: {
-        type: 'separator',
-        title: 'More'
+      migration: {
+        title: '迁移和升级',
+        items: {
+          'from-other-systems': { title: '从其他系统迁移' },
+          upgrading: { title: '版本升级' },
+        },
       },
-      'about-link': {
-        title: 'About Nextra',
-        href: '/about'
+      troubleshooting: {
+        title: '故障排除',
+        items: {
+          faq: { title: '常见问题' },
+          debugging: { title: '调试指南' },
+        },
       },
-      'next.js-link': {
-        title: 'Next.js Docs',
-        href: 'https://nextjs.org?utm_source=nextra.site&utm_medium=referral&utm_campaign=sidebar'
+      contributing: {
+        title: '贡献指南',
       },
-      'migration-from-v3': {
-        title: 'Migration from Nextra v3',
-        href: 'https://the-guild.dev/blog/nextra-4?utm_source=nextra.site&utm_campaign=sidebar&utm_content=sidebar_link#nextra-theme-docs-changes'
-      }
     }
   },
-  api: {
-    type: 'page'
-  },
-  versions: {
-    type: 'menu',
-    title: 'Versions',
+  guides: {
+    type: 'page',
+    title: '开发指南',
     items: {
-      _3: {
-        title: 'Nextra v3 Docs',
-        href: 'https://nextra-v2-7hslbun8z-shud.vercel.app'
-      },
-      _2: {
-        title: 'Nextra v2 Docs',
-        href: 'https://nextra-v2-oe0zrpzjp-shud.vercel.app'
-      }
+      index:'',
+      'resource-definition': { title: '资源定义最佳实践' },
+      'permission-design': { title: '权限设计最佳实践' },
+      'multi-tenant': { title: '多租户实现指南' },
+      'performance-optimization': { title: '性能优化指南' },
+      'plugin-development': { title: '插件开发指南' },
+    },
+  },
+  extensions:{
+    type: 'page',
+    title: '拓展',
+    items:{
+      'policy-cache': { title: '@mtpc/policy-cache' },
+      explain: { title: '@mtpc/explain' },
+      audit: { title: '@mtpc/audit' },
+      'data-scope': { title: '@mtpc/data-scope' },
+      'soft-delete': { title: '@mtpc/soft-delete' },
     }
   },
-  blog: {
+  tutorials:{
     type: 'page',
-    theme: {
-      typesetting: 'article',
-      toc: false
+    title: '示例教程',
+    items:{
+      'blog-api': { title: '博客 API 教程' },
+      ecommerce: { title: '电商系统教程' },
+      'multi-tenant-saas': { title: '多租户 SaaS 教程' },
     }
   },
-  about: {
-    type: 'page',
-    theme: {
-      typesetting: 'article'
-    }
-  },
-  showcase: {
-    type: 'page',
-    theme: {
-      copyPage: false,
-      typesetting: 'article',
-      layout: 'full',
-      timestamp: false,
-      toc: false
-    }
-  },
-  sponsors: {
-    type: 'page',
-    theme: {
-      copyPage: false,
-      typesetting: 'article',
-      layout: 'full',
-      timestamp: false,
-      toc: false
-    }
-  }
+  // docs: {
+  //   type: 'page',
+  //   title: '文档',
+  //   items: {
+  //     index: '',
+  //     'file-conventions': { items: FILE_CONVENTIONS },
+  //     guide: { items: GUIDE },
+  //     advanced: { items: ADVANCED },
+  //     'built-ins': '',
+  //     _: {
+  //       type: 'separator',
+  //       title: 'Themes'
+  //     },
+  //     'docs-theme': {
+  //       items: {
+  //         start: '',
+  //         'built-ins': {
+  //           items: {
+  //             layout: ''
+  //           }
+  //         }
+  //       }
+  //     },
+  //     'blog-theme': { items: BLOG_THEME },
+  //     'custom-theme': '',
+  //     __: {
+  //       type: 'separator',
+  //       title: 'More'
+  //     },
+  //     'about-link': {
+  //       title: 'About Nextra',
+  //       href: '/about'
+  //     },
+  //     'next.js-link': {
+  //       title: 'Next.js Docs',
+  //       href: 'https://nextjs.org?utm_source=nextra.site&utm_medium=referral&utm_campaign=sidebar'
+  //     },
+  //     'migration-from-v3': {
+  //       title: 'Migration from Nextra v3',
+  //       href: 'https://the-guild.dev/blog/nextra-4?utm_source=nextra.site&utm_campaign=sidebar&utm_content=sidebar_link#nextra-theme-docs-changes'
+  //     }
+  //   }
+  // },
+  // api: {
+  //   type: 'page'
+  // },
+  // versions: {
+  //   type: 'menu',
+  //   title: 'Versions',
+  //   items: {
+  //     _3: {
+  //       title: 'Nextra v3 Docs',
+  //       href: 'https://nextra-v2-7hslbun8z-shud.vercel.app'
+  //     },
+  //     _2: {
+  //       title: 'Nextra v2 Docs',
+  //       href: 'https://nextra-v2-oe0zrpzjp-shud.vercel.app'
+  //     }
+  //   }
+  // },
+  // blog: {
+  //   type: 'page',
+  //   theme: {
+  //     typesetting: 'article',
+  //     toc: false
+  //   }
+  // },
+  // about: {
+  //   type: 'page',
+  //   theme: {
+  //     typesetting: 'article'
+  //   }
+  // },
+  // showcase: {
+  //   type: 'page',
+  //   theme: {
+  //     copyPage: false,
+  //     typesetting: 'article',
+  //     layout: 'full',
+  //     timestamp: false,
+  //     toc: false
+  //   }
+  // },
+  // sponsors: {
+  //   type: 'page',
+  //   theme: {
+  //     copyPage: false,
+  //     typesetting: 'article',
+  //     layout: 'full',
+  //     timestamp: false,
+  //     toc: false
+  //   }
+  // }
 }

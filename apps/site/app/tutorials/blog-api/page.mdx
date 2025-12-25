@@ -1,0 +1,717 @@
+---
+title: 博客 API 教程
+description: 使用 MTPC 构建博客 API
+---
+
+# 博客 API 教程
+
+本教程将指导您使用 MTPC 构建一个完整的博客 API，包括文章管理、评论系统和用户权限控制。
+
+## 项目概述
+
+我们将构建一个具有以下功能的博客 API：
+
+- 用户注册和登录
+- 文章 CRUD 操作
+- 评论系统
+- 角色和权限管理
+- 多租户支持
+
+## 技术栈
+
+- **MTPC**: 权限和资源管理
+- **Hono**: Web 框架
+- **Drizzle ORM**: 数据库 ORM
+- **PostgreSQL**: 数据库
+- **Zod**: 数据验证
+
+## 项目结构
+
+```
+blog-api/
+├── src/
+│   ├── config/
+│   │   └── config.ts
+│   ├── db/
+│   │   ├── schema.ts
+│   │   └── connection.ts
+│   ├── resources/
+│   │   ├── user.ts
+│   │   ├── post.ts
+│   │   └── comment.ts
+│   ├── routes/
+│   │   ├── auth.ts
+│   │   ├── posts.ts
+│   │   └── comments.ts
+│   └── index.ts
+├── package.json
+└── tsconfig.json
+```
+
+## 步骤 1: 项目初始化
+
+### 安装依赖
+
+```bash
+pnpm init
+pnpm add @mtpc/core @mtpc/rbac @mtpc/adapter-hono @mtpc/adapter-drizzle
+pnpm add hono drizzle-orm postgres
+pnpm add zod bcryptjs jsonwebtoken
+pnpm add -D @types/bcryptjs @types/jsonwebtoken typescript
+```
+
+### 配置 TypeScript
+
+创建 `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}
+```
+
+## 步骤 2: 数据库配置
+
+### 创建数据库连接
+
+创建 `src/db/connection.ts`:
+
+```typescript
+import { drizzle } from 'drizzle-orm/postgres-js'
+import postgres from 'postgres'
+
+const connectionString = process.env.DATABASE_URL || 'postgresql://localhost/blog'
+
+export const db = drizzle(postgres(connectionString))
+```
+
+### 定义数据库 Schema
+
+创建 `src/db/schema.ts`:
+
+```typescript
+import { pgTable, serial, text, timestamp, uuid, integer } from 'drizzle-orm/pg-core'
+
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull().unique(),
+  password: text('password').notNull(),
+  name: text('name').notNull(),
+  role: text('role').notNull().default('user'),
+  tenantId: uuid('tenant_id').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const posts = pgTable('posts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  authorId: uuid('author_id').notNull().references(() => users.id),
+  tenantId: uuid('tenant_id').notNull(),
+  status: text('status').notNull().default('draft'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const comments = pgTable('comments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  content: text('content').notNull(),
+  postId: uuid('post_id').notNull().references(() => posts.id),
+  authorId: uuid('author_id').notNull().references(() => users.id),
+  tenantId: uuid('tenant_id').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+```
+
+## 步骤 3: 定义资源
+
+### 用户资源
+
+创建 `src/resources/user.ts`:
+
+```typescript
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+const userSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  name: z.string().min(1).max(100),
+  role: z.enum(['admin', 'author', 'reader']),
+  tenantId: z.string().uuid(),
+})
+
+export const userResource = defineResource({
+  name: 'user',
+  schema: userSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: false,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建用户', scope: 'tenant' },
+    { action: 'read', description: '查看用户', scope: 'tenant' },
+    { action: 'update', description: '更新用户', scope: 'own' },
+    { action: 'list', description: '列出用户', scope: 'tenant' },
+  ],
+  metadata: {
+    displayName: '用户',
+    pluralName: '用户列表',
+    group: 'user-management',
+  },
+})
+```
+
+### 文章资源
+
+创建 `src/resources/post.ts`:
+
+```typescript
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+const postSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().min(1).max(200),
+  content: z.string().min(1),
+  authorId: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  status: z.enum(['draft', 'published', 'archived']),
+})
+
+export const postResource = defineResource({
+  name: 'post',
+  schema: postSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: true,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建文章', scope: 'tenant' },
+    { action: 'read', description: '查看文章', scope: 'tenant' },
+    { action: 'update', description: '更新文章', scope: 'own' },
+    { action: 'delete', description: '删除文章', scope: 'own' },
+    { action: 'publish', description: '发布文章', scope: 'own' },
+  ],
+  metadata: {
+    displayName: '文章',
+    pluralName: '文章列表',
+    group: 'content-management',
+  },
+  relations: [{
+    name: 'author',
+    type: 'belongsTo',
+    target: 'user',
+    foreignKey: 'authorId',
+    description: '文章作者',
+  }],
+})
+```
+
+### 评论资源
+
+创建 `src/resources/comment.ts`:
+
+```typescript
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+const commentSchema = z.object({
+  id: z.string().uuid(),
+  content: z.string().min(1).max(1000),
+  postId: z.string().uuid(),
+  authorId: z.string().uuid(),
+  tenantId: z.string().uuid(),
+})
+
+export const commentResource = defineResource({
+  name: 'comment',
+  schema: commentSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: true,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建评论', scope: 'tenant' },
+    { action: 'read', description: '查看评论', scope: 'tenant' },
+    { action: 'update', description: '更新评论', scope: 'own' },
+    { action: 'delete', description: '删除评论', scope: 'own' },
+  ],
+  metadata: {
+    displayName: '评论',
+    pluralName: '评论列表',
+    group: 'content-management',
+  },
+  relations: [{
+    name: 'post',
+    type: 'belongsTo',
+    target: 'post',
+    foreignKey: 'postId',
+    description: '所属文章',
+  }],
+})
+```
+
+## 步骤 4: 配置 MTPC
+
+创建 `src/config/config.ts`:
+
+```typescript
+import { createMTPC } from '@mtpc/core'
+import { createRBACPlugin } from '@mtpc/rbac'
+import { userResource, postResource, commentResource } from '../resources'
+
+const mtpc = createMTPC({
+  registry: {
+    resources: [userResource, postResource, commentResource],
+  },
+})
+
+const rbacPlugin = createRBACPlugin()
+mtpc.use(rbacPlugin)
+
+export async function initMTPC() {
+  await mtpc.init()
+
+  // 创建默认角色
+  await rbacPlugin.createRole('admin', {
+    permissions: [
+      { resource: 'user', action: 'create' },
+      { resource: 'user', action: 'read' },
+      { resource: 'user', action: 'update' },
+      { resource: 'user', action: 'list' },
+      { resource: 'post', action: 'create' },
+      { resource: 'post', action: 'read' },
+      { resource: 'post', action: 'update' },
+      { resource: 'post', action: 'delete' },
+      { resource: 'post', action: 'publish' },
+      { resource: 'post', action: 'list' },
+      { resource: 'comment', action: 'create' },
+      { resource: 'comment', action: 'read' },
+      { resource: 'comment', action: 'update' },
+      { resource: 'comment', action: 'delete' },
+      { resource: 'comment', action: 'list' },
+    ],
+  })
+
+  await rbacPlugin.createRole('author', {
+    permissions: [
+      { resource: 'user', action: 'read' },
+      { resource: 'user', action: 'update', scope: 'own' },
+      { resource: 'post', action: 'create' },
+      { resource: 'post', action: 'read' },
+      { resource: 'post', action: 'update', scope: 'own' },
+      { resource: 'post', action: 'delete', scope: 'own' },
+      { resource: 'post', action: 'publish', scope: 'own' },
+      { resource: 'post', action: 'list' },
+      { resource: 'comment', action: 'create' },
+      { resource: 'comment', action: 'read' },
+      { resource: 'comment', action: 'update', scope: 'own' },
+      { resource: 'comment', action: 'delete', scope: 'own' },
+    ],
+  })
+
+  await rbacPlugin.createRole('reader', {
+    permissions: [
+      { resource: 'user', action: 'read', scope: 'own' },
+      { resource: 'post', action: 'read' },
+      { resource: 'post', action: 'list' },
+      { resource: 'comment', action: 'create' },
+      { resource: 'comment', action: 'read' },
+      { resource: 'comment', action: 'update', scope: 'own' },
+      { resource: 'comment', action: 'delete', scope: 'own' },
+    ],
+  })
+}
+
+export { mtpc, rbacPlugin }
+```
+
+## 步骤 5: 创建路由
+
+### 认证路由
+
+创建 `src/routes/auth.ts`:
+
+```typescript
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
+import { db } from '../db/connection'
+import { users } from '../db/schema'
+import { eq } from 'drizzle-orm'
+
+const authRouter = new Hono()
+
+const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  name: z.string().min(1),
+  tenantId: z.string().uuid(),
+})
+
+authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
+  const { email, password, name, tenantId } = c.req.valid('json')
+
+  // 检查用户是否已存在
+  const existingUser = await db.select().from(users).where(eq(users.email, email))
+  if (existingUser.length > 0) {
+    return c.json({ error: 'User already exists' }, 400)
+  }
+
+  // 加密密码
+  const hashedPassword = await bcrypt.hash(password, 10)
+
+  // 创建用户
+  const [newUser] = await db.insert(users).values({
+    email,
+    password: hashedPassword,
+    name,
+    tenantId,
+    role: 'reader',
+  }).returning()
+
+  // 绑定默认角色
+  await rbacPlugin.bindRole(newUser.id, 'reader')
+
+  // 生成 JWT
+  const token = jwt.sign(
+    { userId: newUser.id, tenantId: newUser.tenantId, roles: ['reader'] },
+    process.env.JWT_SECRET || 'secret',
+    { expiresIn: '7d' }
+  )
+
+  return c.json({ token, user: { id: newUser.id, email: newUser.email, name: newUser.name } })
+})
+
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string(),
+})
+
+authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
+  const { email, password } = c.req.valid('json')
+
+  // 查找用户
+  const [user] = await db.select().from(users).where(eq(users.email, email))
+  if (!user) {
+    return c.json({ error: 'Invalid credentials' }, 401)
+  }
+
+  // 验证密码
+  const isValidPassword = await bcrypt.compare(password, user.password)
+  if (!isValidPassword) {
+    return c.json({ error: 'Invalid credentials' }, 401)
+  }
+
+  // 获取用户角色
+  const roleBindings = await rbacPlugin.getRoleBindings(user.id)
+  const roles = roleBindings.map(b => b.roleId)
+
+  // 生成 JWT
+  const token = jwt.sign(
+    { userId: user.id, tenantId: user.tenantId, roles },
+    process.env.JWT_SECRET || 'secret',
+    { expiresIn: '7d' }
+  )
+
+  return c.json({ token, user: { id: user.id, email: user.email, name: user.name, roles } })
+})
+
+export { authRouter }
+```
+
+### 文章路由
+
+创建 `src/routes/posts.ts`:
+
+```typescript
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
+import { db } from '../db/connection'
+import { posts } from '../db/schema'
+import { eq, and } from 'drizzle-orm'
+import { createContext } from '@mtpc/core'
+import { mtpc } from '../config/config'
+
+const postsRouter = new Hono()
+
+// 认证中间件
+const authMiddleware = async (c: any, next: any) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any
+    c.set('user', decoded)
+    await next()
+  } catch (error) {
+    return c.json({ error: 'Invalid token' }, 401)
+  }
+}
+
+postsRouter.use(authMiddleware)
+
+const createPostSchema = z.object({
+  title: z.string().min(1).max(200),
+  content: z.string().min(1),
+  status: z.enum(['draft', 'published', 'archived']).default('draft'),
+})
+
+postsRouter.post('/', zValidator('json', createPostSchema), async (c) => {
+  const user = c.get('user')
+  const data = c.req.valid('json')
+
+  // 检查权限
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'post', 'create')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  // 创建文章
+  const [newPost] = await db.insert(posts).values({
+    ...data,
+    authorId: user.userId,
+    tenantId: user.tenantId,
+  }).returning()
+
+  return c.json(newPost)
+})
+
+postsRouter.get('/', async (c) => {
+  const user = c.get('user')
+
+  // 检查权限
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'post', 'list')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  // 获取文章列表
+  const allPosts = await db.select().from(posts).where(eq(posts.tenantId, user.tenantId))
+
+  return c.json(allPosts)
+})
+
+postsRouter.get('/:id', async (c) => {
+  const user = c.get('user')
+  const id = c.req.param('id')
+
+  // 检查权限
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'post', 'read')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  // 获取文章
+  const [post] = await db.select().from(posts).where(
+    and(eq(posts.id, id), eq(posts.tenantId, user.tenantId))
+  )
+
+  if (!post) {
+    return c.json({ error: 'Post not found' }, 404)
+  }
+
+  return c.json(post)
+})
+
+postsRouter.put('/:id', zValidator('json', createPostSchema.partial()), async (c) => {
+  const user = c.get('user')
+  const id = c.req.param('id')
+  const data = c.req.valid('json')
+
+  // 检查权限
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+    resource: { id, authorId: user.userId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'post', 'update')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  // 更新文章
+  const [updatedPost] = await db.update(posts)
+    .set({ ...data, updatedAt: new Date() })
+    .where(and(eq(posts.id, id), eq(posts.tenantId, user.tenantId)))
+    .returning()
+
+  return c.json(updatedPost)
+})
+
+postsRouter.delete('/:id', async (c) => {
+  const user = c.get('user')
+  const id = c.req.param('id')
+
+  // 检查权限
+  const ctx = createContext({
+    subject: { id: user.userId, roles: user.roles },
+    tenant: { id: user.tenantId },
+    resource: { id, authorId: user.userId },
+  })
+
+  const hasPermission = await mtpc.checkPermission(ctx, 'post', 'delete')
+  if (!hasPermission.allowed) {
+    return c.json({ error: 'Permission denied' }, 403)
+  }
+
+  // 删除文章
+  await db.delete(posts).where(and(eq(posts.id, id), eq(posts.tenantId, user.tenantId)))
+
+  return c.json({ message: 'Post deleted' })
+})
+
+export { postsRouter }
+```
+
+## 步骤 6: 创建应用
+
+创建 `src/index.ts`:
+
+```typescript
+import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import { initMTPC } from './config/config'
+import { authRouter } from './routes/auth'
+import { postsRouter } from './routes/posts'
+
+const app = new Hono()
+
+app.use('*', cors())
+
+app.route('/auth', authRouter)
+app.route('/posts', postsRouter)
+
+app.get('/', (c) => {
+  return c.json({ message: 'Blog API' })
+})
+
+async function main() {
+  await initMTPC()
+
+  Bun.serve({
+    fetch: app.fetch,
+    port: 3000,
+  })
+
+  console.log('Server running on http://localhost:3000')
+}
+
+main()
+```
+
+## 步骤 7: 运行应用
+
+```bash
+# 启动开发服务器
+pnpm dev
+```
+
+## 测试 API
+
+### 注册用户
+
+```bash
+curl -X POST http://localhost:3000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "password123",
+    "name": "John Doe",
+    "tenantId": "123e4567-e89b-12d3-a456-426614174000"
+  }'
+```
+
+### 登录
+
+```bash
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "password123"
+  }'
+```
+
+### 创建文章
+
+```bash
+curl -X POST http://localhost:3000/posts \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "title": "My First Post",
+    "content": "This is my first blog post",
+    "status": "published"
+  }'
+```
+
+### 获取文章列表
+
+```bash
+curl -X GET http://localhost:3000/posts \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## 总结
+
+本教程展示了如何使用 MTPC 构建一个完整的博客 API，包括：
+
+1. 项目初始化和依赖安装
+2. 数据库配置和 Schema 定义
+3. 资源定义（用户、文章、评论）
+4. MTPC 配置和 RBAC 设置
+5. 路由创建和权限检查
+6. API 测试
+
+您可以根据需要扩展此项目，添加更多功能，如：
+
+- 文章分类和标签
+- 文章搜索
+- 评论回复
+- 用户关注
+- 文章点赞
+
+---
+
+**继续学习：** [电商系统教程](/docs/tutorials/ecommerce) →

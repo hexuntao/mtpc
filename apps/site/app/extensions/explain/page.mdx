@@ -1,0 +1,427 @@
+---
+title: mtpc/explain 权限决策解释扩展
+description: 详细介绍权限解释扩展的功能和使用方法
+---
+
+# @mtpc/explain 权限决策解释扩展
+
+`@mtpc/explain` 提供对权限决策过程的**解释能力**，用于调试权限问题和审计权限决策。
+
+## 扩展概述
+
+### 为什么需要权限解释
+
+在复杂的权限系统中，权限决策可能涉及：
+
+1. 多个角色和权限
+2. 策略规则组合
+3. 条件表达式
+4. 继承关系
+
+当权限检查失败时，快速定位原因非常重要。`@mtpc/explain` 提供：
+
+- 权限决策追踪
+- 决策路径分析
+- 条件评估结果
+- 人类可读的解释输出
+
+### Explain 的设计原则
+
+- **不影响权限判定结果**：作为 Side-channel 存在
+- **面向 Admin UI、Debug、Audit**：用于诊断和审计
+- **零性能开销**：未启用时不影响性能
+- **可配置输出格式**：支持多种输出格式
+
+### 适用场景
+
+- 调试权限问题
+- 审计权限决策
+- 权限管理界面
+- 安全审计
+- 用户权限查询
+
+## 核心功能
+
+### 权限决策追踪
+
+记录权限决策的完整过程。
+
+```ts
+import { createExplainPlugin } from '@mtpc/explain'
+
+const explainPlugin = createExplainPlugin({
+  enabled: true,
+  storage: 'memory', // 或 'database'
+})
+```
+
+**追踪信息：**
+
+- 请求上下文（租户、主体、资源、动作）
+- 检查的权限
+- 评估的策略列表
+- 每个策略的评估结果
+- 最终决策（允许/拒绝）
+- 决策原因
+
+### 决策路径分析
+
+分析权限决策的执行路径。
+
+```ts
+const decision = await explainer.explain({
+  tenant: { id: 'tenant-001' },
+  subject: { id: 'user-123', type: 'user' },
+  resource: 'user',
+  action: 'delete',
+})
+
+console.log(decision.path)
+// [
+//   { step: 'check_direct_permissions', result: 'not_found' },
+//   { step: 'check_wildcard_permissions', result: 'not_found' },
+//   { step: 'evaluate_policies', result: 'matched: policy-001' },
+//   { step: 'final_decision', result: 'denied' },
+// ]
+```
+
+### 条件评估结果
+
+记录每个条件的评估结果。
+
+```ts
+console.log(decision.conditions)
+// {
+//   policy: 'policy-001',
+//   conditions: [
+//     { field: 'resource.ownerId', operator: 'eq', value: 'subject.id', result: true },
+//     { field: 'request.timestamp', operator: 'between', value: {...}, result: false },
+//   ],
+// }
+```
+
+## API 参考
+
+### Explainer 类
+
+```ts
+class Explainer {
+  constructor(options?: ExplainerOptions)
+  
+  // 解释权限决策
+  async explain(context: ExplainContext): Promise<ExplainResult>
+  
+  // 批量解释
+  async explainMany(contexts: ExplainContext[]): Promise<ExplainResult[]>
+  
+  // 获取历史记录
+  async getHistory(
+    tenantId: string,
+    subjectId?: string,
+    limit?: number
+  ): Promise<ExplainResult[]>
+}
+```
+
+### ExplainContext 接口
+
+```ts
+interface ExplainContext {
+  tenant: TenantContext;
+  subject: SubjectContext;
+  resource: string;
+  action: string;
+  resourceId?: string;
+  data?: Record<string, unknown>;
+}
+```
+
+### ExplainResult 接口
+
+```ts
+interface ExplainResult {
+  // 决策结果
+  allowed: boolean;
+  
+  // 检查的权限
+  permission: string;
+  
+  // 决策原因
+  reason: string;
+  
+  // 决策路径
+  path: ExplainStep[];
+  
+  // 命中的策略
+  matchedPolicies: string[];
+  
+  // 条件评估结果
+  conditions?: ExplainCondition[];
+  
+  // 时间戳
+  timestamp: Date;
+}
+```
+
+### ExplainStep 接口
+
+```ts
+interface ExplainStep {
+  step: string;
+  description: string;
+  result: string | boolean;
+  duration?: number;
+}
+```
+
+### ExplainCondition 接口
+
+```ts
+interface ExplainCondition {
+  policy: string;
+  field: string;
+  operator: string;
+  expected: unknown;
+  actual: unknown;
+  result: boolean;
+}
+```
+
+### Formatter 类
+
+```ts
+class Formatter {
+  // 格式化为文本
+  formatText(result: ExplainResult): string;
+  
+  // 格式化为 JSON
+  formatJSON(result: ExplainResult): string;
+  
+  // 格式化为 HTML
+  formatHTML(result: ExplainResult): string;
+  
+  // 格式化为 Markdown
+  formatMarkdown(result: ExplainResult): string;
+}
+```
+
+## 集成方式
+
+### 作为 MTPC 插件
+
+```ts
+import { createMTPC } from '@mtpc/core'
+import { createExplainPlugin } from '@mtpc/explain'
+
+// 创建 Explain 插件
+const explainPlugin = createExplainPlugin({
+  enabled: true,
+  storage: 'memory',
+})
+
+// 创建 MTPC 实例
+const mtpc = createMTPC()
+
+// 注册插件
+mtpc.use(explainPlugin)
+
+await mtpc.init()
+
+// 现在权限检查会自动记录解释
+await mtpc.checkPermission({
+  tenant: { id: 'tenant-001' },
+  subject: { id: 'user-123', type: 'user' },
+  resource: 'user',
+  action: 'delete',
+})
+```
+
+### 自定义解释输出
+
+```ts
+import { createExplainPlugin } from '@mtpc/explain'
+
+const explainPlugin = createExplainPlugin({
+  enabled: true,
+  formatter: {
+    formatText: (result) => {
+      return `权限 ${result.permission} ${result.allowed ? '允许' : '拒绝'}\n` +
+             `原因: ${result.reason}\n` +
+             `路径: ${result.path.map(s => s.step).join(' → ')}`
+    },
+  },
+})
+```
+
+### 自定义存储
+
+```ts
+import { createExplainPlugin } from '@mtpc/explain'
+
+// 自定义存储实现
+const customStorage = {
+  async save(result: ExplainResult) {
+    await db.insert('explain_history', result)
+  },
+  async query(options) {
+    return await db.query('explain_history', options)
+  },
+}
+
+const explainPlugin = createExplainPlugin({
+  enabled: true,
+  storage: customStorage,
+})
+```
+
+## 使用示例
+
+### 获取权限决策解释
+
+```ts
+import { createExplainPlugin } from '@mtpc/explain'
+
+const explainer = createExplainPlugin()
+
+const decision = await explainer.explain({
+  tenant: { id: 'tenant-001' },
+  subject: { id: 'user-123', type: 'user' },
+  resource: 'user',
+  action: 'delete',
+})
+
+console.log('权限决策:', decision)
+// {
+//   allowed: false,
+//   permission: 'user:delete',
+//   reason: 'Permission not granted',
+//   path: [...],
+//   matchedPolicies: [],
+//   conditions: [...],
+//   timestamp: new Date(),
+// }
+```
+
+### 格式化解释输出
+
+```ts
+import { createExplainPlugin } from '@mtpc/explain'
+import { Formatter } from '@mtpc/explain'
+
+const explainer = createExplainPlugin()
+const formatter = new Formatter()
+
+const decision = await explainer.explain({
+  tenant: { id: 'tenant-001' },
+  subject: { id: 'user-123', type: 'user' },
+  resource: 'user',
+  action: 'delete',
+})
+
+// 格式化为文本
+const text = formatter.formatText(decision)
+console.log(text)
+
+// 格式化为 Markdown
+const markdown = formatter.formatMarkdown(decision)
+console.log(markdown)
+```
+
+### 集成到 Admin UI
+
+```ts
+import { createExplainPlugin } from '@mtpc/explain'
+
+const explainer = createExplainPlugin()
+
+// API 端点：获取权限解释
+app.get('/api/permissions/explain', async (c) => {
+  const { tenant, subject, resource, action } = await c.req.json()
+  
+  const decision = await explainer.explain({
+    tenant,
+    subject,
+    resource,
+    action,
+  })
+  
+  return c.json({
+    success: true,
+    data: {
+      explanation: formatter.formatText(decision),
+      raw: decision,
+    },
+  })
+})
+```
+
+### 查询历史记录
+
+```ts
+import { createExplainPlugin } from '@mtpc/explain'
+
+const explainer = createExplainPlugin()
+
+// 获取用户的历史记录
+const history = await explainer.getHistory('tenant-001', 'user-123', 10)
+
+// 获取租户的所有历史记录
+const allHistory = await explainer.getHistory('tenant-001', undefined, 100)
+```
+
+## 最佳实践
+
+### 性能考虑
+
+1. **按需启用**：只在需要调试时启用 Explain
+2. **异步记录**：使用异步方式记录，不影响权限检查性能
+3. **存储限制**：限制历史记录数量，避免无限增长
+
+```ts
+const explainPlugin = createExplainPlugin({
+  enabled: process.env.NODE_ENV === 'development',
+  storage: {
+    maxHistory: 1000,
+    ttl: 7 * 24 * 60 * 60 * 1000, // 7 天
+  },
+})
+```
+
+### 数据隐私
+
+1. **敏感信息处理**：避免记录敏感数据
+2. **访问控制**：限制谁可以查看权限解释
+3. **数据保留**：设置合理的保留策略
+
+```ts
+const explainPlugin = createExplainPlugin({
+  enabled: true,
+  storage: {
+    // 脱敏处理
+    sanitize: (result) => ({
+      ...result,
+      subject: { id: result.subject.id, type: result.subject.type },
+    }),
+  },
+})
+```
+
+### 审计日志集成
+
+```ts
+import { createExplainPlugin } from '@mtpc/explain'
+import { AuditPlugin } from '@mtpc/audit'
+
+const explainPlugin = createExplainPlugin()
+const auditPlugin = AuditPlugin()
+
+// 集成审计日志
+mtpc.use(explainPlugin)
+mtpc.use(auditPlugin)
+
+// 权限检查会同时记录解释和审计
+```
+
+---
+
+**继续学习：** [@mtpc/audit](/docs/extensions/audit) →

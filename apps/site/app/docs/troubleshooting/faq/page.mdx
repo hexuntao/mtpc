@@ -1,0 +1,266 @@
+---
+title: 常见问题
+description: MTPC 常见问题解答
+---
+
+# 常见问题
+
+本文档收集了 MTPC 使用过程中的常见问题和解决方案。
+
+## 安装和配置
+
+### Q: 如何安装 MTPC？
+
+A: 使用 pnpm 或 npm 安装：
+
+```bash
+# 使用 pnpm
+pnpm add @mtpc/core @mtpc/rbac @mtpc/adapter-hono @mtpc/adapter-drizzle
+
+# 使用 npm
+npm install @mtpc/core @mtpc/rbac @mtpc/adapter-hono @mtpc/adapter-drizzle
+```
+
+### Q: MTPC 支持哪些数据库？
+
+A: MTPC 通过 Drizzle ORM 支持多种数据库：
+- PostgreSQL
+- MySQL
+- SQLite
+- SQL Server
+
+### Q: 如何配置 MTPC？
+
+A: 使用 `createMTPC()` 函数创建 MTPC 实例：
+
+```typescript
+import { createMTPC } from '@mtpc/core'
+
+const mtpc = createMTPC({
+  registry: {
+    resources: [userResource, orderResource],
+  },
+})
+```
+
+## 核心概念
+
+### Q: 什么是资源？
+
+A: 资源是 MTPC 的核心抽象，代表业务实体（如用户、订单、产品）。资源定义了：
+- 数据结构（Schema）
+- CRUD 能力
+- 权限
+- 关系
+- 生命周期钩子
+
+### Q: 什么是权限？
+
+A: 权限定义了对资源的操作能力，如 `user:create`、`order:read`、`product:delete`。权限由资源自动生成，也可以自定义。
+
+### Q: 什么是策略？
+
+A: 策略是权限评估规则，定义了谁可以在什么条件下对什么资源执行什么操作。策略可以是：
+- 基于角色的（RBAC）
+- 基于属性的（ABAC）
+- 自定义的
+
+## 使用问题
+
+### Q: 如何定义自定义权限？
+
+A: 在定义资源时使用 `permissions` 选项：
+
+```typescript
+const orderResource = defineResource({
+  name: 'order',
+  schema: orderSchema,
+  permissions: [
+    { action: 'create', description: '创建订单', scope: 'tenant' },
+    { action: 'read', description: '查看订单', scope: 'tenant' },
+    { action: 'update', description: '更新订单', scope: 'own' },
+    { action: 'delete', description: '删除订单', scope: 'own' },
+    { action: 'export', description: '导出订单', scope: 'tenant' },
+  ],
+})
+```
+
+### Q: 如何实现行级权限？
+
+A: 使用 `@mtpc/data-scope` 扩展：
+
+```typescript
+import { createDataScopePlugin } from '@mtpc/data-scope'
+
+const plugin = createDataScopePlugin()
+
+const orderResource = defineResource({
+  name: 'order',
+  schema: orderSchema,
+  metadata: {
+    dataScope: {
+      enabled: true,
+      defaultScope: 'department',
+      ownerField: 'createdBy',
+    },
+  },
+})
+```
+
+### Q: 如何实现软删除？
+
+A: 使用 `@mtpc/soft-delete` 扩展：
+
+```typescript
+import { createSoftDeletePlugin } from '@mtpc/soft-delete'
+
+const plugin = createSoftDeletePlugin()
+
+const userResource = defineResource({
+  name: 'user',
+  schema: userSchema,
+  metadata: {
+    softDelete: {
+      enabled: true,
+      deletedAtColumn: 'deleted_at',
+      deletedByColumn: 'deleted_by',
+    },
+  },
+})
+```
+
+## 性能优化
+
+### Q: 如何提高权限检查性能？
+
+A: 使用 `@mtpc/policy-cache` 扩展：
+
+```typescript
+import { createPolicyCachePlugin } from '@mtpc/policy-cache'
+
+const plugin = createPolicyCachePlugin({
+  strategy: 'write-through',
+  ttl: 300, // 5 分钟
+})
+```
+
+### Q: 如何减少数据库查询？
+
+A: 使用缓存和批量操作：
+
+```typescript
+// 批量检查权限
+const permissions = await mtpc.checkPermissions(
+  ctx,
+  [
+    { resource: 'user', action: 'create' },
+    { resource: 'order', action: 'read' },
+    { resource: 'product', action: 'update' },
+  ]
+)
+```
+
+## 调试和排查
+
+### Q: 如何查看权限决策过程？
+
+A: 使用 `@mtpc/explain` 扩展：
+
+```typescript
+import { createExplainPlugin } from '@mtpc/explain'
+
+const plugin = createExplainPlugin()
+
+const result = await mtpc.checkPermission(ctx, 'user', 'create')
+console.log(result.explanation)
+```
+
+### Q: 如何记录权限检查日志？
+
+A: 使用 `@mtpc/audit` 扩展：
+
+```typescript
+import { createAuditPlugin } from '@mtpc/audit'
+
+const plugin = createAuditPlugin({
+  store: auditStore,
+})
+```
+
+## 集成问题
+
+### Q: 如何与 Hono 集成？
+
+A: 使用 `@mtpc/adapter-hono`：
+
+```typescript
+import { createMTPCApp } from '@mtpc/adapter-hono'
+
+const app = createMTPCApp({
+  mtpc,
+  resources: [userResource, orderResource],
+})
+```
+
+### Q: 如何与 Drizzle ORM 集成？
+
+A: 使用 `@mtpc/adapter-drizzle`：
+
+```typescript
+import { createDrizzleAdapter } from '@mtpc/adapter-drizzle'
+
+const adapter = createDrizzleAdapter({
+  db,
+  schema: {
+    users,
+    orders,
+    products,
+  },
+})
+```
+
+## 常见错误
+
+### Q: 错误：`Resource not found`
+
+A: 确保资源已注册到 MTPC：
+
+```typescript
+const mtpc = createMTPC({
+  registry: {
+    resources: [userResource, orderResource], // 确保资源在这里
+  },
+})
+```
+
+### Q: 错误：`Permission denied`
+
+A: 检查：
+1. 用户是否有足够的角色
+2. 角色是否绑定到用户
+3. 策略是否允许该操作
+
+### Q: 错误：`Invalid schema`
+
+A: 确保 Schema 是有效的 Zod schema：
+
+```typescript
+const userSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100),
+  email: z.string().email(),
+})
+```
+
+## 更多帮助
+
+如果您的问题不在 FAQ 中，请：
+
+1. 查看 [文档](/docs)
+2. 搜索 [GitHub Issues](https://github.com/your-org/mtpc/issues)
+3. 在 [GitHub Discussions](https://github.com/your-org/mtpc/discussions) 中提问
+4. 查看 [调试指南](/docs/troubleshooting/debugging)
+
+---
+
+**继续学习：** [调试指南](/docs/troubleshooting/debugging) →

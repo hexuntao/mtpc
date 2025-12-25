@@ -1,29 +1,26 @@
-import { getEnhancedPageMap } from '@components/get-page-map'
-import type { Folder } from 'nextra'
-import { useMDXComponents as getDocsMDXComponents } from 'nextra-theme-docs'
-import type { UseMDXComponents } from 'nextra/mdx-components'
-import { generateDefinition, TSDoc } from 'nextra/tsdoc'
-import type { ComponentProps } from 'react'
+import { getEnhancedPageMap } from '@components/get-page-map';
+import type { Folder } from 'nextra';
+import type { UseMDXComponents } from 'nextra/mdx-components';
+import { generateDefinition, TSDoc } from 'nextra/tsdoc';
+import { useMDXComponents as getDocsMDXComponents } from 'nextra-theme-docs';
+import type { ComponentProps } from 'react';
 
-type TSDocProps = ComponentProps<typeof TSDoc>
-type GenerateDefinitionArgs = Parameters<typeof generateDefinition>[0]
+type TSDocProps = ComponentProps<typeof TSDoc>;
+type GenerateDefinitionArgs = Parameters<typeof generateDefinition>[0];
 
 interface APIDocsProps
-  extends
-    Partial<TSDocProps>,
+  extends Partial<TSDocProps>,
     Pick<GenerateDefinitionArgs, 'code' | 'flattened'> {
-  componentName?: string
-  groupKeys?: string
-  packageName?: string
+  componentName?: string;
+  groupKeys?: string;
+  packageName?: string;
 }
 
 const { img: Image, ...docsComponents } = getDocsMDXComponents({
   // @ts-expect-error -- FIXME
   figure: props => <figure className="mt-[1.25em]" {...props} />,
   // @ts-expect-error -- FIXME
-  figcaption: props => (
-    <figcaption className="mt-2 text-center text-sm" {...props} />
-  ),
+  figcaption: props => <figcaption className="mt-2 text-center text-sm" {...props} />,
   async APIDocs({
     componentName,
     groupKeys,
@@ -34,14 +31,14 @@ const { img: Image, ...docsComponents } = getDocsMDXComponents({
     ...props
   }: APIDocsProps) {
     if (Object.keys(props).length) {
-      throw new Error(`Unexpected props: ${Object.keys(props)}`)
+      throw new Error(`Unexpected props: ${Object.keys(props)}`);
     }
-    let code: string
+    let code: string;
 
     if (componentName) {
       const result = groupKeys
         ? `Omit<MyProps, keyof ${groupKeys}> & { '...props': ${groupKeys} }>`
-        : 'MyProps'
+        : 'MyProps';
 
       code = `
 import type { ComponentProps } from 'react'
@@ -49,22 +46,20 @@ import type { ${componentName.split('.')[0]} } from '${packageName}'
 type MyProps = ComponentProps<typeof ${componentName}>
 type $ = ${result}
 
-export default $`
+export default $`;
     } else {
-      code = $code
+      code = $code;
     }
     const definition =
       $definition ??
       generateDefinition(
         // @ts-expect-error -- exist
         { code, flattened }
-      )
+      );
 
     // TODO pass `'/api'` as first argument
-    const pageMap = await getEnhancedPageMap()
-    const apiPageMap = pageMap.find(
-      (o): o is Folder => 'name' in o && o.name === 'api'
-    )!.children
+    const pageMap = await getEnhancedPageMap();
+    const apiPageMap = pageMap.find((o): o is Folder => 'name' in o && o.name === 'api')!.children;
 
     return (
       <TSDoc
@@ -76,8 +71,7 @@ export default $`
               // @ts-expect-error -- fixme
               .map(o => [o.title, o.route])
           ),
-          NextConfig:
-            'https://nextjs.org/docs/pages/api-reference/config/next-config-js',
+          NextConfig: 'https://nextjs.org/docs/pages/api-reference/config/next-config-js',
           RehypePrettyCodeOptions: 'https://rehype-pretty.pages.dev/#options',
           PluggableList: 'https://github.com/unifiedjs/unified#pluggablelist',
           GitHubIcon:
@@ -105,23 +99,16 @@ export default $`
           MDXComponents:
             'https://github.com/DefinitelyTyped/DefinitelyTyped/blob/4c3811099cbe9ee60151c11a679b780d0ba785bf/types/mdx/types.d.ts#L65',
           ComboboxInputProps:
-            'https://github.com/tailwindlabs/headlessui/blob/0933dd5e5f563675c8a36e4520905bf9b58df00e/packages/%40headlessui-react/src/components/combobox/combobox.tsx#L506'
+            'https://github.com/tailwindlabs/headlessui/blob/0933dd5e5f563675c8a36e4520905bf9b58df00e/packages/%40headlessui-react/src/components/combobox/combobox.tsx#L506',
         }}
       />
-    )
-  }
-})
+    );
+  },
+});
 
-export const useMDXComponents: UseMDXComponents<typeof docsComponents> = <T,>(
-  components?: T
-) => ({
+export const useMDXComponents: UseMDXComponents<typeof docsComponents> = <T,>(components?: T) => ({
   ...docsComponents,
   // @ts-expect-error -- FIXME
-  img: props => (
-    <Image
-      {...props}
-      className="nextra-border rounded-xl border drop-shadow-sm"
-    />
-  ),
-  ...components
-})
+  img: props => <Image {...props} className="nextra-border rounded-xl border drop-shadow-sm" />,
+  ...components,
+});

@@ -1,0 +1,451 @@
+---
+title: 性能优化指南
+description: 如何优化 MTPC 应用的性能
+---
+
+# 性能优化指南
+
+本指南介绍如何优化 MTPC 应用的性能，包括权限检查优化、缓存策略、数据库优化等。
+
+## 性能优化概述
+
+### 性能指标
+
+| 指标 | 目标值 | 说明 |
+|------|--------|------|
+| 权限检查延迟 | < 10ms | 单次权限检查的响应时间 |
+| 策略评估延迟 | < 5ms | 策略评估的响应时间 |
+| 缓存命中率 | > 90% | 缓存命中比例 |
+| 数据库查询延迟 | < 50ms | 数据库查询的响应时间 |
+
+### 性能优化层次
+
+```
+应用层优化
+  ↓
+MTPC 层优化
+  ↓
+数据库层优化
+  ↓
+基础设施优化
+```
+
+## 权限检查优化
+
+### 使用策略缓存
+
+使用 `@mtpc/policy-cache` 扩展缓存权限检查结果。
+
+```typescript
+import { createPolicyCachePlugin } from '@mtpc/policy-cache'
+
+const cachePlugin = createPolicyCachePlugin({
+  strategy: 'write-through',
+  ttl: 300000, // 5 分钟
+})
+
+mtpc.use(cachePlugin)
+```
+
+### 批量权限检查
+
+使用 `checkMany()` 一次性检查多个权限，减少数据库查询。
+
+```typescript
+// 错误：多次检查
+const canCreate = await mtpc.checkPermission(ctx, 'user', 'create')
+const canRead = await mtpc.checkPermission(ctx, 'user', 'read')
+const canUpdate = await mtpc.checkPermission(ctx, 'user', 'update')
+
+// 正确：批量检查
+const results = await mtpc.checkMany(ctx, [
+  { resource: 'user', action: 'create' },
+  { resource: 'user', action: 'read' },
+  { resource: 'user', action: 'update' },
+])
+```
+
+### 预加载权限
+
+在请求开始时预加载所有权限，避免重复检查。
+
+```typescript
+import { createContext } from '@mtpc/core'
+
+// 预加载权限
+const ctx = createContext({
+  tenant: { id: 'tenant-001' },
+  subject: { id: 'user-123', type: 'user' },
+  preloadPermissions: true, // 预加载所有权限
+})
+
+// 后续权限检查从内存中读取
+const canCreate = ctx.hasPermission('user:create')
+const canRead = ctx.hasPermission('user:read')
+```
+
+## 缓存策略
+
+### 缓存策略选择
+
+| 策略 | 描述 | 适用场景 |
+|------|------|----------|
+| Write-Through | 写入时同步更新缓存 | 读多写少 |
+| Write-Behind | 写入时异步更新缓存 | 写多读少 |
+| Refresh-Ahead | 提前刷新缓存 | 有过期时间要求 |
+
+### Write-Through 策略
+
+```typescript
+const cachePlugin = createPolicyCachePlugin({
+  strategy: 'write-through',
+  ttl: 300000, // 5 分钟
+})
+```
+
+**特点：**
+- 写入时同步更新缓存
+- 缓存与数据源强一致
+- 适合读多写少的场景
+
+### Write-Behind 策略
+
+```typescript
+const cachePlugin = createPolicyCachePlugin({
+  strategy: 'write-behind',
+  ttl: 300000,
+  writeInterval: 5000, // 5 秒批量写入
+})
+```
+
+**特点：**
+- 写入时异步更新缓存
+- 提高写入性能
+- 适合写多读少的场景
+
+### Refresh-Ahead 策略
+
+```typescript
+const cachePlugin = createPolicyCachePlugin({
+  strategy: 'refresh-ahead',
+  ttl: 300000,
+  refreshAheadRatio: 0.8, // 剩余 80% 时间时刷新
+})
+```
+
+**特点：**
+- 提前刷新缓存
+- 避免缓存失效延迟
+- 适合有过期时间要求的场景
+
+### 缓存 TTL 设置
+
+根据权限变更频率设置合适的 TTL。
+
+| 变更频率 | 推荐的 TTL |
+|----------|-----------|
+| 极少（分钟级）| 600000 (10 分钟) |
+| 较少（小时级） | 300000 (5 分钟) |
+| 中等（天级） | 180000 (3 分钟) |
+| 频繁（分钟级）| 60000 (1 分钟) |
+
+### 缓存失效策略
+
+在权限变更时及时使缓存失效。
+
+```typescript
+// 角色变更后使缓存失效
+await rbac.updateRole('tenant-001', 'role-001', {
+  permissions: ['new:permission'],
+})
+
+// 使相关用户的缓存失效
+await cachePlugin.state.cache.invalidate('tenant-001', 'user-123')
+
+// 或者使整个租户的缓存失效
+await cachePlugin.state.cache.invalidate('tenant-001')
+```
+
+## 数据库优化
+
+### 索引优化
+
+为常用查询字段添加索引。
+
+```typescript
+import { pgTable, uuid, text, index } from 'drizzle-orm/pg-core'
+
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull(),
+  tenantId: uuid('tenant_id').notNull(),
+}, (table) => ({
+  tenantIdIdx: index('tenant_id_idx').on(table.tenantId),
+  emailIdx: index('email_idx').on(table.email),
+  tenantEmailIdx: index('tenant_email_idx').on(table.tenantId, table.email),
+}))
+```
+
+### 查询优化
+
+使用高效的 SQL 查询。
+
+```typescript
+// 错误：N+1 查询
+const users = await db.select().from(users)
+for (const user of users) {
+  const roles = await db.select().from(roles).where(eq(roles.userId, user.id))
+  user.roles = roles
+}
+
+// 正确：使用 JOIN
+const users = await db.select({
+  user: users,
+  roles: roles,
+}).from(users)
+  .leftJoin(roles, eq(roles.userId, users.id))
+```
+
+### 连接池优化
+
+配置数据库连接池。
+
+```typescript
+import { drizzle } from 'drizzle-orm/postgres-js'
+import postgres from 'postgres'
+
+const connection = postgres(process.env.DATABASE_URL, {
+  max: 20, // 最大连接数
+  idle_timeout: 20, // 空闲超时
+  connect_timeout: 10, // 连接超时
+})
+
+export const db = drizzle(connection)
+```
+
+### 分区表
+
+对大表进行分区。
+
+```sql
+-- 按时间分区
+CREATE TABLE audit_logs (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL,
+  action TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL
+) PARTITION BY RANGE (created_at);
+
+-- 创建分区
+CREATE TABLE audit_logs_2024_01 PARTITION OF audit_logs
+  FOR VALUES FROM ('2024-01-01') TO ('2024-02-01');
+```
+
+## 应用层优化
+
+### 异步处理
+
+使用异步处理提高并发性能。
+
+```typescript
+// 错误：串行处理
+for (const user of users) {
+  await sendWelcomeEmail(user.email)
+}
+
+// 正确：并行处理
+await Promise.all(users.map(user => sendWelcomeEmail(user.email)))
+```
+
+### 批量操作
+
+使用批量操作减少数据库往返。
+
+```typescript
+// 错误：逐个插入
+for (const user of users) {
+  await db.insert(users).values(user)
+}
+
+// 正确：批量插入
+await db.insert(users).values(users)
+```
+
+### 请求合并
+
+合并多个请求为一个请求。
+
+```typescript
+// 错误：多个请求
+const user = await fetchUser(userId)
+const permissions = await fetchPermissions(userId)
+const roles = await fetchRoles(userId)
+
+// 正确：合并请求
+const data = await fetchUserData(userId)
+// { user, permissions, roles }
+```
+
+## 监控和调优
+
+### 性能监控
+
+启用 MTPC 的性能监控。
+
+```typescript
+const mtpc = createMTPC({
+  performance: {
+    enabled: true,
+    threshold: 100, // 超过 100ms 记录警告
+  },
+})
+```
+
+### 性能指标
+
+获取性能统计信息。
+
+```typescript
+const stats = mtpc.getPerformanceStats()
+
+console.log('Average permission check time:', stats.avgPermissionCheckTime)
+console.log('Cache hit rate:', stats.cacheHitRate)
+console.log('Total operations:', stats.totalOperations)
+```
+
+### 慢查询分析
+
+分析慢查询并优化。
+
+```typescript
+// 启用慢查询日志
+const db = drizzle(connection, {
+  logger: {
+    logQuery: (query, params) => {
+      const start = Date.now()
+      return () => {
+        const duration = Date.now() - start
+        if (duration > 100) {
+          console.warn('Slow query:', { query, params, duration })
+        }
+      }
+    },
+  },
+})
+```
+
+### 性能分析工具
+
+使用性能分析工具。
+
+```typescript
+// 使用 Node.js 性能分析
+const { performance } = require('perf_hooks')
+
+const start = performance.now()
+
+// 执行代码
+await mtpc.checkPermission(ctx, 'user', 'create')
+
+const duration = performance.now() - start
+console.log('Duration:', duration)
+```
+
+## 性能优化示例
+
+### 优化前
+
+```typescript
+// 每次请求都检查权限
+app.get('/api/users', async (c) => {
+  const users = await db.select().from(users)
+  
+  const result = []
+  for (const user of users) {
+    // 每个用户都检查权限
+    const canRead = await mtpc.checkPermission(ctx, 'user', 'read')
+    if (canRead.allowed) {
+      result.push(user)
+    }
+  }
+  
+  return c.json(result)
+})
+```
+
+### 优化后
+
+```typescript
+// 预加载权限，批量检查
+app.get('/api/users', async (c) => {
+  // 预加载所有权限
+  const ctx = createContext({
+    tenant: c.get('tenant'),
+    subject: c.get('subject'),
+    preloadPermissions: true,
+  })
+  
+  const users = await db.select().from(users)
+  
+  // 从内存中读取权限
+  const result = users.filter(user => ctx.hasPermission('user:read'))
+  
+  return c.json(result)
+})
+```
+
+## 性能优化清单
+
+### 应用层
+
+- [ ] 使用批量权限检查
+- [ ] 预加载权限
+- [ ] 使用异步处理
+- [ ] 使用批量操作
+- [ ] 合并请求
+
+### MTPC 层
+
+- [ ] 启用策略缓存
+- [ ] 设置合适的缓存 TTL
+- [ ] 及时使缓存失效
+- [ ] 启用性能监控
+- [ ] 分析性能指标
+
+### 数据库层
+
+- [ ] 添加合适的索引
+- [ ] 优化 SQL 查询
+- [ ] 配置连接池
+- [ ] 对大表进行分区
+- [ ] 分析慢查询
+
+### 基础设施层
+
+- [ ] 使用 CDN
+- [ ] 启用 HTTP 缓存
+- [ ] 使用负载均衡
+- [ ] 配置自动扩展
+- [ ] 监控资源使用
+
+## 常见问题
+
+### Q: 如何提高缓存命中率？
+
+A: 设置合适的缓存 TTL，及时使缓存失效，使用批量权限检查。
+
+### Q: 如何减少数据库查询？
+
+A: 使用批量操作、JOIN 查询、缓存查询结果。
+
+### Q: 如何处理高并发？
+
+A: 使用连接池、异步处理、负载均衡、自动扩展。
+
+### Q: 如何优化慢查询？
+
+A: 添加索引、优化 SQL 查询、使用分区表、分析查询计划。
+
+---
+
+**继续学习：** [迁移指南](/docs/migration/upgrading) →

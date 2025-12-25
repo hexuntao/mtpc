@@ -1,0 +1,393 @@
+---
+title: 版本升级指南
+description: 如何升级 MTPC 到新版本
+---
+
+# 版本升级指南
+
+本文档介绍如何升级 MTPC 到新版本。
+
+## 版本号说明
+
+MTPC 遵循 [语义化版本 (SemVer)](https://semver.org/) 规范：
+
+- **主版本号 (Major)**：不兼容的 API 变更
+- **次版本号 (Minor)**：向后兼容的功能新增
+- **修订号 (Patch)**：向后兼容的问题修复
+
+例如：`1.2.3` 表示主版本 1，次版本 2，修订 3。
+
+## 升级前准备
+
+### 1. 备份数据
+
+在升级前，请备份所有重要数据：
+
+```bash
+# 备份数据库
+pg_dump dbname > backup.sql
+
+# 备份配置文件
+cp .env .env.backup
+```
+
+### 2. 检查当前版本
+
+```bash
+# 查看 package.json 中的版本
+cat package.json | grep "@mtpc"
+
+# 或使用 npm
+npm list @mtpc/core
+```
+
+### 3. 查看升级日志
+
+查看新版本的 [CHANGELOG](https://github.com/your-org/mtpc/blob/main/CHANGELOG.md) 了解变更内容。
+
+## 升级步骤
+
+### 1. 更新依赖
+
+```bash
+# 更新到最新版本
+pnpm update @mtpc/core @mtpc/rbac @mtpc/adapter-hono @mtpc/adapter-drizzle
+
+# 或更新到特定版本
+pnpm update @mtpc/core@1.2.0 @mtpc/rbac@1.2.0
+```
+
+### 2. 运行迁移脚本
+
+如果新版本包含数据库迁移，运行迁移脚本：
+
+```bash
+pnpm migrate
+```
+
+### 3. 更新代码
+
+根据 CHANGELOG 中的破坏性变更更新代码。
+
+### 4. 运行测试
+
+```bash
+# 运行所有测试
+pnpm test
+
+# 运行特定测试
+pnpm test -- --testNamePattern="permission"
+```
+
+### 5. 验证功能
+
+手动验证关键功能是否正常工作。
+
+## 版本升级指南
+
+### 从 1.x 升级到 2.x
+
+#### 破坏性变更
+
+1. **API 变更**
+
+   ```typescript
+   // 旧版本
+   const mtpc = new MTPC(config)
+
+   // 新版本
+   const mtpc = createMTPC(config)
+   ```
+
+2. **插件系统变更**
+
+   ```typescript
+   // 旧版本
+   mtpc.registerPlugin(plugin)
+
+   // 新版本
+   mtpc.use(plugin)
+   ```
+
+3. **权限检查 API 变更**
+
+   ```typescript
+   // 旧版本
+   const result = await mtpc.checkPermission(subject, resource, action)
+
+   // 新版本
+   const ctx = createContext({ subject, tenant })
+   const result = await mtpc.checkPermission(ctx, resource, action)
+   ```
+
+#### 迁移步骤
+
+1. 更新导入语句：
+
+   ```typescript
+   // 旧版本
+   import { MTPC } from '@mtpc/core'
+
+   // 新版本
+   import { createMTPC } from '@mtpc/core'
+   ```
+
+2. 更新初始化代码：
+
+   ```typescript
+   // 旧版本
+   const mtpc = new MTPC(config)
+
+   // 新版本
+   const mtpc = createMTPC(config)
+   await mtpc.init()
+   ```
+
+3. 更新权限检查代码：
+
+   ```typescript
+   // 旧版本
+   const result = await mtpc.checkPermission(subject, resource, action)
+
+   // 新版本
+   const ctx = createContext({ subject, tenant })
+   const result = await mtpc.checkPermission(ctx, resource, action)
+   ```
+
+### 从 0.x 升级到 1.x
+
+#### 破坏性变更
+
+1. **资源定义 API 变更**
+
+   ```typescript
+   // 旧版本
+   const resource = new Resource({
+     name: 'user',
+     schema: userSchema,
+   })
+
+   // 新版本
+   const resource = defineResource({
+     name: 'user',
+     schema: userSchema,
+   })
+   ```
+
+2. **RBAC API 变更**
+
+   ```typescript
+   // 旧版本
+   await rbac.createRole('admin', permissions)
+
+   // 新版本
+   await rbac.createRole('admin', { permissions })
+   ```
+
+3. **适配器 API 变更**
+
+   ```typescript
+   // 旧版本
+   const adapter = new HonoAdapter(mtpc)
+
+   // 新版本
+   const app = createMTPCApp({ mtpc })
+   ```
+
+#### 迁移步骤
+
+1. 更新资源定义：
+
+   ```typescript
+   // 旧版本
+   const resource = new Resource({
+     name: 'user',
+     schema: userSchema,
+   })
+
+   // 新版本
+   const resource = defineResource({
+     name: 'user',
+     schema: userSchema,
+     features: {
+       creatable: true,
+       readable: true,
+       updatable: true,
+       deletable: true,
+       listable: true,
+     },
+   })
+   ```
+
+2. 更新 RBAC 代码：
+
+   ```typescript
+   // 旧版本
+   await rbac.createRole('admin', permissions)
+
+   // 新版本
+   await rbac.createRole('admin', { permissions })
+   ```
+
+3. 更新适配器代码：
+
+   ```typescript
+   // 旧版本
+   const adapter = new HonoAdapter(mtpc)
+
+   // 新版本
+   const app = createMTPCApp({ mtpc })
+   ```
+
+## 常见问题
+
+### Q: 升级后权限检查失败
+
+A: 检查以下几点：
+
+1. 确认上下文创建正确：
+
+   ```typescript
+   const ctx = createContext({ subject, tenant })
+   ```
+
+2. 确认资源已注册：
+
+   ```typescript
+   const resource = mtpc.registry.getResource('user')
+   ```
+
+3. 确认策略已加载：
+
+   ```typescript
+   const policies = await mtpc.policyEngine.getPolicies()
+   ```
+
+### Q: 升级后数据库查询失败
+
+A: 检查以下几点：
+
+1. 运行数据库迁移：
+
+   ```bash
+   pnpm migrate
+   ```
+
+2. 检查数据库连接配置：
+
+   ```typescript
+   const db = drizzle({ connection: dbConfig })
+   ```
+
+3. 检查 Schema 是否更新：
+
+   ```typescript
+   const schema = generateSchema(mtpc.registry)
+   ```
+
+### Q: 升级后性能下降
+
+A: 检查以下几点：
+
+1. 启用缓存：
+
+   ```typescript
+   const cachePlugin = createPolicyCachePlugin()
+   mtpc.use(cachePlugin)
+   ```
+
+2. 检查性能统计：
+
+   ```typescript
+   const stats = mtpc.getPerformanceStats()
+   ```
+
+3. 优化数据库查询：
+
+   ```typescript
+   // 添加索引
+   CREATE INDEX idx_user_tenant ON users(tenant_id);
+   ```
+
+## 回滚计划
+
+如果升级后出现问题，可以回滚到之前的版本：
+
+### 1. 回滚依赖
+
+```bash
+# 回滚到特定版本
+pnpm install @mtpc/core@1.1.0 @mtpc/rbac@1.1.0
+```
+
+### 2. 回滚数据库
+
+```bash
+# 回滚数据库迁移
+pnpm migrate:rollback
+```
+
+### 3. 回滚代码
+
+使用 Git 回滚代码：
+
+```bash
+# 查看提交历史
+git log
+
+# 回滚到特定提交
+git revert <commit-hash>
+```
+
+## 最佳实践
+
+### 1. 测试环境先行
+
+在生产环境升级前，先在测试环境进行升级：
+
+```bash
+# 在测试环境测试
+cd test-environment
+pnpm update @mtpc/core
+pnpm test
+```
+
+### 2. 分阶段升级
+
+对于大版本升级，建议分阶段进行：
+
+1. **第一阶段**：升级依赖
+2. **第二阶段**：运行迁移
+3. **第三阶段**：更新代码
+4. **第四阶段**：测试验证
+
+### 3. 监控和日志
+
+升级后启用详细日志：
+
+```typescript
+const mtpc = createMTPC({
+  logging: {
+    level: 'debug',
+    file: 'upgrade.log',
+  },
+})
+```
+
+### 4. 逐步切换
+
+使用特性开关逐步切换到新版本：
+
+```typescript
+const useNewVersion = process.env.USE_NEW_VERSION === 'true'
+
+if (useNewVersion) {
+  // 使用新版本 API
+} else {
+  // 使用旧版本 API
+}
+```
+
+---
+
+**继续学习：** [常见问题](/docs/troubleshooting/faq) →

@@ -1,0 +1,840 @@
+---
+title: 插件开发指南
+description: 如何开发自定义 MTPC 插件
+---
+
+# 插件开发指南
+
+本指南介绍如何开发自定义 MTPC 插件，扩展 MTPC 的功能。
+
+## 插件概述
+
+### 什么是插件
+
+插件是扩展 MTPC 功能的一种方式，允许开发者在不修改核心代码的情况下添加新功能。
+
+### 插件的优势
+
+- **可插拔**：可以随时启用或禁用插件
+- **可组合**：多个插件可以协同工作
+- **可维护**：插件独立于核心代码，易于维护
+- **可测试**：插件可以独立测试
+
+### 插件类型
+
+| 类型 | 描述 | 示例 |
+|------|------|------|
+| 扩展插件 | 扩展 MTPC 的功能 | `@mtpc/rbac`, `@mtpc/audit` |
+| 适配器插件 | 适配第三方库 | `@mtpc/adapter-hono`, `@mtpc/adapter-drizzle` |
+| 工具插件 | 提供辅助功能 | `@mtpc/explain`, `@mtpc/policy-cache` |
+
+## 插件基础
+
+### MTPCPlugin 接口
+
+```typescript
+interface MTPCPlugin {
+  name: string;
+  version?: string;
+  install(registry: Registry): void | Promise<void>;
+  uninstall?(registry: Registry): void | Promise<void>;
+  hooks?: Partial<ResourceHooks>;
+  state?: Record<string, unknown>;
+}
+```
+
+### 创建简单插件
+
+```typescript
+import { MTPCPlugin, Registry } from '@mtpc/core'
+
+const myPlugin: MTPCPlugin = {
+  name: 'my-plugin',
+  version: '1.0.0',
+  
+  install(registry) {
+    console.log('Plugin installed:', this.name)
+  },
+  
+  uninstall(registry) {
+    console.log('Plugin uninstalled:', this.name)
+  },
+}
+
+export default myPlugin
+```
+
+### 使用插件
+
+```typescript
+import { createMTPC } from '@mtpc/core'
+import myPlugin from './my-plugin'
+
+const mtpc = createMTPC()
+
+// 注册插件
+mtpc.use(myPlugin)
+
+await mtpc.init()
+
+console.log('MTPC initialized with plugin:', myPlugin.name)
+```
+
+## 插件生命周期
+
+### 1. 安装阶段
+
+插件在 `install()` 方法中初始化。
+
+```typescript
+const plugin: MTPCPlugin = {
+  name: 'my-plugin',
+  
+  install(registry) {
+    // 注册资源
+    registry.registerResource(customResource)
+    
+    // 注册权限
+    registry.registerPermission(customPermission)
+    
+    // 注册策略
+    registry.registerPolicy(customPolicy)
+  },
+}
+```
+
+### 2. 运行时阶段
+
+插件通过钩子参与资源生命周期。
+
+```typescript
+const plugin: MTPCPlugin = {
+  name: 'my-plugin',
+  
+  hooks: {
+    beforeCreate: async (ctx, data) => {
+      console.log('Before create:', data)
+      return data
+    },
+    
+    afterCreate: async (ctx, result) => {
+      console.log('After create:', result)
+    },
+  },
+}
+```
+
+### 3. 卸载阶段
+
+插件在 `uninstall()` 方法中清理资源。
+
+```typescript
+const plugin: MTPCPlugin = {
+  name: 'my-plugin',
+  
+  uninstall(registry) {
+    // 清理资源
+    registry.unregisterResource(customResource.name)
+    
+    // 清理权限
+    registry.unregisterPermission(customPermission.code)
+    
+    // 清理策略
+    registry.unregisterPolicy(customPolicy.id)
+  },
+}
+```
+
+## 插件状态管理
+
+### 插件状态接口
+
+```typescript
+interface PluginState {
+  [key: string]: unknown;
+}
+```
+
+### 使用插件状态
+
+```typescript
+interface PluginState {
+  counter: number;
+  cache: Map<string, unknown>;
+}
+
+const plugin: MTPCPlugin = {
+  name: 'my-plugin',
+  
+  state: {
+    counter: 0,
+    cache: new Map(),
+  },
+  
+  install(registry) {
+    // 访问插件状态
+    this.state.counter++
+  },
+}
+```
+
+### 暴露插件状态
+
+```typescript
+const plugin: MTPCPlugin = {
+  name: 'my-plugin',
+  
+  state: {
+    counter: 0,
+    cache: new Map(),
+  },
+  
+  install(registry) {
+    // 暴露状态供外部访问
+    registry.registerPluginState(this.name, this.state)
+  },
+}
+
+// 外部访问插件状态
+const state = mtpc.registry.getPluginState('my-plugin')
+console.log('Counter:', state.counter)
+```
+
+## 资源钩子
+
+### 可用的钩子
+
+```typescript
+interface ResourceHooks<TData> {
+  beforeCreate?: (ctx: MTPCContext, data: unknown) => Promise<unknown>
+  afterCreate?: (ctx: MTPCContext, data: TData) => Promise<void>
+  beforeUpdate?: (ctx: MTPCContext, id: string, data: unknown) => Promise<unknown>
+  afterUpdate?: (ctx: MTPCContext, id: string, data: TData) => Promise<void>
+  beforeDelete?: (ctx: MTPCContext, id: string) => Promise<void>
+  afterDelete?: (ctx: MTPCContext, id: string) => Promise<void>
+  filterQuery?: (ctx: MTPCContext, query: unknown) => Promise<unknown>
+}
+```
+
+### beforeCreate 钩子
+
+在创建数据前执行，可以修改数据或抛出错误。
+
+```typescript
+const plugin: MTPCPlugin = {
+  name: 'validation-plugin',
+  
+  hooks: {
+    beforeCreate: async (ctx, data) => {
+      // 验证数据
+      if (!data.email || !data.email.includes('@')) {
+        throw new Error('Invalid email address')
+      }
+      
+      // 添加默认值
+      if (!data.status) {
+        data.status = 'active'
+      }
+      
+      return data
+    },
+  },
+}
+```
+
+### afterCreate 钩子
+
+在创建数据后执行，用于发送通知或记录日志。
+
+```typescript
+const plugin: MTPCPlugin = {
+  name: 'notification-plugin',
+  
+  hooks: {
+    afterCreate: async (ctx, result) => {
+      // 发送欢迎邮件
+      await sendWelcomeEmail(result.email)
+      
+      // 记录审计日志
+      await auditLog(ctx, {
+        action: 'create',
+        resource: ctx.resource.name,
+        resourceId: result.id,
+      })
+    },
+  },
+}
+```
+
+### filterQuery 钩子
+
+在查询前执行，用于添加过滤条件（行级权限）。
+
+```typescript
+const plugin: MTPCPlugin = {
+  name: 'data-scope-plugin',
+  
+  hooks: {
+    filterQuery: async (ctx, query) => {
+      const subject = ctx.subject
+      
+      // 管理员不过滤
+      if (subject.roles.includes('admin')) {
+        return query
+      }
+      
+      // 普通用户只能看到自己的数据
+      return query.where(eq(ctx.resource.table.ownerId, subject.id))
+    },
+  },
+}
+```
+
+## 插件配置
+
+### 插件选项接口
+
+```typescript
+interface PluginOptions {
+  enabled?: boolean;
+  [key: string]: unknown;
+}
+```
+
+### 创建可配置的插件
+
+```typescript
+interface MyPluginOptions extends PluginOptions {
+  cacheSize?: number;
+  cacheTTL?: number;
+}
+
+function createMyPlugin(options: MyPluginOptions = {}): MTPCPlugin {
+  const {
+    enabled = true,
+    cacheSize = 1000,
+    cacheTTL = 300000,
+  } = options
+  
+  return {
+    name: 'my-plugin',
+    
+    state: {
+      cache: new Map(),
+      cacheSize,
+      cacheTTL,
+    },
+    
+    install(registry) {
+      if (!enabled) {
+        console.log('Plugin is disabled')
+        return
+      }
+      
+      console.log('Plugin installed with options:', { cacheSize, cacheTTL })
+    },
+  }
+}
+
+// 使用插件
+const plugin = createMyPlugin({
+  enabled: true,
+  cacheSize: 2000,
+  cacheTTL: 600000,
+})
+
+mtpc.use(plugin)
+```
+
+## 插件开发示例
+
+### 审计日志插件
+
+```typescript
+import { MTPCPlugin, MTPCContext } from '@mtpc/core'
+
+interface AuditEvent {
+  action: string;
+  resource: string;
+  resourceId: string;
+  subjectId: string;
+  tenantId: string;
+  timestamp: Date;
+  metadata?: Record<string, unknown>;
+}
+
+interface AuditPluginOptions {
+  enabled?: boolean;
+  store?: {
+    save(event: AuditEvent): Promise<void>;
+  };
+}
+
+function createAuditPlugin(options: AuditPluginOptions = {}): MTPCPlugin {
+  const { enabled = true, store } = options
+  
+  const plugin: MTPCPlugin = {
+    name: 'audit-plugin',
+    
+    state: {
+      events: [] as AuditEvent[],
+    },
+    
+    hooks: {
+      beforeCreate: async (ctx, data) => {
+        if (!enabled) return data
+        
+        const event: AuditEvent = {
+          action: 'create',
+          resource: ctx.resource.name,
+          resourceId: data.id,
+          subjectId: ctx.subject.id,
+          tenantId: ctx.tenant.id,
+          timestamp: new Date(),
+          metadata: { data },
+        }
+        
+        if (store) {
+          await store.save(event)
+        } else {
+          plugin.state.events.push(event)
+        }
+        
+        return data
+      },
+      
+      beforeUpdate: async (ctx, id, data) => {
+        if (!enabled) return data
+        
+        const event: AuditEvent = {
+          action: 'update',
+          resource: ctx.resource.name,
+          resourceId: id,
+          subjectId: ctx.subject.id,
+          tenantId: ctx.tenant.id,
+          timestamp: new Date(),
+          metadata: { data },
+        }
+        
+        if (store) {
+          await store.save(event)
+        } else {
+          plugin.state.events.push(event)
+        }
+        
+        return data
+      },
+      
+      beforeDelete: async (ctx, id) => {
+        if (!enabled) return
+        
+        const event: AuditEvent = {
+          action: 'delete',
+          resource: ctx.resource.name,
+          resourceId: id,
+          subjectId: ctx.subject.id,
+          tenantId: ctx.tenant.id,
+          timestamp: new Date(),
+        }
+        
+        if (store) {
+          await store.save(event)
+        } else {
+          plugin.state.events.push(event)
+        }
+      },
+    },
+  }
+  
+  return plugin
+}
+
+export { createAuditPlugin }
+```
+
+### 缓存插件
+
+```typescript
+import { MTPCPlugin, MTPCContext } from '@mtpc/core'
+
+interface CachePluginOptions {
+  enabled?: boolean;
+  ttl?: number;
+  maxSize?: number;
+}
+
+function createCachePlugin(options: CachePluginOptions = {}): MTPCPlugin {
+  const {
+    enabled = true,
+    ttl = 300000, // 5 分钟
+    maxSize = 1000,
+  } = options
+  
+  const plugin: MTPCPlugin = {
+    name: 'cache-plugin',
+    
+    state: {
+      cache: new Map<string, { value: unknown; expiresAt: number }>(),
+      ttl,
+      maxSize,
+    },
+    
+    hooks: {
+      beforeCreate: async (ctx, data) => {
+        if (!enabled) return data
+        
+        // 检查缓存
+        const cacheKey = `${ctx.tenant.id}:${ctx.resource.name}:${JSON.stringify(data)}`
+        const cached = plugin.state.cache.get(cacheKey)
+        
+        if (cached && cached.expiresAt > Date.now()) {
+          console.log('Cache hit:', cacheKey)
+          return cached.value
+        }
+        
+        console.log('Cache miss:', cacheKey)
+        return data
+      },
+      
+      afterCreate: async (ctx, result) => {
+        if (!enabled) return
+        
+        // 写入缓存
+        const cacheKey = `${ctx.tenant.id}:${ctx.resource.name}:${result.id}`
+        
+        // 清理过期缓存
+        if (plugin.state.cache.size >= maxSize) {
+          const now = Date.now()
+          for (const [key, value] of plugin.state.cache.entries()) {
+            if (value.expiresAt < now) {
+              plugin.state.cache.delete(key)
+            }
+          }
+        }
+        
+        plugin.state.cache.set(cacheKey, {
+          value: result,
+          expiresAt: Date.now() + ttl,
+        })
+      },
+    },
+  }
+  
+  return plugin
+}
+
+export { createCachePlugin }
+```
+
+### 数据范围插件
+
+```typescript
+import { MTPCPlugin, MTPCContext } from '@mtpc/core'
+
+interface DataScopePluginOptions {
+  enabled?: boolean;
+  defaultScope?: 'tenant' | 'department' | 'team' | 'self';
+  adminBypass?: boolean;
+}
+
+function createDataScopePlugin(options: DataScopePluginOptions = {}): MTPCPlugin {
+  const {
+    enabled = true,
+    defaultScope = 'tenant',
+    adminBypass = false,
+  } = options
+  
+  const plugin: MTPCPlugin = {
+    name: 'data-scope-plugin',
+    
+    state: {
+      defaultScope,
+      adminBypass,
+    },
+    
+    hooks: {
+      filterQuery: async (ctx, query) => {
+        if (!enabled) return query
+        
+        const subject = ctx.subject
+        
+        // 管理员绕过
+        if (adminBypass && subject.roles.includes('admin')) {
+          return query
+        }
+        
+        // 根据范围过滤
+        switch (defaultScope) {
+          case 'tenant':
+            return query.where(eq(ctx.resource.table.tenantId, ctx.tenant.id))
+          
+          case 'department':
+            if (subject.departmentId) {
+              return query.where(eq(ctx.resource.table.departmentId, subject.departmentId))
+            }
+            break
+          
+          case 'team':
+            if (subject.teamId) {
+              return query.where(eq(ctx.resource.table.teamId, subject.teamId))
+            }
+            break
+          
+          case 'self':
+            return query.where(eq(ctx.resource.table.ownerId, subject.id))
+        }
+        
+        return query
+      },
+    },
+  }
+  
+  return plugin
+}
+
+export { createDataScopePlugin }
+```
+
+## 插件测试
+
+### 单元测试
+
+```typescript
+import { describe, it, expect, beforeEach } from 'vitest'
+import { createMTPC } from '@mtpc/core'
+import { createAuditPlugin } from './audit-plugin'
+
+describe('Audit Plugin', () => {
+  let mtpc: MTPC
+  let plugin: MTPCPlugin
+  
+  beforeEach(() => {
+    mtpc = createMTPC()
+    plugin = createAuditPlugin({ enabled: true })
+    mtpc.use(plugin)
+  })
+  
+  it('should record create events', async () => {
+    const ctx = {
+      tenant: { id: 'tenant-001' },
+      subject: { id: 'user-123', type: 'user' },
+      resource: { name: 'user' },
+    }
+    
+    await plugin.hooks.beforeCreate(ctx, { id: 'user-001', name: 'John' })
+    
+    expect(plugin.state.events).toHaveLength(1)
+    expect(plugin.state.events[0].action).toBe('create')
+  })
+  
+  it('should be disabled when enabled is false', async () => {
+    const disabledPlugin = createAuditPlugin({ enabled: false })
+    const ctx = {
+      tenant: { id: 'tenant-001' },
+      subject: { id: 'user-123', type: 'user' },
+      resource: { name: 'user' },
+    }
+    
+    await disabledPlugin.hooks.beforeCreate(ctx, { id: 'user-001', name: 'John' })
+    
+    expect(disabledPlugin.state.events).toHaveLength(0)
+  })
+})
+```
+
+### 集成测试
+
+```typescript
+import { describe, it, expect, beforeEach } from 'vitest'
+import { createMTPC, defineResource } from '@mtpc/core'
+import { createAuditPlugin } from './audit-plugin'
+import { z } from 'zod'
+
+describe('Audit Plugin Integration', () => {
+  let mtpc: MTPC
+  let plugin: MTPCPlugin
+  
+  beforeEach(async () => {
+    mtpc = createMTPC()
+    plugin = createAuditPlugin({ enabled: true })
+    mtpc.use(plugin)
+    
+    const userResource = defineResource({
+      name: 'user',
+      schema: z.object({
+        id: z.string(),
+        name: z.string(),
+      }),
+      features: {
+        creatable: true,
+        readable: true,
+      },
+    })
+    
+    mtpc.registerResource(userResource)
+    await mtpc.init()
+  })
+  
+  it('should record events when creating a resource', async () => {
+    const ctx = {
+      tenant: { id: 'tenant-001' },
+      subject: { id: 'user-123', type: 'user' },
+      resource: mtpc.getResource('user'),
+    }
+    
+    await plugin.hooks.beforeCreate(ctx, { id: 'user-001', name: 'John' })
+    
+    expect(plugin.state.events).toHaveLength(1)
+    expect(plugin.state.events[0].resource).toBe('user')
+  })
+})
+```
+
+## 插件最佳实践
+
+### 1. 保持插件单一职责
+
+每个插件只负责一个特定功能。
+
+```typescript
+// ❌ 错误：一个插件承担多个职责
+const badPlugin = {
+  name: 'everything-plugin',
+  hooks: {
+    beforeCreate: async (ctx, data) => {
+      // 审计
+      await auditLog(ctx, data)
+      // 缓存
+      await cache.set(ctx, data)
+      // 通知
+      await sendNotification(ctx, data)
+    },
+  },
+}
+
+// ✅ 正确：分离职责
+const auditPlugin = createAuditPlugin()
+const cachePlugin = createCachePlugin()
+const notificationPlugin = createNotificationPlugin()
+```
+
+### 2. 提供配置选项
+
+允许用户配置插件行为。
+
+```typescript
+function createMyPlugin(options: MyPluginOptions = {}) {
+  const {
+    enabled = true,
+    cacheSize = 1000,
+    cacheTTL = 300000,
+  } = options
+  
+  return {
+    name: 'my-plugin',
+    state: { cacheSize, cacheTTL },
+    install(registry) {
+      if (!enabled) return
+      // ...
+    },
+  }
+}
+```
+
+### 3. 正确处理错误
+
+插件不应影响核心功能。
+
+```typescript
+const plugin: MTPCPlugin = {
+  name: 'my-plugin',
+  
+  hooks: {
+    beforeCreate: async (ctx, data) => {
+      try {
+        // 插件逻辑
+        return data
+      } catch (error) {
+        console.error('Plugin error:', error)
+        // 返回原始数据，不影响核心功能
+        return data
+      }
+    },
+  },
+}
+```
+
+### 4. 编写完整的测试
+
+为插件编写单元测试和集成测试。
+
+### 5. 提供清晰的文档
+
+为插件编写使用文档和 API 参考。
+
+## 常见问题
+
+### Q: 插件之间如何通信？
+
+A: 通过插件状态或注册表进行通信。
+
+```typescript
+const plugin1: MTPCPlugin = {
+  name: 'plugin1',
+  
+  state: {
+    data: 'shared data',
+  },
+  
+  install(registry) {
+    registry.registerPluginState('plugin1', this.state)
+  },
+}
+
+const plugin2: MTPCPlugin = {
+  name: 'plugin2',
+  
+  install(registry) {
+    const state = registry.getPluginState('plugin1')
+    console.log('Shared data:', state.data)
+  },
+}
+```
+
+### Q: 如何实现插件依赖？
+
+A: 在插件的 `install()` 方法中检查依赖。
+
+```typescript
+const plugin: MTPCPlugin = {
+  name: 'my-plugin',
+  
+  install(registry) {
+    // 检查依赖
+    const rbacPlugin = registry.getPlugin('rbac-plugin')
+    if (!rbacPlugin) {
+      throw new Error('rbac-plugin is required')
+    }
+    
+    // 使用依赖插件
+    const rbacState = rbacPlugin.state
+    // ...
+  },
+}
+```
+
+### Q: 如何实现插件热更新？
+
+A: 使用 `uninstall()` 和 `install()` 方法。
+
+```typescript
+// 卸载插件
+await plugin.uninstall(mtpc.registry)
+
+// 重新安装插件
+await plugin.install(mtpc.registry)
+```
+
+---
+
+**继续学习：** [性能优化指南](/docs/guides/performance-optimization) →

@@ -1,0 +1,417 @@
+---
+title: 从其他系统迁移
+description: 如何从其他权限系统迁移到 MTPC
+---
+
+# 从其他系统迁移
+
+本文档介绍如何从其他权限系统迁移到 MTPC。
+
+## 支持的迁移来源
+
+MTPC 支持从以下系统迁移：
+
+- [Casbin](https://casbin.org/)
+- [AccessControl](https://github.com/onury/accesscontrol)
+- [Node-Casbin](https://github.com/casbin/node-casbin)
+- 自定义权限系统
+
+## 迁移步骤
+
+### 1. 分析现有系统
+
+在开始迁移之前，需要分析现有权限系统的结构：
+
+```typescript
+// 分析现有系统的权限模型
+const existingSystem = {
+  resources: ['user', 'order', 'product'],
+  actions: ['create', 'read', 'update', 'delete'],
+  roles: ['admin', 'user', 'guest'],
+  policies: [
+    { role: 'admin', resource: '*', action: '*' },
+    { role: 'user', resource: 'order', action: 'read' },
+  ],
+}
+```
+
+### 2. 映射到 MTPC 概念
+
+将现有系统的概念映射到 MTPC：
+
+| 现有系统 | MTPC | 说明 |
+|----------|------|------|
+| Resource | Resource | 资源 |
+| Action | Permission | 权限 |
+| Role | Role | 角色 |
+| Policy | Policy | 策略 |
+| User | Subject | 主体 |
+
+### 3. 创建迁移脚本
+
+创建迁移脚本将现有数据转换为 MTPC 格式：
+
+```typescript
+import { createMTPC } from '@mtpc/core'
+import { createRBACPlugin } from '@mtpc/rbac'
+
+async function migrateFromCasbin() {
+  // 1. 创建 MTPC 实例
+  const mtpc = createMTPC()
+  const rbacPlugin = createRBACPlugin()
+  mtpc.use(rbacPlugin)
+  await mtpc.init()
+
+  // 2. 迁移资源
+  for (const resource of existingSystem.resources) {
+    const mtpcResource = defineResource({
+      name: resource,
+      schema: z.object({ id: z.string() }),
+      features: {
+        creatable: true,
+        readable: true,
+        updatable: true,
+        deletable: true,
+        listable: true,
+      },
+    })
+    mtpc.registry.register(mtpcResource)
+  }
+
+  // 3. 迁移角色
+  for (const role of existingSystem.roles) {
+    await rbacPlugin.createRole(role, {
+      permissions: existingSystem.policies
+        .filter(p => p.role === role)
+        .map(p => ({
+          resource: p.resource,
+          action: p.action,
+        })),
+    })
+  }
+
+  // 4. 迁移角色绑定
+  for (const binding of existingSystem.roleBindings) {
+    await rbacPlugin.bindRole(binding.userId, binding.role)
+  }
+
+  console.log('Migration completed!')
+}
+```
+
+## 从 Casbin 迁移
+
+### Casbin 模型
+
+Casbin 使用以下模型定义权限：
+
+```
+[request_definition]
+r = sub, obj, act
+
+[policy_definition]
+p = sub, obj, act
+
+[role_definition]
+g = _, _
+
+[policy_effect]
+e = some(where (p.eft == allow))
+
+[matchers]
+m = g(r.sub, p.sub) && r.obj == p.obj && r.act == p.act
+```
+
+### 迁移脚本
+
+```typescript
+import { enforcer } from './casbin-config'
+import { createMTPC } from '@mtpc/core'
+import { createRBACPlugin } from '@mtpc/rbac'
+
+async function migrateFromCasbin() {
+  const mtpc = createMTPC()
+  const rbacPlugin = createRBACPlugin()
+  mtpc.use(rbacPlugin)
+  await mtpc.init()
+
+  // 获取所有策略
+  const policies = await enforcer.getPolicy()
+
+  // 按角色分组
+  const rolePolicies = new Map<string, any[]>()
+
+  for (const policy of policies) {
+    const [role, resource, action] = policy
+    if (!rolePolicies.has(role)) {
+      rolePolicies.set(role, [])
+    }
+    rolePolicies.get(role)!.push({ resource, action })
+  }
+
+  // 创建角色
+  for (const [role, permissions] of rolePolicies) {
+    await rbacPlugin.createRole(role, { permissions })
+  }
+
+  // 获取所有角色绑定
+  const roleBindings = await enforcer.getGroupingPolicy()
+
+  // 创建角色绑定
+  for (const binding of roleBindings) {
+    const [userId, role] = binding
+    await rbacPlugin.bindRole(userId, role)
+  }
+
+  console.log('Casbin migration completed!')
+}
+```
+
+## 从 AccessControl 迁移
+
+### AccessControl 模型
+
+AccessControl 使用以下格式定义权限：
+
+```typescript
+const ac = new AccessControl(grants)
+
+const grants = {
+  admin: {
+    user: {
+      'create:any': ['*'],
+      'read:any': ['*'],
+      'update:any': ['*'],
+      'delete:any': ['*'],
+    },
+  },
+  user: {
+    order: {
+      'read:own': ['*'],
+    },
+  },
+}
+```
+
+### 迁移脚本
+
+```typescript
+import { createMTPC } from '@mtpc/core'
+import { createRBACPlugin } from '@mtpc/rbac'
+
+async function migrateFromAccessControl() {
+  const mtpc = createMTPC()
+  const rbacPlugin = createRBACPlugin()
+  mtpc.use(rbacPlugin)
+  await mtpc.init()
+
+  // 遍历所有角色
+  for (const [role, resources] of Object.entries(grants)) {
+    const permissions = []
+
+    // 遍历所有资源
+    for (const [resource, actions] of Object.entries(resources)) {
+      for (const [action, attributes] of Object.entries(actions)) {
+        const [actionName, scope] = action.split(':')
+        permissions.push({
+          resource,
+          action: actionName,
+          scope: scope === 'any' ? 'tenant' : 'own',
+        })
+      }
+    }
+
+    // 创建角色
+    await rbacPlugin.createRole(role, { permissions })
+  }
+
+  console.log('AccessControl migration completed!')
+}
+```
+
+## 从自定义系统迁移
+
+### 分析现有系统
+
+首先需要分析现有系统的数据结构：
+
+```typescript
+// 示例：自定义权限系统
+interface CustomPermission {
+  userId: string
+  resource: string
+  action: string
+  conditions?: Record<string, any>
+}
+
+interface CustomRole {
+  id: string
+  name: string
+  permissions: CustomPermission[]
+}
+```
+
+### 创建迁移脚本
+
+```typescript
+import { createMTPC } from '@mtpc/core'
+import { createRBACPlugin } from '@mtpc/rbac'
+
+async function migrateFromCustomSystem() {
+  const mtpc = createMTPC()
+  const rbacPlugin = createRBACPlugin()
+  mtpc.use(rbacPlugin)
+  await mtpc.init()
+
+  // 1. 从现有系统获取角色
+  const customRoles = await getCustomRoles()
+
+  // 2. 迁移角色
+  for (const customRole of customRoles) {
+    const permissions = customRole.permissions.map(p => ({
+      resource: p.resource,
+      action: p.action,
+      scope: p.conditions?.own ? 'own' : 'tenant',
+    }))
+
+    await rbacPlugin.createRole(customRole.name, { permissions })
+  }
+
+  // 3. 从现有系统获取角色绑定
+  const customBindings = await getCustomRoleBindings()
+
+  // 4. 迁移角色绑定
+  for (const binding of customBindings) {
+    await rbacPlugin.bindRole(binding.userId, binding.roleName)
+  }
+
+  console.log('Custom system migration completed!')
+}
+```
+
+## 验证迁移
+
+### 验证脚本
+
+创建验证脚本确保迁移正确：
+
+```typescript
+async function validateMigration() {
+  const mtpc = createMTPC()
+  const rbacPlugin = createRBACPlugin()
+  mtpc.use(rbacPlugin)
+  await mtpc.init()
+
+  // 1. 验证角色
+  const roles = await rbacPlugin.getRoles()
+  console.log('Roles:', roles)
+
+  // 2. 验证角色权限
+  for (const role of roles) {
+    const permissions = await rbacPlugin.getRolePermissions(role.id)
+    console.log(`Role ${role.name} permissions:`, permissions)
+  }
+
+  // 3. 验证角色绑定
+  const bindings = await rbacPlugin.getRoleBindings('user-id')
+  console.log('Role bindings:', bindings)
+
+  // 4. 验证权限检查
+  const ctx = createContext({
+    subject: { id: 'user-id', roles: ['user'] },
+    tenant: { id: 'tenant-id' },
+  })
+
+  const result = await mtpc.checkPermission(ctx, 'user', 'read')
+  console.log('Permission check result:', result)
+}
+```
+
+## 回滚计划
+
+如果迁移出现问题，需要能够回滚：
+
+```typescript
+async function rollbackMigration() {
+  const mtpc = createMTPC()
+  const rbacPlugin = createRBACPlugin()
+  mtpc.use(rbacPlugin)
+  await mtpc.init()
+
+  // 1. 删除所有角色绑定
+  const bindings = await rbacPlugin.getAllRoleBindings()
+  for (const binding of bindings) {
+    await rbacPlugin.unbindRole(binding.userId, binding.roleId)
+  }
+
+  // 2. 删除所有角色
+  const roles = await rbacPlugin.getRoles()
+  for (const role of roles) {
+    await rbacPlugin.deleteRole(role.id)
+  }
+
+  console.log('Rollback completed!')
+}
+```
+
+## 最佳实践
+
+### 1. 分阶段迁移
+
+建议分阶段进行迁移：
+
+1. **第一阶段**：迁移基础资源和角色
+2. **第二阶段**：迁移角色绑定
+3. **第三阶段**：验证和测试
+4. **第四阶段**：切换到 MTPC
+
+### 2. 并行运行
+
+在迁移期间，保持新旧系统并行运行：
+
+```typescript
+async function checkPermissionWithFallback(ctx, resource, action) {
+  // 首先尝试 MTPC
+  try {
+    const result = await mtpc.checkPermission(ctx, resource, action)
+    return result
+  } catch (error) {
+    // 如果 MTPC 失败，使用旧系统
+    return oldSystem.checkPermission(ctx, resource, action)
+  }
+}
+```
+
+### 3. 数据备份
+
+在迁移前备份所有数据：
+
+```typescript
+async function backupData() {
+  const backup = {
+    roles: await getCustomRoles(),
+    bindings: await getCustomRoleBindings(),
+    timestamp: new Date().toISOString(),
+  }
+
+  await fs.writeFile('backup.json', JSON.stringify(backup, null, 2))
+  console.log('Backup completed!')
+}
+```
+
+### 4. 监控和日志
+
+在迁移期间启用详细日志：
+
+```typescript
+const mtpc = createMTPC({
+  logging: {
+    level: 'debug',
+    file: 'migration.log',
+  },
+})
+```
+
+---
+
+**继续学习：** [版本升级指南](/docs/migration/upgrading) →

@@ -1,0 +1,707 @@
+---
+title: 资源定义最佳实践
+description: 详细介绍如何设计和定义资源
+---
+
+# 资源定义最佳实践
+
+本文档详细介绍如何设计和定义 MTPC 资源，包括设计原则、Schema 定义、特性配置、元数据设计和关系定义。
+
+## 资源设计原则
+
+### 单一职责
+
+每个资源只负责一个业务实体，避免将多个实体混在一个资源中。
+
+**反例：**
+
+```ts
+// ❌ 错误：一个资源包含多个实体
+const badResource = defineResource({
+  name: 'user_and_order',  // 违反单一职责原则
+  schema: z.object({
+    userId: z.string(),
+    orderId: z.string(),
+    userName: z.string(),
+    orderAmount: z.number(),
+  })
+})
+```
+
+**正例：**
+
+```ts
+// ✅ 正确：分离为两个资源
+const userResource = defineResource({
+  name: 'user',
+  schema: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().email(),
+  }),
+})
+
+const orderResource = defineResource({
+  name: 'order',
+  schema: z.object({
+    id: z.string(),
+    userId: z.string(),
+    amount: z.number(),
+    status: z.enum(['pending', 'completed', 'cancelled']),
+  }),
+  relations: [{
+    name: 'user',
+    type: 'belongsTo',
+    target: 'user',
+    foreignKey: 'userId',
+  }],
+})
+```
+
+### 合理的粒度
+
+资源粒度应该根据业务需求和访问模式来决定。
+
+| 粒度 | 描述 | 适用场景 |
+|------|------|----------|
+| 细粒度 | 每个字段都是一个独立的资源 | 字段级别的权限控制 |
+| 中粒度 | 每个业务实体都是一个资源 | 实体级别的权限控制 |
+| 粗粒度 | 每个业务模块都是一个资源 | 模块级别的权限控制 |
+
+**示例：**
+
+```ts
+// 粗粒度：每个字段都是独立资源
+const userProfileField = defineResource({
+  name: 'user_profile_field',
+  schema: z.object({
+    userId: z.string(),
+    fieldName: z.string(),
+    canEdit: z.boolean(),
+  }),
+})
+
+// 中粒度：每个业务实体都是一个资源
+const userResource = defineResource({
+  name: 'user',
+  schema: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().email(),
+  }),
+})
+
+// 粗粒度：每个业务模块都是一个资源
+const contentModule = defineResource({
+  name: 'content',
+  schema: z.object({
+    id: z.string(),
+    title: z.string(),
+    body: z.string(),
+    status: z.enum(['draft', 'published', 'archived']),
+  }),
+})
+```
+
+### 关系设计
+
+明确定义资源之间的关系，使用正确的关系类型。
+
+| 关系类型 | 描述 | 示例 |
+|----------|------|------|
+| `hasOne` | 一对一关系 | User ↔ UserProfile |
+| `hasMany` | 一对多关系 | User ↔ Order |
+| `belongsTo` | 多对一关系 | Order ↔ User |
+| `belongsToMany` | 多对多关系 | User ↔ Role |
+
+**示例：**
+
+```ts
+const userResource = defineResource({
+  name: 'user',
+  schema: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().email(),
+  }),
+  relations: [{
+    name: 'profile',
+    type: 'hasOne',
+    target: 'user_profile',
+    foreignKey: 'userId',
+    description: '用户资料',
+  }],
+})
+
+const orderResource = defineResource({
+  name: 'order',
+  schema: z.object({
+    id: z.string(),
+    userId: z.string(),
+    amount: z.number(),
+    status: z.enum(['pending', 'completed', 'cancelled']),
+  }),
+  relations: [{
+    name: 'user',
+    type: 'belongsTo',
+    target: 'user',
+    foreignKey: 'userId',
+    description: '订单所属用户',
+  }],
+})
+```
+
+## Schema 定义
+
+### Zod Schema 基础
+
+MTPC 使用 Zod 进行 Schema 定义，提供完整的类型安全和验证。
+
+```ts
+import { z } from 'zod'
+
+const userSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100),
+  email: z.string().email(),
+  role: z.enum(['admin', 'user', 'guest']),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+})
+```
+
+### 字段类型选择
+
+| Zod 类型 | 描述 | 示例 |
+|---------|------|------|
+| `z.string()` | 字符串 | `z.string().min(1).max(100)` |
+| `z.number()` | 数字 | `z.number().min(0)` |
+| `z.boolean()` | 布尔值 | `z.boolean().default(false)` |
+| `z.date()` | 日期 | `z.date().default(() => new Date())` |
+| `z.enum([...])` | 枚举 | `z.enum(['admin', 'user', 'guest'])` |
+| `z.array(...)` | 数组 | `z.array(z.string())` |
+| `z.object({...})` | 对象 | `z.object({ name: z.string(), age: z.number() })` |
+| `z.union([...])` | 联合 | `z.union([z.string(), z.number()])` |
+
+### 验证规则
+
+使用 Zod 的验证规则确保数据完整性。
+
+```ts
+const userSchema = z.object({
+  id: z.string().uuid('Invalid user ID format'),
+  name: z.string().min(1).max(100, 'Name is required'),
+  email: z.string().email('Invalid email format'),
+  age: z.number().min(0).max(150, 'Age must be between 0 and 150'),
+  role: z.enum(['admin', 'user', 'guest'], 'Invalid role'),
+})
+```
+
+### 自定义验证器
+
+```ts
+import { z } from 'zod'
+
+// 自定义验证器
+const customValidator = z.custom(
+  (value) => {
+    // 自定义验证逻辑
+    if (typeof value !== 'string' || value.length < 3 || value.length > 20) {
+      return false
+    }
+    return true
+  },
+  { message: 'Invalid format' }
+)
+
+const userSchema = z.object({
+  username: customValidator,
+})
+```
+
+## 特性配置
+
+### CRUD 能力选择
+
+根据业务需求选择合适的 CRUD 能力。
+
+| 特性 | 描述 | 使用场景 |
+|------|------|----------|
+| `creatable` | 允许创建资源 | 用户、订单、文章 |
+| `readable` | 允许读取资源 | 所有资源 |
+| `updatable` | 允许更新资源 | 用户资料、订单状态 |
+| `deletable` | 允许删除资源 | 订单、文章 |
+| `listable` | 允许列表资源 | 所有资源 |
+
+**示例：**
+
+```ts
+const userResource = defineResource({
+  name: 'user',
+  schema: userSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: false, // 用户不能直接删除，只能禁用
+    listable: true,
+  },
+})
+
+const orderResource = defineResource({
+  name: 'order',
+  schema: orderSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: true,
+    listable: true,
+  },
+})
+
+const auditLogResource = defineResource({
+  name: 'audit_log',
+  schema: auditLogSchema,
+  features: {
+    creatable: false, // 审计日志只能通过系统创建
+    readable: true,
+    updatable: false,
+    deletable: false,
+    listable: true,
+  },
+})
+```
+
+### 权限定义
+
+根据业务需求定义合适的权限。
+
+```ts
+const orderResource = defineResource({
+  name: 'order',
+  schema: orderSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: true,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建订单', scope: 'tenant' },
+    { action: 'read', description: '查看订单', scope: 'tenant' },
+    { action: 'update', description: '更新订单', scope: 'own' },
+    { action: 'delete', description: '删除订单', scope: 'own' },
+    { action: 'list', description: '列出订单', scope: 'tenant' },
+    { action: 'export', description: '导出订单', scope: 'tenant' },
+  ],
+})
+```
+
+## 钩子使用
+
+### 资源生命周期钩子
+
+钩子用于在资源生命周期关键节点插入自定义逻辑。
+
+### 可用的钩子
+
+| 钩子 | 触发时机 | 用途 |
+|------|----------|------|
+| `beforeCreate` | 创建数据前 | 数据验证、默认值设置 |
+| `afterCreate` | 创建数据后 | 发送通知、关联数据创建 |
+| `beforeUpdate` | 更新数据前 | 权限检查、数据验证 |
+| `afterUpdate` | 更新数据后 | 审计日志、缓存失效 |
+| `beforeDelete` | 删除数据前 | 权限检查、关联数据检查 |
+| `afterDelete` | 删除数据后 | 审计日志、关联数据清理 |
+| `filterQuery` | 查询过滤 | 行级权限控制 |
+
+### 钩子执行顺序
+
+```
+请求 → beforeCreate → 数据验证 → 创建数据 → afterCreate → 响应
+请求 → beforeUpdate → 权限检查 → 更新数据 → afterUpdate → 响应
+请求 → beforeDelete → 权限检查 → 删除数据 → afterDelete → 响应
+查询 → filterQuery → 查询过滤 → 返回数据
+```
+
+### beforeCreate 示例
+
+```ts
+const userResource = defineResource({
+  name: 'user',
+  schema: userSchema,
+  hooks: {
+    beforeCreate: async (ctx, data) => {
+      // 验证数据
+      if (!data.email.endsWith('@company.com')) {
+        throw new Error('仅允许公司邮箱')
+      }
+      // 设置默认值
+      if (!data.status) {
+        data.status = 'active'
+      }
+      // 返回修改后的数据
+      return data
+    },
+    afterCreate: async (ctx, result) => {
+      // 发送欢迎邮件
+      await sendWelcomeEmail(result.email)
+      // 记录审计日志
+      await auditLog(ctx, {
+        action: 'user.create',
+        resource: 'user',
+        resourceId: result.id,
+        subjectId: ctx.subject.id,
+      })
+    },
+  },
+})
+```
+
+### filterQuery 示例
+
+```ts
+const orderResource = defineResource({
+  name: 'order',
+  schema: orderSchema,
+  metadata: {
+    dataScope: {
+      enabled: true,
+      defaultScope: 'department',
+      ownerField: 'createdBy',
+    },
+  },
+  hooks: {
+    filterQuery: async (ctx, query) => {
+      const subject = ctx.subject
+      const dataScope = ctx.resource.metadata.dataScope
+      
+      // 如果是管理员，不过滤
+      if (subject.roles.includes('admin')) {
+        return query
+      }
+      
+      // 根据数据范围过滤
+      switch (dataScope.defaultScope) {
+        case 'department':
+          if (dataScope.departmentField) {
+            return query.where(eq(orders.departmentId, subject.departmentId))
+          }
+          break
+        case 'team':
+          if (dataScope.teamField) {
+            return query.where(eq(orders.teamId, subject.teamId))
+          }
+          break
+        case 'self':
+          if (dataScope.ownerField) {
+            return query.where(eq(orders.createdBy, subject.id))
+          }
+          break
+        default:
+          return query
+      }
+    },
+  },
+})
+```
+
+## 元数据设计
+
+### 显示名称
+
+```ts
+const userResource = defineResource({
+  name: 'user',
+  schema: userSchema,
+  metadata: {
+    displayName: '用户',
+    pluralName: '用户列表',
+    description: '系统用户管理',
+    icon: 'user-icon',
+  },
+})
+```
+
+### 分组和排序
+
+```ts
+const userResource = defineResource({
+  name: 'user',
+  schema: userSchema,
+  metadata: {
+    group: 'user-management',
+    sortOrder: 1,
+  },
+})
+
+const orderResource = defineResource({
+  name: 'order',
+  schema: orderSchema,
+  metadata: {
+    group: 'order-management',
+    sortOrder: 2,
+  },
+})
+
+const productResource = defineResource({
+  name: 'product',
+  schema: productSchema,
+  metadata: {
+    group: 'product-management',
+    sortOrder: 3,
+  },
+})
+```
+
+### 标签使用
+
+```ts
+const userResource = defineResource({
+  name: 'user',
+  schema: userSchema,
+  metadata: {
+    tags: ['core', 'auth', 'user-management'],
+  },
+})
+
+const adminResource = defineResource({
+  name: 'admin',
+  schema: adminSchema,
+  metadata: {
+    tags: ['admin', 'system', 'configuration'],
+  },
+})
+```
+
+### 数据范围控制配置
+
+```ts
+const orderResource = defineResource({
+  name: 'order',
+  schema: orderSchema,
+  metadata: {
+    dataScope: {
+      enabled: true,
+      defaultScope: 'department',
+      ownerField: 'createdBy',
+      adminBypass: true,
+    },
+  },
+})
+```
+
+## 示例：设计用户资源
+
+```ts
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+const userSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100, 'Name is required'),
+  email: z.string().email('Invalid email format'),
+  role: z.enum(['admin', 'user', 'guest'], 'Invalid role'),
+  status: z.enum(['active', 'inactive', 'suspended'], 'Invalid status'),
+  avatar: z.string().url().optional(),
+  bio: z.string().max(500).optional(),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+})
+
+export const userResource = defineResource({
+  name: 'user',
+  schema: userSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: false,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建用户', scope: 'tenant' },
+    { action: 'read', description: '查看用户', scope: 'tenant' },
+    { action: 'update', description: '更新用户', scope: 'own' },
+    { action: 'list', description: '列出用户', scope: 'tenant' },
+  ],
+  metadata: {
+    displayName: '用户',
+    pluralName: '用户列表',
+    description: '系统用户管理',
+    icon: 'user-icon',
+    group: 'user-management',
+    sortOrder: 1,
+    tags: ['core', 'auth', 'user-management'],
+    dataScope: {
+      enabled: true,
+      defaultScope: 'self',
+      ownerField: 'id',
+      adminBypass: true,
+    },
+  },
+  hooks: {
+    beforeCreate: async (ctx, data) => {
+      if (!data.email.endsWith('@company.com')) {
+        throw new Error('仅允许公司邮箱')
+      }
+      if (!data.status) {
+        data.status = 'active'
+      }
+      return data
+    },
+    afterCreate: async (ctx, result) => {
+      await sendWelcomeEmail(result.email)
+    },
+  },
+})
+```
+
+## 示例：设计订单资源
+
+```ts
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+const orderSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  totalAmount: z.number().min(0, 'Amount must be positive'),
+  status: z.enum(['pending', 'completed', 'cancelled', 'refunded']),
+  items: z.array(z.object({
+    productId: z.string().uuid(),
+    quantity: z.number().min(1, 'Quantity must be positive'),
+    price: z.number().min(0, 'Price must be positive'),
+  })),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+})
+
+export const orderResource = defineResource({
+  name: 'order',
+  schema: orderSchema,
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: true,
+    listable: true,
+  },
+  permissions: [
+    { action: 'create', description: '创建订单', scope: 'tenant' },
+    { action: 'read', description: '查看订单', scope: 'tenant' },
+    { action: 'update', description: '更新订单', scope: 'own' },
+    { action: 'delete', description: '删除订单', scope: 'own' },
+    { action: 'list', description: '列出订单', scope: 'tenant' },
+    { action: 'export', description: '导出订单', scope: 'tenant' },
+  ],
+  metadata: {
+    displayName: '订单',
+    pluralName: '订单列表',
+    description: '订单生命周期管理',
+    icon: 'shopping-cart',
+    group: 'order-management',
+    sortOrder: 2,
+    tags: ['commerce', 'finance'],
+    dataScope: {
+      enabled: true,
+      defaultScope: 'department',
+      ownerField: 'createdBy',
+      adminBypass: true,
+    },
+  },
+  relations: [{
+    name: 'user',
+    type: 'belongsTo',
+    target: 'user',
+    foreignKey: 'userId',
+    description: '订单所属用户',
+  }],
+  hooks: {
+    filterQuery: async (ctx, query) => {
+      const subject = ctx.subject
+      const dataScope = ctx.resource.metadata.dataScope
+      
+      if (subject.roles.includes('admin')) {
+        return query
+      }
+      
+      switch (dataScope.defaultScope) {
+        case 'department':
+          if (dataScope.departmentField) {
+            return query.where(eq(orders.departmentId, subject.departmentId))
+          }
+          break
+        case 'self':
+          if (dataScope.ownerField) {
+            return query.where(eq(orders.createdBy, subject.id))
+          }
+          break
+        default:
+          return query
+      }
+    },
+  },
+})
+```
+
+## 常见问题和解决方案
+
+### Q: 如何处理复杂的验证逻辑？
+
+A: 使用 Zod 的 `refine()` 和 `transform()` 进行复杂验证。
+
+```ts
+const passwordSchema = z.object({
+  password: z.string()
+  .min(8, 'Password must be at least 8 characters')
+  .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#]).*$/,
+  'Password must contain at least one letter, one digit and one special character',
+)
+})
+```
+
+### Q: 如何实现软删除？
+
+A: 使用 `@mtpc/soft-delete` 扩展。
+
+```ts
+import { defineResource } from '@mtpc/core'
+import { createSoftDeletePlugin } from '@mtpc/soft-delete'
+
+const plugin = createSoftDeletePlugin()
+
+const userResource = defineResource({
+  name: 'user',
+  schema: userSchema,
+  metadata: {
+    softDelete: {
+      enabled: true,
+      deletedAtColumn: 'deleted_at',
+      deletedByColumn: 'deleted_by',
+    },
+  },
+})
+
+const mtpc = createMTPC()
+mtpc.use(plugin)
+await mtpc.init()
+```
+
+### Q: 如何实现多语言支持？
+
+A: 在 Schema 中使用 `z.object()` 的 `describe()` 方法。
+
+```ts
+const userSchema = z.object({
+  name: z.string().describe('用户姓名'),
+  email: z.string().email().describe('用户邮箱'),
+  role: z.enum(['admin', 'user', 'guest']).describe('用户角色'),
+})
+```
+
+---
+
+**继续学习：** [权限设计](/docs/guides/permission-design) →

@@ -1,0 +1,242 @@
+---
+title: 快速开始
+description: 帮助新用户快速了解 MTPC 并完成第一个示例项目的搭建
+---
+
+# 快速开始
+
+本指南将帮助你在 5 分钟内创建第一个 MTPC 应用。
+
+## 什么是 MTPC？
+
+**MTPC (Multi-Tenant Permission Core)** 是一个业务无关、可嵌入、可组合的多租户权限内核。
+
+### 定位声明
+
+- MTPC ≠ 权限系统
+- MTPC = 权限系统的"内核与引擎"
+
+### 核心价值
+
+- 提供统一的多租户权限抽象模型
+- 通过 Schema / Resource 定义作为单一事实源
+- 在编译期与启动期派生权限码、CRUD、类型、菜单元数据
+- 在运行期提供稳定的权限判定与扩展点
+
+### 适用场景
+
+- SaaS 多租户应用
+- 企业内部管理系统
+- B 端权限控制系统
+- 需要细粒度权限控制的任何应用
+
+## 安装 MTPC
+
+### 使用 npm
+
+```bash
+npm install @mtpc/core
+```
+
+### 使用 pnpm
+
+```bash
+pnpm add @mtpc/core
+```
+
+### 使用 yarn
+
+```bash
+yarn add @mtpc/core
+```
+
+### 使用 bun
+
+```bash
+bun add @mtpc/core
+```
+
+## 项目依赖配置
+
+### TypeScript 配置
+
+确保你的 `tsconfig.json` 包含以下配置：
+
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "moduleResolution": "bundler"
+  }
+}
+```
+
+### 安装 Zod
+
+MTPC 使用 Zod 进行 Schema 定义，请确保已安装：
+
+```bash
+npm install zod
+```
+
+## 5 分钟创建第一个 MTPC 应用
+
+### 步骤 1：初始化项目
+
+```bash
+mkdir my-mtpc-app
+cd my-mtpc-app
+npm init -y
+npm install @mtpc/core zod typescript
+```
+
+### 步骤 2：创建资源定义
+
+创建 `resources.ts` 文件：
+
+```ts
+import { defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+// 定义用户资源
+export const userResource = defineResource({
+  name: 'user',
+  schema: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().email(),
+    role: z.enum(['admin', 'user', 'guest']),
+  }),
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: true,
+    listable: true,
+  },
+  metadata: {
+    displayName: '用户',
+    pluralName: '用户列表',
+    description: '系统用户管理',
+  },
+})
+```
+
+### 步骤 3：创建 MTPC 实例
+
+创建 `mtpc.ts` 文件：
+
+```ts
+import { createMTPC } from '@mtpc/core'
+import { userResource } from './resources'
+
+// 创建 MTPC 实例
+export const mtpc = createMTPC()
+
+// 注册资源
+mtpc.registerResource(userResource)
+
+// 初始化
+await mtpc.init()
+
+console.log('MTPC 已初始化')
+console.log('已注册资源:', mtpc.listResources())
+```
+
+### 步骤 4：检查权限
+
+```ts
+import { mtpc } from './mtpc'
+
+// 检查权限
+const result = await mtpc.checkPermission({
+  tenant: { id: 'tenant-001' },
+  subject: { id: 'user-123', type: 'user' },
+  resource: 'user',
+  action: 'create',
+})
+
+console.log('权限检查结果:', result)
+// { allowed: boolean, permission: string, reason: string, ... }
+```
+
+### 步骤 5：运行应用
+
+```bash
+npx tsx mtpc.ts
+```
+
+输出：
+
+```
+MTPC 已初始化
+已注册资源: ['user']
+权限检查结果: { allowed: false, permission: 'user:create', reason: 'Permission not granted' }
+```
+
+## 集成 RBAC
+
+如果你需要基于角色的访问控制，可以安装并使用 `@mtpc/rbac`：
+
+```bash
+npm install @mtpc/rbac
+```
+
+```ts
+import { createMTPC } from '@mtpc/core'
+import { createRBACPlugin } from '@mtpc/rbac'
+
+// 创建 RBAC 插件
+const rbacPlugin = createRBACPlugin()
+
+// 创建 MTPC 实例并集成 RBAC
+const mtpc = createMTPC({
+  defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(rbacPlugin.state.evaluator)
+})
+
+// 注册插件
+mtpc.use(rbacPlugin)
+
+// 初始化
+await mtpc.init()
+```
+
+## 下一步
+
+- 📖 [架构概览](/docs/architecture) - 深入了解 MTPC 的设计理念和架构
+- 📦 [核心包文档](/docs/packages) - 了解 @mtpc/core、@mtpc/rbac 等核心包
+- 📚 [示例教程](/docs/tutorials) - 查看完整的示例项目
+- 🔧 [开发指南](/docs/guides) - 资源定义、权限设计、多租户实现等
+
+## 示例项目
+
+- [example-api](https://github.com/your-org/mtpc/tree/main/apps/example-api) - 完整的 API 示例
+- [example-web](https://github.com/your-org/mtpc/tree/main/apps/example-web) - 前端集成示例
+
+## 常见问题
+
+### MTPC 支持哪些数据库？
+
+MTPC Core 是数据库无关的。通过适配器可以支持各种数据库：
+
+- [@mtpc/adapter-drizzle](/docs/packages/adapter-drizzle) - 支持 PostgreSQL、MySQL、SQLite 等
+- 你也可以实现自己的适配器
+
+### MTPC 支持哪些框架？
+
+MTPC 是框架无关的。通过适配器可以支持各种 Web 框架：
+
+- [@mtpc/adapter-hono](/docs/packages/adapter-hono) - Hono 框架
+- 你也可以实现自己的适配器
+
+### 如何获取帮助？
+
+- 📖 查看[故障排除文档](/docs/troubleshooting)
+- 💬 加入我们的 [Discord 社区](https://discord.gg/mtpc)
+- 🐛 提交 [Issue](https://github.com/your-org/mtpc/issues)
+
+---
+
+**继续学习：** [架构概览](/docs/architecture) →

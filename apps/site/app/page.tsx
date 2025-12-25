@@ -1,21 +1,21 @@
-import { ArrowRightIcon } from '@components/icons'
-import type { Metadata } from 'next'
-import Image from 'next/image'
-import { Link } from 'nextra-theme-docs'
-import { MdxIcon } from 'nextra/icons'
-import docsCardDark from 'public/assets/card-1.dark.png'
-import docsCard from 'public/assets/card-1.png'
-import { Feature, Features } from './_components/features'
-import { MotionDiv, MotionH3 } from './_components/framer-motion'
-import { I18n } from './_components/i18n-demo'
-import styles from './page.module.css'
-import './page.css'
-import type { FC } from 'react'
+import { ArrowRightIcon } from '@components/icons';
+import type { Metadata } from 'next';
+import Image from 'next/image';
+import { MdxIcon } from 'nextra/icons';
+import { Link } from 'nextra-theme-docs';
+import docsCardDark from 'public/assets/card-1.dark.png';
+import docsCard from 'public/assets/card-1.png';
+import { Feature, Features } from './_components/features';
+import { MotionDiv, MotionH3 } from './_components/framer-motion';
+import { I18n } from './_components/i18n-demo';
+import styles from './page.module.css';
+import './page.css';
+import type { FC } from 'react';
 
 export const metadata: Metadata = {
   description:
-    'Build fast, customizable, and content-rich websites with Nextra. Powered by Next.js, it offers seamless Markdown support, customizable themes, file conventions, and easy integration with MDX, making it perfect for documentation, blogs, and static websites.'
-}
+    'Build fast, customizable, and content-rich websites with Nextra. Powered by Next.js, it offers seamless Markdown support, customizable themes, file conventions, and easy integration with MDX, making it perfect for documentation, blogs, and static websites.',
+};
 
 const IndexPage: FC = () => {
   return (
@@ -26,8 +26,7 @@ const IndexPage: FC = () => {
           with Next.js & MDX
         </h1>
         <p className="subtitle">
-          Simple, powerful and flexible site generation framework{' '}
-          <br className="max-md:hidden" />
+          Simple, powerful and flexible site generation framework <br className="max-md:hidden" />
           with everything you love from{' '}
           <Link href="https://nextjs.org" className="text-current">
             Next.js
@@ -43,19 +42,9 @@ const IndexPage: FC = () => {
       <div className="features-container x:border-b nextra-border">
         <div className="content-container">
           <Features>
-            <Feature
-              index={0}
-              large
-              centered
-              id="docs-card"
-              href="/docs/docs-theme/start"
-            >
+            <Feature index={0} large centered id="docs-card" href="/docs/docs-theme/start">
               <Image src={docsCard} alt="Background" loading="eager" />
-              <Image
-                src={docsCardDark}
-                alt="Background (Dark)"
-                loading="eager"
-              />
+              <Image src={docsCardDark} alt="Background (Dark)" loading="eager" />
               <h3>
                 Full-power documentation <br className="show-on-mobile" />
                 in minutes
@@ -98,18 +87,14 @@ const IndexPage: FC = () => {
                 </div>
               </div>
             </Feature>
-            <Feature
-              index={2}
-              id="highlighting-card"
-              href="/docs/guide/syntax-highlighting"
-            >
+            <Feature index={2} id="highlighting-card" href="/docs/guide/syntax-highlighting">
               <h3>
                 Advanced syntax <br className="show-on-mobile" />
                 highlighting solution
               </h3>
               <p>
-                Performant and reliable build-time syntax highlighting powered
-                by <Link href="https://shiki.style">Shiki</Link>.
+                Performant and reliable build-time syntax highlighting powered by{' '}
+                <Link href="https://shiki.style">Shiki</Link>.
               </p>
             </Feature>
             <Feature index={3} href="/docs/guide/i18n">
@@ -118,8 +103,8 @@ const IndexPage: FC = () => {
                 creating new files
               </h3>
               <p className="mb-4">
-                Place your page files in folders specific to each locale, Nextra
-                and Next.js will handle the rest for you.
+                Place your page files in folders specific to each locale, Nextra and Next.js will
+                handle the rest for you.
               </p>
               <I18n />
             </Feature>
@@ -131,50 +116,37 @@ const IndexPage: FC = () => {
             >
               <MdxIcon className="w-4/6 [filter:drop-shadow(0_2px_10px_rgba(0,0,0,.1))]" />
               <p style={{ textShadow: '0 2px 4px rgb(0 0 0 / 20%)' }}>
-                <Link
-                  href="https://mdxjs.com/blog/v3"
-                  className="!text-current"
-                >
+                <Link href="https://mdxjs.com/blog/v3" className="!text-current">
                   MDX 3
                 </Link>{' '}
-                lets you use Components inside Markdown,{' '}
-                <br className="hide-medium" />
+                lets you use Components inside Markdown, <br className="hide-medium" />
                 with huge performance boost since v1.
               </p>
             </Feature>
-            <Feature
-              index={5}
-              centered
-              className="feat-darkmode flex items-center justify-center"
-            >
+            <Feature index={5} centered className="feat-darkmode flex items-center justify-center">
               <MotionDiv
                 animate={{
-                  backgroundPosition: [
-                    '0% 0%',
-                    '50% 40%',
-                    '50% 40%',
-                    '100% 100%'
-                  ],
+                  backgroundPosition: ['0% 0%', '50% 40%', '50% 40%', '100% 100%'],
                   backgroundImage: [
                     'radial-gradient(farthest-corner, #e2e5ea, #e2e5ea)',
                     'radial-gradient(farthest-corner, #06080a, #e2e5ea)',
                     'radial-gradient(farthest-corner, #06080a, #e2e5ea)',
-                    'radial-gradient(farthest-corner, #e2e5ea, #e2e5ea)'
-                  ]
+                    'radial-gradient(farthest-corner, #e2e5ea, #e2e5ea)',
+                  ],
                 }}
                 transition={{
                   backgroundPosition: {
                     times: [0, 0.5, 0.5, 1],
                     repeat: Infinity,
                     duration: 10,
-                    delay: 1
+                    delay: 1,
                   },
                   backgroundImage: {
                     times: [0, 0.2, 0.8, 1],
                     repeat: Infinity,
                     duration: 10,
-                    delay: 1
-                  }
+                    delay: 1,
+                  },
                 }}
                 style={{
                   position: 'absolute',
@@ -182,27 +154,26 @@ const IndexPage: FC = () => {
                   left: 0,
                   width: '100%',
                   height: '100%',
-                  backgroundImage:
-                    'radial-gradient(farthest-corner, #06080a, #e2e5ea)',
+                  backgroundImage: 'radial-gradient(farthest-corner, #06080a, #e2e5ea)',
                   backgroundSize: '400% 400%',
-                  backgroundRepeat: 'no-repeat'
+                  backgroundRepeat: 'no-repeat',
                 }}
               />
               <MotionH3
                 animate={{
-                  color: ['#dae5ff', '#fff', '#fff', '#dae5ff']
+                  color: ['#dae5ff', '#fff', '#fff', '#dae5ff'],
                 }}
                 transition={{
                   color: {
                     times: [0.25, 0.35, 0.7, 0.8],
                     repeat: Infinity,
                     duration: 10,
-                    delay: 1
-                  }
+                    delay: 1,
+                  },
                 }}
                 style={{
                   position: 'relative',
-                  mixBlendMode: 'difference'
+                  mixBlendMode: 'difference',
                 }}
               >
                 Dark <br />
@@ -222,12 +193,9 @@ const IndexPage: FC = () => {
                 zero-config needed
               </h3>
               <p className="z-2">
-                Nextra indexes your content automatically at build-time and
-                performs incredibly fast full-text search via{' '}
-                <Link href="https://github.com/cloudcannon/pagefind">
-                  Pagefind
-                </Link>
-                .
+                Nextra indexes your content automatically at build-time and performs incredibly fast
+                full-text search via{' '}
+                <Link href="https://github.com/cloudcannon/pagefind">Pagefind</Link>.
               </p>
               <div className="absolute inset-0 z-1 size-full bg-[linear-gradient(to_right,white_250px,_transparent)] max-sm:hidden dark:bg-[linear-gradient(to_right,#202020_250px,_transparent)]" />
               <video
@@ -255,13 +223,12 @@ const IndexPage: FC = () => {
               id="fs-card"
               style={{
                 color: 'white',
-                backgroundImage:
-                  'url(/assets/routing.png), url(/assets/gradient-bg.jpeg)',
+                backgroundImage: 'url(/assets/routing.png), url(/assets/gradient-bg.jpeg)',
                 backgroundSize: '140%, 180%',
                 backgroundPosition: '130px -8px, top',
                 backgroundRepeat: 'no-repeat',
                 textShadow: '0 1px 6px rgb(38 59 82 / 18%)',
-                aspectRatio: '1.765'
+                aspectRatio: '1.765',
               }}
               href="/docs/docs-theme/page-configuration"
             >
@@ -276,7 +243,7 @@ const IndexPage: FC = () => {
               style={{
                 backgroundSize: 750,
                 backgroundRepeat: 'no-repeat',
-                minHeight: 288
+                minHeight: 288,
               }}
             >
               <h3>A11y as a top priority</h3>
@@ -291,8 +258,8 @@ const IndexPage: FC = () => {
                 next generation
               </h3>
               <p className="mr-6">
-                You can leverage the hybrid rendering power from Next.js with
-                your Markdown content including{' '}
+                You can leverage the hybrid rendering power from Next.js with your Markdown content
+                including{' '}
                 <Link href="https://nextjs.org/docs/app/building-your-application/rendering/server-components">
                   Server Components
                 </Link>
@@ -310,8 +277,8 @@ const IndexPage: FC = () => {
             <Feature index={10} large>
               <h3>And more...</h3>
               <p>
-                SEO / RTL Layout / Pluggable Themes / Built-in Components / Last
-                Git Edit Time / Multi-Docs...
+                SEO / RTL Layout / Pluggable Themes / Built-in Components / Last Git Edit Time /
+                Multi-Docs...
                 <br />A lot of new possibilities to be explored.
               </p>
               <p className="subtitle">
@@ -324,7 +291,7 @@ const IndexPage: FC = () => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default IndexPage
+export default IndexPage;

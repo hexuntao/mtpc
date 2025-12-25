@@ -1,0 +1,451 @@
+---
+title: 架构概览
+description: 深入讲解 MTPC 的设计原则、核心概念和整体架构
+---
+
+# MTPC 架构概览
+
+本文档深入讲解 MTPC 的设计原则、核心概念和整体架构。
+
+## 定位声明
+
+**MTPC (Multi-Tenant Permission Core)** 是一个业务无关、可嵌入、可组合的多租户权限内核。
+
+### MTPC ≠ 权限系统
+
+MTPC 不是一个可直接部署的系统，也不包含任何具体业务、UI 或运行态应用。
+
+### MTPC = 权限系统的"内核与引擎"
+
+MTPC 是一个权限基础设施内核，用于被真实业务系统（SaaS、内部后台、B 端系统等）作为依赖引入。
+
+## 设计原则
+
+### 1. Business-agnostic（业务无关）
+
+核心不包含 Department / User / Role / Menu 等具体业务模型，仅提供抽象与派生能力。
+
+**示例：**
+
+```ts
+// ✅ MTPC 提供的抽象
+defineResource({
+  name: 'user',
+  schema: z.object({
+    id: z.string(),
+    name: z.string(),
+  })
+})
+
+// ❌ MTPC 不提供具体业务模型
+// 如：Department, Organization, Menu 等
+```
+
+### 2. Schema-driven（单一事实源）
+
+Resource Definition 是唯一权威来源，其它一切（CRUD / Permission / Menu / Types）均由其派生。
+
+**派生流程：**
+
+```
+Resource Definition
+        │
+        ├─→ CRUD Capability (logical)
+        ├─→ Permission Codes (typed)
+        ├─→ Menu Metadata (UI-agnostic)
+        ├─→ Validation Schemas
+        └─→ Shared TypeScript Types
+```
+
+### 3. Compile-time First（编译期优先）
+
+能在编译期生成的内容绝不推迟到运行期，确保类型安全与一致性。
+
+**示例：**
+
+```ts
+// 编译期生成权限码常量
+export const PERMISSIONS = {
+  USER_CREATE: 'user:create',
+  USER_READ: 'user:read',
+  USER_UPDATE: 'user:update',
+  USER_DELETE: 'user:delete',
+} as const
+
+// 类型安全的权限检查
+type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS]
+```
+
+### 4. Library, not Service（库而非服务）
+
+MTPC 以内嵌库方式运行，不是独立微服务。
+
+**对比：**
+
+| 特性 | MTPC | 权限系统 |
+|------|-------|---------|
+| 部署方式 | 作为 npm 包引入 | 独立部署服务 |
+| 数据存储 | 由消费者系统管理 | 内置数据库 |
+| API 调用 | 函数调用 | HTTP/RPC |
+| 扩展方式 | 插件系统 | 配置文件 |
+
+### 5. Extensible by Design（可扩展优先）
+
+所有企业级能力通过插件、钩子与策略扩展，而非硬编码。
+
+**示例：**
+
+```ts
+// 使用插件扩展能力
+mtpc.use(auditPlugin)
+mtpc.use(cachePlugin)
+mtpc.use(softDeletePlugin)
+```
+
+### 6. Fail-safe Authorization（默认拒绝）
+
+权限校验失败即拒绝访问，不存在"隐式放行"。
+
+**示例：**
+
+```ts
+const result = await mtpc.checkPermission({
+  tenant: { id: 'tenant-001' },
+  subject: { id: 'user-123', type: 'user' },
+  resource: 'user',
+  action: 'delete',
+})
+
+// 默认拒绝，除非显式授予权限
+if (!result.allowed) {
+  throw new PermissionDeniedError(result.permission)
+}
+```
+
+## 总体分层架构
+
+```
+┌──────────────────────────────────────────────┐
+│        Consumer Applications (Not MTPC)     │
+│  SaaS API / Admin UI / Internal Systems     │
+└──────────────────────────────────────────────┘
+                 ▲ 依赖 MTPC
+┌──────────────────────────────────────────────┐
+│              MTPC Core Packages              │
+│                                              │
+│  ┌───────────────┬────────────────────────┐ │
+│  │  Core Layer   │   Adapter / Integration │ │
+│  │               │   (Hono / Drizzle / UI)│ │
+│  └───────────────┴────────────────────────┘ │
+└──────────────────────────────────────────────┘
+```
+
+MTPC 只关心 **Core 能力本身**，不关心最终运行在哪个应用中。
+
+## 核心概念
+
+### Resource（资源）
+
+Resource 是 MTPC 的核心抽象，表示一个"可受权限控制的对象集合"。
+
+```ts
+Resource = {
+  name: string
+  schema: SchemaDefinition
+  features: ResourceFeatures
+  permissions: PermissionDefinition[]
+  hooks?: ResourceHooks
+}
+```
+
+**示例：**
+
+```ts
+const userResource = defineResource({
+  name: 'user',
+  schema: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().email(),
+  }),
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: true,
+  },
+})
+```
+
+### Permission（权限）
+
+Permission 是对 Resource 可执行操作的最小授权单元。
+
+```ts
+Permission = {
+  code: string        // e.g. product:create
+  resource: string
+  action: string
+}
+```
+
+**权限代码格式：** `resource:action`
+
+```
+user:create    - 创建用户
+user:read      - 查看用户
+user:update    - 更新用户
+user:delete    - 删除用户
+user:list      - 列出用户
+```
+
+### Policy（策略）
+
+Policy 用于表达 **权限组合与条件规则**，支持：
+
+- 声明式规则（字段比较）
+- 函数式动态判定
+
+**示例：**
+
+```ts
+const policy: PolicyDefinition = {
+  id: 'working-hours',
+  rules: [{
+    permissions: ['*'],
+    effect: 'allow',
+    conditions: [{
+      field: 'request.timestamp',
+      operator: 'between',
+      value: { start: '09:00', end: '18:00' }
+    }]
+  }]
+}
+```
+
+### Tenant（租户）
+
+Tenant 是多租户隔离的第一等公民。
+
+- 所有权限判定都在 Tenant Context 下执行
+- Tenant 仅作为上下文存在，不强制具体数据模型
+
+**示例：**
+
+```ts
+const tenantContext: TenantContext = {
+  id: 'tenant-001',
+  status: 'active',
+  metadata: {
+    plan: 'enterprise',
+    expiresAt: new Date('2025-12-31')
+  }
+}
+```
+
+### Registry（注册表）
+
+Registry 是 MTPC 的"运行时事实表"，负责集中管理：
+
+- Resource Registry
+- Permission Registry
+- Policy Registry
+
+Registry 是所有派生、编译、Explain 能力的基础。
+
+## 派生模型
+
+MTPC 的核心价值在于 **派生而非配置**。
+
+### 派生流程
+
+```
+Resource Definition
+        │
+        ├─→ CRUD Capability (logical)
+        ├─→ Permission Codes (typed)
+        ├─→ Menu Metadata (UI-agnostic)
+        ├─→ Validation Schemas
+        └─→ Shared TypeScript Types
+```
+
+### 派生时机
+
+| 时机 | 派生内容 | 用途 |
+|------|----------|------|
+| 编译期 | 权限码常量、TypeScript 类型 | 类型安全、IDE 提示 |
+| 启动期 | Registry 注册、策略编译 | 运行时可用性 |
+
+## 生命周期阶段
+
+### 1. Definition Time
+
+- 开发者通过 DSL 定义 Resource
+- 描述 schema、CRUD 能力、权限、特性
+
+### 2. Registration Time
+
+- Resource 被注册到 Registry
+- 校验完整性与冲突
+
+### 3. Build Time
+
+- 生成权限码常量
+- 生成共享 TS 类型
+- 生成 UI 可消费的权限元数据
+
+### 4. Runtime Initialization
+
+- Adapter 创建路由与中间件
+- Policy 进入可执行状态
+
+### 5. Request Time
+
+- 解析 Tenant Context
+- 执行权限判定
+- 触发生命周期钩子
+
+## 扩展机制
+
+### Plugin System
+
+插件用于扩展 MTPC 的能力，而非修改核心。
+
+```ts
+interface MTPCPlugin {
+  name: string
+  install(registry: Registry): void
+  hooks?: Partial<ResourceHooks>
+}
+```
+
+**典型插件：**
+
+- 审计日志
+- 数据范围控制
+- 软删除
+
+### Hooks
+
+Hooks 用于在资源生命周期关键节点插入行为：
+
+- `beforeCreate` / `afterCreate`
+- `beforeUpdate` / `afterUpdate`
+- `filterQuery`（行级权限）
+
+**示例：**
+
+```ts
+const userResource = defineResource({
+  name: 'user',
+  schema: userSchema,
+  hooks: {
+    beforeCreate: async (ctx, data) => {
+      // 验证数据
+      if (!data.email.includes('@company.com')) {
+        throw new Error('仅允许公司邮箱')
+      }
+    },
+    afterCreate: async (ctx, result) => {
+      // 发送欢迎邮件
+      await sendWelcomeEmail(result.email)
+    }
+  }
+})
+```
+
+## 技术无关性与 Adapter 层
+
+MTPC Core 不依赖任何具体技术栈。
+
+通过 Adapter 层对接：
+
+- Web Framework（如 Hono）
+- ORM / Database（如 Drizzle / PostgreSQL）
+- 前端权限消费模型
+
+Adapter 是可替换的，Core API 不随 Adapter 改变。
+
+## 冻结边界
+
+### 必须长期稳定
+
+- Resource Definition API
+- Permission Code 生成规则
+- Registry 接口
+- Tenant Context 抽象
+
+### 允许演进
+
+- 性能优化策略
+- 缓存实现
+- 插件执行顺序
+
+## 非目标
+
+以下内容 **刻意不属于 MTPC Core**：
+
+- 具体业务模型（Department / User 等）
+- 应用级菜单渲染
+- Seed / 数据同步策略细节
+- 部署、运维与多环境管理
+
+这些内容应由 Consumer System 自行实现。
+
+## Extension Architecture（官方扩展架构）
+
+MTPC 采用 **Core + Extensions** 的整体架构设计。
+
+### Core 职责
+
+MTPC Core 只负责提供**最小、稳定、业务无关、类型安全**的权限基础能力：
+
+- Resource 元模型与注册机制
+- Permission 抽象与统一评估接口
+- Tenant 作为第一性原则的上下文模型
+- Policy Engine 的最小执行语义
+- 类型派生与编译期产物约定
+
+### Extensions 职责
+
+所有 **权限模型、性能优化、可观测性与诊断能力**，均通过官方扩展模块提供：
+
+- `@mtpc/rbac` - Role-Based Access Control
+- `@mtpc/policy-cache` - 策略缓存
+- `@mtpc/explain` - 权限决策解释
+- `@mtpc/audit` - 审计日志
+- `@mtpc/data-scope` - 数据范围控制
+- `@mtpc/soft-delete` - 软删除
+
+### Core 与 Extensions 的关系
+
+```
+┌──────────────────────────────┐
+│          Business App        │
+│ (User / Role UI / Admin UI) │
+└────────────▲────────────────┘
+             │ uses
+┌────────────┴────────────────┐
+│     Official Extensions      │
+│  rbac / policy-cache / ...  │
+└────────────▲────────────────┘
+             │ built on
+┌────────────┴────────────────┐
+│          MTPC Core           │
+│ Resource / Policy / Tenant  │
+└──────────────────────────────┘
+```
+
+## 总结
+
+MTPC 是一个：
+
+- 面向未来项目复用的权限内核
+- 多租户优先、权限优先、类型优先
+- 通过派生而非配置降低复杂度
+
+它的价值不在于"开箱即用"，而在于 **长期稳定、可组合、可演进**。
+
+---
+
+**继续学习：** [@mtpc/core 核心包](/docs/packages/core) →

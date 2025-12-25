@@ -1,0 +1,481 @@
+---
+title: Hono Adapter API
+description: MTPC Hono Adapter API 参考
+---
+
+# Hono Adapter API
+
+MTPC Hono Adapter 提供了与 Hono Web 框架的集成。
+
+## createMTPCApp
+
+创建 MTPC Hono 应用。
+
+### 类型定义
+
+```typescript
+function createMTPCApp(config: MTPCAppConfig): Hono
+```
+
+### 参数
+
+| 参数 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| config | [`MTPCAppConfig`](#mtpcappconfig) | 是 | MTPC 应用配置 |
+
+### 返回值
+
+返回 Hono 应用实例。
+
+### 示例
+
+```typescript
+import { createMTPCApp } from '@mtpc/adapter-hono'
+
+const app = createMTPCApp({
+  mtpc,
+  resources: [userResource, orderResource],
+})
+```
+
+## MTPCAppConfig
+
+MTPC 应用配置接口。
+
+### 类型定义
+
+```typescript
+interface MTPCAppConfig {
+  mtpc: MTPC
+  resources: Resource[]
+  middleware?: MiddlewareConfig
+  routes?: RoutesConfig
+}
+```
+
+### 属性
+
+| 属性 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| mtpc | [`MTPC`](#mtpc) | 是 | MTPC 实例 |
+| resources | [`Resource[]`](#resource) | 是 | 资源列表 |
+| middleware | [`MiddlewareConfig`](#middlewareconfig) | 否 | 中间件配置 |
+| routes | [`RoutesConfig`](#routesconfig) | 否 | 路由配置 |
+
+### 示例
+
+```typescript
+const config: MTPCAppConfig = {
+  mtpc,
+  resources: [userResource, orderResource],
+  middleware: {
+    auth: true,
+    tenant: true,
+  },
+  routes: {
+    autoGenerate: true,
+  },
+}
+```
+
+## MiddlewareConfig
+
+中间件配置接口。
+
+### 类型定义
+
+```typescript
+interface MiddlewareConfig {
+  auth?: boolean | AuthMiddlewareConfig
+  tenant?: boolean | TenantMiddlewareConfig
+  cors?: boolean | CorsConfig
+}
+```
+
+### 属性
+
+| 属性 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| auth | `boolean \| AuthMiddlewareConfig` | 否 | 认证中间件 |
+| tenant | `boolean \| TenantMiddlewareConfig` | 否 | 租户中间件 |
+| cors | `boolean \| CorsConfig` | 否 | CORS 配置 |
+
+### 示例
+
+```typescript
+const middlewareConfig: MiddlewareConfig = {
+  auth: {
+    enabled: true,
+    header: 'Authorization',
+    scheme: 'Bearer',
+  },
+  tenant: {
+    enabled: true,
+    header: 'X-Tenant-ID',
+  },
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  },
+}
+```
+
+## AuthMiddlewareConfig
+
+认证中间件配置接口。
+
+### 类型定义
+
+```typescript
+interface AuthMiddlewareConfig {
+  enabled: boolean
+  header?: string
+  scheme?: string
+  extract?: (c: Context) => Promise<Subject | null>
+}
+```
+
+### 属性
+
+| 属性 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| enabled | `boolean` | 是 | 是否启用 |
+| header | `string` | 否 | 请求头名称 |
+| scheme | `string` | 否 | 认证方案 |
+| extract | `function` | 否 | 自定义提取函数 |
+
+### 示例
+
+```typescript
+const authConfig: AuthMiddlewareConfig = {
+  enabled: true,
+  header: 'Authorization',
+  scheme: 'Bearer',
+  extract: async (c) => {
+    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+    if (!token) return null
+    const decoded = await verifyToken(token)
+    return decoded
+  },
+}
+```
+
+## TenantMiddlewareConfig
+
+租户中间件配置接口。
+
+### 类型定义
+
+```typescript
+interface TenantMiddlewareConfig {
+  enabled: boolean
+  header?: string
+  extract?: (c: Context) => Promise<Tenant | null>
+}
+```
+
+### 属性
+
+| 属性 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| enabled | `boolean` | 是 | 是否启用 |
+| header | `string` | 否 | 请求头名称 |
+| extract | `function` | 否 | 自定义提取函数 |
+
+### 示例
+
+```typescript
+const tenantConfig: TenantMiddlewareConfig = {
+  enabled: true,
+  header: 'X-Tenant-ID',
+  extract: async (c) => {
+    const tenantId = c.req.header('X-Tenant-ID')
+    if (!tenantId) return null
+    return { id: tenantId }
+  },
+}
+```
+
+## RoutesConfig
+
+路由配置接口。
+
+### 类型定义
+
+```typescript
+interface RoutesConfig {
+  autoGenerate?: boolean
+  basePath?: string
+  handlers?: RouteHandlers
+}
+```
+
+### 属性
+
+| 属性 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| autoGenerate | `boolean` | 否 | 是否自动生成路由 |
+| basePath | `string` | 否 | 基础路径 |
+| handlers | [`RouteHandlers`](#routehandlers) | 否 | 自定义处理器 |
+
+### 示例
+
+```typescript
+const routesConfig: RoutesConfig = {
+  autoGenerate: true,
+  basePath: '/api',
+  handlers: {
+    create: customCreateHandler,
+    read: customReadHandler,
+  },
+}
+```
+
+## RouteHandlers
+
+路由处理器接口。
+
+### 类型定义
+
+```typescript
+interface RouteHandlers {
+  create?: RouteHandler
+  read?: RouteHandler
+  update?: RouteHandler
+  delete?: RouteHandler
+  list?: RouteHandler
+}
+```
+
+### 属性
+
+| 属性 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| create | [`RouteHandler`](#routehandler) | 否 | 创建处理器 |
+| read | [`RouteHandler`](#routehandler) | 否 | 读取处理器 |
+| update | [`RouteHandler`](#routehandler) | 否 | 更新处理器 |
+| delete | [`RouteHandler`](#routehandler) | 否 | 删除处理器 |
+| list | [`RouteHandler`](#routehandler) | 否 | 列表处理器 |
+
+### 示例
+
+```typescript
+const handlers: RouteHandlers = {
+  create: async (c) => {
+    const data = await c.req.json()
+    const result = await mtpc.createResource(ctx, 'user', data)
+    return c.json(result)
+  },
+  read: async (c) => {
+    const id = c.req.param('id')
+    const result = await mtpc.readResource(ctx, 'user', id)
+    return c.json(result)
+  },
+}
+```
+
+## RouteHandler
+
+路由处理器类型。
+
+### 类型定义
+
+```typescript
+type RouteHandler = (c: Context) => Promise<Response>
+```
+
+### 参数
+
+| 参数 | 类型 | 描述 |
+|------|------|------|
+| c | `Context` | Hono 上下文 |
+
+### 返回值
+
+返回 `Promise<Response>`。
+
+### 示例
+
+```typescript
+const handler: RouteHandler = async (c) => {
+  const data = await c.req.json()
+  const result = await mtpc.createResource(ctx, 'user', data)
+  return c.json(result)
+}
+```
+
+## tenantMiddleware
+
+租户中间件。
+
+### 类型定义
+
+```typescript
+function tenantMiddleware(config?: TenantMiddlewareConfig): Middleware
+```
+
+### 参数
+
+| 参数 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| config | [`TenantMiddlewareConfig`](#tenantmiddlewareconfig) | 否 | 租户中间件配置 |
+
+### 返回值
+
+返回 Hono 中间件。
+
+### 示例
+
+```typescript
+import { tenantMiddleware } from '@mtpc/adapter-hono'
+
+app.use('*', tenantMiddleware({
+  header: 'X-Tenant-ID',
+}))
+```
+
+## authMiddleware
+
+认证中间件。
+
+### 类型定义
+
+```typescript
+function authMiddleware(config?: AuthMiddlewareConfig): Middleware
+```
+
+### 参数
+
+| 参数 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| config | [`AuthMiddlewareConfig`](#authmiddlewareconfig) | 否 | 认证中间件配置 |
+
+### 返回值
+
+返回 Hono 中间件。
+
+### 示例
+
+```typescript
+import { authMiddleware } from '@mtpc/adapter-hono'
+
+app.use('*', authMiddleware({
+  header: 'Authorization',
+  scheme: 'Bearer',
+}))
+```
+
+## checkPermissionMiddleware
+
+权限检查中间件。
+
+### 类型定义
+
+```typescript
+function checkPermissionMiddleware(
+  resource: string,
+  action: string
+): Middleware
+```
+
+### 参数
+
+| 参数 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| resource | `string` | 是 | 资源名称 |
+| action | `string` | 是 | 操作名称 |
+
+### 返回值
+
+返回 Hono 中间件。
+
+### 示例
+
+```typescript
+import { checkPermissionMiddleware } from '@mtpc/adapter-hono'
+
+app.post(
+  '/users',
+  checkPermissionMiddleware('user', 'create'),
+  async (c) => {
+    // 处理创建用户逻辑
+  }
+)
+```
+
+## createCRUDRoutes
+
+创建 CRUD 路由。
+
+### 类型定义
+
+```typescript
+function createCRUDRoutes(
+  resource: string,
+  options?: CRUDRoutesOptions
+): Hono
+```
+
+### 参数
+
+| 参数 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| resource | `string` | 是 | 资源名称 |
+| options | [`CRUDRoutesOptions`](#crudroutesoptions) | 否 | CRUD 路由选项 |
+
+### 返回值
+
+返回 Hono 路由实例。
+
+### 示例
+
+```typescript
+import { createCRUDRoutes } from '@mtpc/adapter-hono'
+
+const userRoutes = createCRUDRoutes('user', {
+  basePath: '/api/users',
+  handlers: {
+    create: customCreateHandler,
+  },
+})
+
+app.route('/', userRoutes)
+```
+
+## CRUDRoutesOptions
+
+CRUD 路由选项接口。
+
+### 类型定义
+
+```typescript
+interface CRUDRoutesOptions {
+  basePath?: string
+  handlers?: RouteHandlers
+  middleware?: Middleware[]
+}
+```
+
+### 属性
+
+| 属性 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| basePath | `string` | 否 | 基础路径 |
+| handlers | [`RouteHandlers`](#routehandlers) | 否 | 自定义处理器 |
+| middleware | `Middleware[]` | 否 | 中间件列表 |
+
+### 示例
+
+```typescript
+const options: CRUDRoutesOptions = {
+  basePath: '/api/users',
+  handlers: {
+    create: customCreateHandler,
+  },
+  middleware: [authMiddleware(), tenantMiddleware()],
+}
+```
+
+---
+
+**继续学习：** [Drizzle Adapter API](/docs/api/adapter-drizzle) →
