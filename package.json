@@ -7,6 +7,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "dev:api": "cd apps/example-api pnpm run dev",
     "test": "turbo test",
     "clean": "turbo clean && rm -rf node_modules",
     "format": "biome format --write .",
