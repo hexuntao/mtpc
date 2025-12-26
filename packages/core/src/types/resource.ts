@@ -234,11 +234,11 @@ export interface ResourceDataScopeConfig {
  *     email: z.string().email()
  *   }),
  *   features: {
- *     creatable: true,
- *     readable: true,
- *     updatable: true,
- *     deletable: true,
- *     listable: true
+ *     create: true,
+ *     read: true,
+ *     update: true,
+ *     delete: true,
+ *     list: true
  *   },
  *   permissions: [
  *     { action: 'create', description: '创建用户', scope: 'tenant' },
@@ -266,7 +266,7 @@ export interface ResourceDataScopeConfig {
  *   updateSchema: z.object({
  *     status: z.enum(['pending', 'completed', 'cancelled'])
  *   }),
- *   features: { creatable: true, updatable: true },
+ *   features: { create: true, update: true },
  *   relations: [
  *     { name: 'user', type: 'belongsTo', target: 'user', foreignKey: 'userId' }
  *   ]
@@ -315,7 +315,7 @@ export interface ResourceDefinitionInput<
  *   readonly schema: z.object({...}),
  *   readonly createSchema: z.object({...}),
  *   readonly updateSchema: z.object({...}),
- *   readonly features: { creatable: true, readable: true, ... },
+ *   readonly features: { create: true, read: true, ... },
  *   readonly permissions: [...],
  *   readonly hooks: { beforeCreate: [...], afterCreate: [...] },
  *   readonly relations: [...],

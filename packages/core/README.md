@@ -363,6 +363,510 @@ const result = await mtpc.checkPermission({
 });
 ```
 
+### 4.5 Registry 注册表系统
+
+MTPC 提供了一套完整的注册表系统，用于管理资源、权限和策略。注册表系统包含四个核心组件：
+
+- **ResourceRegistry**: 资源注册表，管理系统中的所有资源
+- **PermissionRegistry**: 权限注册表，管理资源关联的权限
+- **PolicyRegistry**: 策略注册表，管理访问控制策略
+- **UnifiedRegistry**: 统一注册表，一站式管理所有注册表
+
+#### 4.5.1 ResourceRegistry
+
+资源注册表用于管理系统中的所有资源定义。
+
+```typescript
+import { ResourceRegistry } from '@mtpc/core';
+
+const resourceRegistry = new ResourceRegistry();
+
+resourceRegistry.register({
+  name: 'user',
+  displayName: '用户',
+  description: '用户资源管理',
+  group: 'core',
+  visible: true,
+  permissions: [
+    {
+      code: 'user:read',
+      displayName: '查看用户',
+      description: '允许查看用户信息',
+      defaultGrant: true
+    },
+    {
+      code: 'user:create',
+      displayName: '创建用户',
+      description: '允许创建新用户',
+      defaultGrant: false
+    },
+    {
+      code: 'user:update',
+      displayName: '更新用户',
+      description: '允许更新用户信息',
+      defaultGrant: false
+    },
+    {
+      code: 'user:delete',
+      displayName: '删除用户',
+      description: '允许删除用户',
+      defaultGrant: false
+    }
+  ]
+});
+
+resourceRegistry.register({
+  name: 'article',
+  displayName: '文章',
+  description: '文章资源管理',
+  group: 'content',
+  visible: true,
+  permissions: [
+    {
+      code: 'article:read',
+      displayName: '查看文章',
+      description: '允许查看文章',
+      defaultGrant: true
+    },
+    {
+      code: 'article:create',
+      displayName: '创建文章',
+      description: '允许创建文章',
+      defaultGrant: false
+    }
+  ]
+});
+```
+
+查询资源：
+
+```typescript
+const userResource = resourceRegistry.get('user');
+console.log(userResource.displayName);
+
+const allResources = resourceRegistry.getAll();
+console.log(allResources.length);
+
+const coreResources = resourceRegistry.getByGroup('core');
+console.log(coreResources);
+
+const hasUser = resourceRegistry.has('user');
+console.log(hasUser);
+
+const names = resourceRegistry.getNames();
+console.log(names);
+```
+
+冻结注册表：
+
+```typescript
+resourceRegistry.freeze();
+
+resourceRegistry.register({
+  name: 'comment',
+  displayName: '评论',
+  description: '评论资源管理',
+  group: 'content',
+  visible: true,
+  permissions: []
+});
+
+const isFrozen = resourceRegistry.isFrozen();
+console.log(isFrozen);
+```
+
+#### 4.5.2 PermissionRegistry
+
+权限注册表用于管理所有权限定义。
+
+```typescript
+import { PermissionRegistry } from '@mtpc/core';
+
+const permissionRegistry = new PermissionRegistry();
+
+permissionRegistry.register('user', {
+  code: 'user:read',
+  displayName: '查看用户',
+  description: '允许查看用户信息',
+  defaultGrant: true
+});
+
+permissionRegistry.register('user', {
+  code: 'user:create',
+  displayName: '创建用户',
+  description: '允许创建新用户',
+  defaultGrant: false
+});
+
+permissionRegistry.register('article', {
+  code: 'article:read',
+  displayName: '查看文章',
+  description: '允许查看文章',
+  defaultGrant: true
+});
+```
+
+批量注册权限：
+
+```typescript
+permissionRegistry.registerMany('user', [
+  {
+    code: 'user:read',
+    displayName: '查看用户',
+    description: '允许查看用户信息',
+    defaultGrant: true
+  },
+  {
+    code: 'user:create',
+    displayName: '创建用户',
+    description: '允许创建新用户',
+    defaultGrant: false
+  },
+  {
+    code: 'user:update',
+    displayName: '更新用户',
+    description: '允许更新用户信息',
+    defaultGrant: false
+  },
+  {
+    code: 'user:delete',
+    displayName: '删除用户',
+    description: '允许删除用户',
+    defaultGrant: false
+  }
+]);
+```
+
+查询权限：
+
+```typescript
+const userReadPermission = permissionRegistry.get('user:read');
+console.log(userReadPermission.displayName);
+
+const allPermissions = permissionRegistry.getAll();
+console.log(allPermissions.length);
+
+const userPermissions = permissionRegistry.getByResource('user');
+console.log(userPermissions);
+
+const hasPermission = permissionRegistry.has('user:read');
+console.log(hasPermission);
+
+const codes = permissionRegistry.getCodes();
+console.log(codes);
+```
+
+#### 4.5.3 PolicyRegistry
+
+策略注册表用于管理访问控制策略。
+
+```typescript
+import { PolicyRegistry } from '@mtpc/core';
+
+const policyRegistry = new PolicyRegistry();
+
+policyRegistry.register({
+  id: 'admin-full-access',
+  name: '管理员完全访问',
+  description: '管理员拥有所有资源的完全访问权限',
+  tenantId: undefined,
+  permissions: ['*'],
+  effect: 'allow'
+});
+
+policyRegistry.register({
+  id: 'user-read-only',
+  name: '用户只读',
+  description: '普通用户只能读取资源',
+  tenantId: undefined,
+  permissions: ['user:read', 'article:read'],
+  effect: 'allow'
+});
+
+policyRegistry.register({
+  id: 'tenant-1-admin',
+  name: '租户1管理员',
+  description: '租户1的管理员策略',
+  tenantId: 'tenant-1',
+  permissions: ['*'],
+  effect: 'allow'
+});
+```
+
+查询策略：
+
+```typescript
+const adminPolicy = policyRegistry.get('admin-full-access');
+console.log(adminPolicy.name);
+
+const allPolicies = policyRegistry.getAll();
+console.log(allPolicies.length);
+
+const tenant1Policies = policyRegistry.getByTenant('tenant-1');
+console.log(tenant1Policies);
+
+const globalPolicies = policyRegistry.getGlobalPolicies();
+console.log(globalPolicies);
+
+const hasPolicy = policyRegistry.has('admin-full-access');
+console.log(hasPolicy);
+```
+
+#### 4.5.4 UnifiedRegistry
+
+统一注册表提供一站式管理所有注册表的接口。
+
+```typescript
+import { UnifiedRegistry } from '@mtpc/core';
+
+const registry = new UnifiedRegistry();
+
+registry.registerResource({
+  name: 'user',
+  displayName: '用户',
+  description: '用户资源管理',
+  group: 'core',
+  visible: true,
+  permissions: [
+    {
+      code: 'user:read',
+      displayName: '查看用户',
+      description: '允许查看用户信息',
+      defaultGrant: true
+    },
+    {
+      code: 'user:create',
+      displayName: '创建用户',
+      description: '允许创建新用户',
+      defaultGrant: false
+    }
+  ]
+});
+
+registry.registerPolicy({
+  id: 'admin-full-access',
+  name: '管理员完全访问',
+  description: '管理员拥有所有资源的完全访问权限',
+  tenantId: undefined,
+  permissions: ['*'],
+  effect: 'allow'
+});
+```
+
+访问子注册表：
+
+```typescript
+const userResource = registry.resources.get('user');
+console.log(userResource.displayName);
+
+const userReadPermission = registry.permissions.get('user:read');
+console.log(userReadPermission.displayName);
+
+const adminPolicy = registry.policies.get('admin-full-access');
+console.log(adminPolicy.name);
+```
+
+导出元数据：
+
+```typescript
+const metadata = registry.exportMetadata();
+
+console.log('Resources:', metadata.resources);
+console.log('Permissions:', metadata.permissions);
+console.log('Policies:', metadata.policies);
+```
+
+冻结所有注册表：
+
+```typescript
+registry.freeze();
+
+registry.registerResource({
+  name: 'comment',
+  displayName: '评论',
+  description: '评论资源管理',
+  group: 'content',
+  visible: true,
+  permissions: []
+});
+
+registry.registerPolicy({
+  id: 'new-policy',
+  name: '新策略',
+  description: '新添加的策略',
+  tenantId: undefined,
+  permissions: ['user:read'],
+  effect: 'allow'
+});
+```
+
+获取全局实例：
+
+```typescript
+import { getGlobalRegistry } from '@mtpc/core';
+
+const globalRegistry = getGlobalRegistry();
+
+globalRegistry.registerResource({
+  name: 'product',
+  displayName: '产品',
+  description: '产品资源管理',
+  group: 'business',
+  visible: true,
+  permissions: [
+    {
+      code: 'product:read',
+      displayName: '查看产品',
+      description: '允许查看产品信息',
+      defaultGrant: true
+    }
+  ]
+});
+
+const productResource = globalRegistry.resources.get('product');
+console.log(productResource.displayName);
+```
+
+#### 4.5.5 完整示例
+
+```typescript
+import { UnifiedRegistry } from '@mtpc/core';
+
+const registry = new UnifiedRegistry();
+
+registry.registerResource({
+  name: 'user',
+  displayName: '用户',
+  description: '用户资源管理',
+  group: 'core',
+  visible: true,
+  permissions: [
+    {
+      code: 'user:read',
+      displayName: '查看用户',
+      description: '允许查看用户信息',
+      defaultGrant: true
+    },
+    {
+      code: 'user:create',
+      displayName: '创建用户',
+      description: '允许创建新用户',
+      defaultGrant: false
+    },
+    {
+      code: 'user:update',
+      displayName: '更新用户',
+      description: '允许更新用户信息',
+      defaultGrant: false
+    },
+    {
+      code: 'user:delete',
+      displayName: '删除用户',
+      description: '允许删除用户',
+      defaultGrant: false
+    }
+  ]
+});
+
+registry.registerResource({
+  name: 'article',
+  displayName: '文章',
+  description: '文章资源管理',
+  group: 'content',
+  visible: true,
+  permissions: [
+    {
+      code: 'article:read',
+      displayName: '查看文章',
+      description: '允许查看文章',
+      defaultGrant: true
+    },
+    {
+      code: 'article:create',
+      displayName: '创建文章',
+      description: '允许创建文章',
+      defaultGrant: false
+    },
+    {
+      code: 'article:update',
+      displayName: '更新文章',
+      description: '允许更新文章',
+      defaultGrant: false
+    },
+    {
+      code: 'article:delete',
+      displayName: '删除文章',
+      description: '允许删除文章',
+      defaultGrant: false
+    }
+  ]
+});
+
+registry.registerPolicy({
+  id: 'admin-full-access',
+  name: '管理员完全访问',
+  description: '管理员拥有所有资源的完全访问权限',
+  tenantId: undefined,
+  permissions: ['*'],
+  effect: 'allow'
+});
+
+registry.registerPolicy({
+  id: 'user-read-only',
+  name: '用户只读',
+  description: '普通用户只能读取资源',
+  tenantId: undefined,
+  permissions: ['user:read', 'article:read'],
+  effect: 'allow'
+});
+
+registry.registerPolicy({
+  id: 'tenant-1-admin',
+  name: '租户1管理员',
+  description: '租户1的管理员策略',
+  tenantId: 'tenant-1',
+  permissions: ['*'],
+  effect: 'allow'
+});
+
+registry.registerPolicy({
+  id: 'tenant-1-user',
+  name: '租户1用户',
+  description: '租户1的普通用户策略',
+  tenantId: 'tenant-1',
+  permissions: ['user:read', 'article:read'],
+  effect: 'allow'
+});
+
+const allResources = registry.resources.getAll();
+console.log(`Total resources: ${allResources.length}`);
+
+const allPermissions = registry.permissions.getAll();
+console.log(`Total permissions: ${allPermissions.length}`);
+
+const allPolicies = registry.policies.getAll();
+console.log(`Total policies: ${allPolicies.length}`);
+
+const tenant1Policies = registry.policies.getByTenant('tenant-1');
+console.log(`Tenant 1 policies: ${tenant1Policies.length}`);
+
+const metadata = registry.exportMetadata();
+console.log('Metadata:', JSON.stringify(metadata, null, 2));
+
+registry.freeze();
+console.log('Registry frozen:', registry.resources.isFrozen());
+```
+
+#### 4.5.6 最佳实践
+
+1. **使用统一注册表**: 优先使用 UnifiedRegistry 来管理所有注册表，简化代码
+2. **冻结注册表**: 在生产环境中，完成注册后立即冻结注册表，防止运行时修改
+3. **合理分组**: 使用 group 属性对资源进行分组，便于管理和查询
+4. **默认权限**: 为常用权限设置 defaultGrant，简化权限配置
+5. **全局策略**: 定义全局策略供所有租户使用，减少重复配置
+6. **租户隔离**: 使用 tenantId 区分不同租户的策略，实现租户隔离
+7. **导出元数据**: 使用 exportMetadata 导出完整的元数据，便于前端展示和管理
+
 ## 5. 常见场景应用代码片段
 
 ### 5.1 HTTP 中间件集成
