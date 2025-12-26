@@ -28,7 +28,8 @@ export function createAstObject(obj) {
     properties: Object.entries(obj).map(([key, value]) => ({
       ...DEFAULT_PROPERTY_PROPS,
       key: { type: 'Identifier', name: key },
-      value: value && typeof value === 'object' ? value : { type: 'Literal', value },
+      value:
+        value && typeof value === 'object' ? value : { type: 'Literal', value },
     })),
   };
 }
@@ -40,11 +41,14 @@ type RehypePlugin = NonNullable<MdxOptions['rehypePlugins']>[0];
 // eslint-disable-next-line unicorn/consistent-function-scoping
 const rehypeOpenGraphImage: RehypePlugin = () => (ast: any) => {
   // @ts-expect-error -- fixme
-  const frontMatterNode = ast.children.find(node => isExportNode(node, 'metadata'));
+  const frontMatterNode = ast.children.find(node =>
+    isExportNode(node, 'metadata')
+  );
   if (!frontMatterNode) {
     return;
   }
-  const { properties } = frontMatterNode.data.estree.body[0].declaration.declarations[0].init;
+  const { properties } =
+    frontMatterNode.data.estree.body[0].declaration.declarations[0].init;
   // @ts-expect-error -- fixme
   const title = properties.find(o => o.key.value === 'title')?.value.value;
   if (!title) {
@@ -73,7 +77,8 @@ const withNextra = nextra({
 const nextConfig = withNextra({
   reactStrictMode: true,
   env: {
-    NEXT_PUBLIC_INKEEP_API_KEY: 'dee399c7f7ac40b9de0d0b85ca32959953b9ff7c9fc8d96c',
+    NEXT_PUBLIC_INKEEP_API_KEY:
+      'dee399c7f7ac40b9de0d0b85ca32959953b9ff7c9fc8d96c',
   },
   turbopack: {
     resolveAlias: {
@@ -86,7 +91,7 @@ const nextConfig = withNextra({
       },
     },
   },
-  redirects: () => [
+  redirects: async () => [
     // {
     //   source: '/docs/guide/:slug(typescript|latex|tailwind-css|mermaid)',
     //   destination: '/docs/advanced/:slug',

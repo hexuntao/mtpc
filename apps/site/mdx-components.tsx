@@ -20,7 +20,9 @@ const { img: Image, ...docsComponents } = getDocsMDXComponents({
   // @ts-expect-error -- FIXME
   figure: props => <figure className="mt-[1.25em]" {...props} />,
   // @ts-expect-error -- FIXME
-  figcaption: props => <figcaption className="mt-2 text-center text-sm" {...props} />,
+  figcaption: props => (
+    <figcaption className="mt-2 text-center text-sm" {...props} />
+  ),
   async APIDocs({
     componentName,
     groupKeys,
@@ -59,7 +61,10 @@ export default $`;
 
     // TODO pass `'/api'` as first argument
     const pageMap = await getEnhancedPageMap();
-    const apiPageMap = pageMap.find((o): o is Folder => 'name' in o && o.name === 'api')!.children;
+    // biome-ignore lint/style/noNonNullAssertion: <1>
+    const apiPageMap = pageMap.find(
+      (o): o is Folder => 'name' in o && o.name === 'api'
+    )!.children;
 
     return (
       <TSDoc
@@ -71,7 +76,8 @@ export default $`;
               // @ts-expect-error -- fixme
               .map(o => [o.title, o.route])
           ),
-          NextConfig: 'https://nextjs.org/docs/pages/api-reference/config/next-config-js',
+          NextConfig:
+            'https://nextjs.org/docs/pages/api-reference/config/next-config-js',
           RehypePrettyCodeOptions: 'https://rehype-pretty.pages.dev/#options',
           PluggableList: 'https://github.com/unifiedjs/unified#pluggablelist',
           GitHubIcon:
@@ -106,9 +112,16 @@ export default $`;
   },
 });
 
-export const useMDXComponents: UseMDXComponents<typeof docsComponents> = <T,>(components?: T) => ({
+export const useMDXComponents: UseMDXComponents<typeof docsComponents> = <T,>(
+  components?: T
+) => ({
   ...docsComponents,
   // @ts-expect-error -- FIXME
-  img: props => <Image {...props} className="nextra-border rounded-xl border drop-shadow-sm" />,
+  img: props => (
+    <Image
+      {...props}
+      className="nextra-border rounded-xl border drop-shadow-sm"
+    />
+  ),
   ...components,
 });
