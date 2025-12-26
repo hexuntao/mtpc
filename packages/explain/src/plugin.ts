@@ -1,8 +1,7 @@
-import type { PluginContext, PluginDefinition } from '@mtpc/core';
+import type { MTPCContext, PluginContext, PluginDefinition } from '@mtpc/core';
 import { ExplanationCollector } from './collector.js';
-import { PermissionExplainer } from './explainer.js';
 import { TextFormatter } from './formatter.js';
-import type { ExplainLevel } from './types.js';
+import type { ExplainLevel, PermissionExplanation } from './types.js';
 
 /**
  * Explain 插件配置选项
@@ -38,12 +37,6 @@ export interface ExplainPluginOptions {
  */
 export interface ExplainPluginState {
   /**
-   * 权限解释器实例
-   * 在插件初始化时创建
-   */
-  explainer?: PermissionExplainer;
-
-  /**
    * 解释收集器实例
    * 用于收集和管理权限解释结果
    */
@@ -54,6 +47,11 @@ export interface ExplainPluginState {
    * 用于格式化权限解释结果为可读文本
    */
   formatter: TextFormatter;
+
+  /**
+   * 默认解释级别
+   */
+  defaultLevel: ExplainLevel;
 }
 
 /**
@@ -61,40 +59,56 @@ export interface ExplainPluginState {
  * 为 MTPC 框架提供权限决策解释功能
  *
  * **功能**：
- * - 解释权限决策结果
  * - 收集权限检查历史
  * - 提供多种格式化输出（文本、JSON、Markdown）
  * - 支持批量权限解释
  *
  * **插件生命周期**：
  * 1. install - 插件安装时的初始化
- * 2. onInit - 框架初始化时调用
- * 3. onDestroy - 框架销毁时清理资源
+ * 2. onDestroy - 框架销毁时清理资源
+ *
+ * **重要说明**：
+ * - Explain 插件不直接访问 policyEngine 或 permissionResolver
+ * - 用户需要通过 MTPC 实例访问这些组件来创建解释器
+ * - 插件主要提供收集器和格式化器功能
  *
  * @param options 插件配置选项
- * @param options.defaultLevel 默认解释详细级别
- * @param options.collectExplanations 是否收集解释结果
- * @param options.maxCollectedEntries 最大收集条目数
  * @returns 插件定义对象
  *
  * @example
  * ```typescript
- * import { MTPC } from '@mtpc/core';
- * import { createExplainPlugin } from '@mtpc/explain';
+ * import { createMTPC } from '@mtpc/core';
+ * import { createExplainPlugin, createExplainerFromMTPC } from '@mtpc/explain';
  *
- * const mtpc = new MTPC({
- *   plugins: [
- *     createExplainPlugin({
- *       defaultLevel: 'detailed',
- *       collectExplanations: true,
- *       maxCollectedEntries: 5000
- *     })
- *   ]
+ * const mtpc = createMTPC({
+ *   defaultPermissionResolver: async (tenantId, subjectId) => {
+ *     // 自定义权限解析器
+ *     return new Set(['user:read', 'user:write']);
+ *   }
  * });
  *
- * // 使用插件功能
- * const explainer = mtpc.plugins.state.explainer;
- * const explanation = await explainer.explain(tenant, subject, 'user:read');
+ * // 注册 Explain 插件
+ * mtpc.use(createExplainPlugin({
+ *   defaultLevel: 'detailed',
+ *   collectExplanations: true,
+ *   maxCollectedEntries: 5000
+ * }));
+ *
+ * // 初始化 MTPC
+ * await mtpc.init();
+ *
+ * // 使用解释器（通过 MTPC 实例访问核心组件）
+ * const explainer = createExplainerFromMTPC(mtpc, {
+ *   defaultLevel: 'detailed'
+ * });
+ *
+ * const explanation = await explainer.explain(
+ *   { id: 'tenant-1' },
+ *   { id: 'user-1', type: 'user' },
+ *   'user:read'
+ * );
+ *
+ * console.log(explanation);
  * ```
  */
 export function createExplainPlugin(
@@ -112,6 +126,7 @@ export function createExplainPlugin(
   const state: ExplainPluginState = {
     collector,
     formatter,
+    defaultLevel: options.defaultLevel ?? 'standard',
   };
 
   return {
@@ -127,41 +142,55 @@ export function createExplainPlugin(
      *
      * @param context 插件上下文，提供对框架核心功能的访问
      */
-    install(_context: PluginContext): void {
-      // 可以在这里注册钩子或修改框架配置
-      console.log('Explain plugin installed');
-    },
+    install(context: PluginContext): void {
+      console.log('[Explain Plugin] Installing...');
 
-    /**
-     * 插件初始化时调用
-     * 在 MTPC 实例初始化完成后执行
-     *
-     * @param context 插件上下文
-     */
-    onInit(context: PluginContext): void {
-      // 检查必需的依赖是否可用
-      if (!context.policyEngine) {
-        throw new Error('Explain plugin requires policyEngine to be available in plugin context');
-      }
-      if (!context.permissionResolver) {
-        throw new Error(
-          'Explain plugin requires permissionResolver to be available in plugin context'
-        );
-      }
-
-      // 创建权限解释器
-      state.explainer = new PermissionExplainer(context.policyEngine, context.permissionResolver, {
-        defaultLevel: options.defaultLevel,
-      });
-
-      // 如果启用了自动收集，注册钩子
+      // 如果启用了自动收集，注册全局钩子
       if (options.collectExplanations) {
-        // 在实际的权限检查后收集解释结果
-        // 这需要与 PermissionChecker 集成
-        console.log('Explanation collection enabled');
+        // 创建 afterAny 钩子函数
+        const afterAnyHook: (
+          mtpcContext: MTPCContext,
+          operation: string,
+          resourceName: string,
+          result: unknown
+        ) => void = (mtpcContext, operation, resourceName, result) => {
+          // 收集权限检查结果到收集器
+          // 注意：这里收集的是权限检查结果，而不是解释结果
+          // 解释结果需要用户通过 explainer 显式生成
+          const explanation: PermissionExplanation = {
+            permission: `${resourceName}:${operation}`,
+            resource: resourceName,
+            action: operation,
+            decision: (result as { allowed?: boolean })?.allowed ? 'allow' : 'deny',
+            reason: (result as { reason?: string })?.reason ?? 'Unknown',
+            evaluationPath: ['permission-check'],
+            timestamp: new Date(),
+            duration: (result as { evaluationTime?: number })?.evaluationTime ?? 0,
+            context: {
+              tenant: {
+                id: mtpcContext.tenant.id,
+                status: mtpcContext.tenant.status,
+              },
+              subject: {
+                id: mtpcContext.subject.id,
+                type: mtpcContext.subject.type,
+              },
+            },
+          };
+
+          collector.collect(explanation, {
+            requestId: mtpcContext.request.requestId,
+          });
+        };
+
+        context.registerGlobalHooks({
+          afterAny: [afterAnyHook],
+        });
+
+        console.log('[Explain Plugin] Auto-collection enabled via global hooks');
       }
 
-      console.log('Explain plugin initialized');
+      console.log('[Explain Plugin] Installed successfully');
     },
 
     /**
@@ -171,7 +200,7 @@ export function createExplainPlugin(
     onDestroy(): void {
       // 清空收集器中的所有条目
       collector.clear();
-      console.log('Explain plugin destroyed');
+      console.log('[Explain Plugin] Destroyed');
     },
   };
 }

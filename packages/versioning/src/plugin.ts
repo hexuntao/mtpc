@@ -19,8 +19,6 @@ export function createVersioningPlugin(): PluginDefinition & {
   // 存储所有资源的版本控制配置
   const configs = new Map<string, VersioningConfig>();
 
-  let ctxRef: PluginContext | null = null;
-
   // 插件状态，包含配置存储和配置方法
   const state: VersioningPluginState & {
     configureResource: (config: VersioningConfig, context: PluginContext) => void;
@@ -58,7 +56,6 @@ export function createVersioningPlugin(): PluginDefinition & {
     install(context: PluginContext): void {
       // 使用方手动为需要版本控制的资源调用 configureResource
 
-      ctxRef = context;
       // 已有配置需要在 install 时应用一次
       for (const config of configs.values()) {
         context.extendResourceHooks(config.resourceName, createVersioningHooks(config));
