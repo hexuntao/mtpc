@@ -11,7 +11,9 @@
 - 解释主体的角色和权限来源
 - 自定义解释级别和详细程度
 - 支持包含策略评估详情
-- 提供友好的解释结果格式化
+- 提供友好的解释结果格式化（文本、JSON、Markdown）
+- 自动收集权限检查历史
+- 提供统计和查询功能
 
 ### 适用场景
 
@@ -20,6 +22,14 @@
 - 管理员权限可视化界面
 - 权限决策可解释性需求
 - 开发阶段的权限测试
+- 生产环境的可观测性需求
+
+### 设计原则
+
+- **非侵入性**: 不影响权限判定结果，作为 Side-channel 存在
+- **可观测性**: 提供详细的权限决策解释
+- **可扩展性**: 支持自定义格式化器和收集策略
+- **易于集成**: 通过插件系统无缝集成到 MTPC
 
 ## 2. 安装指南
 
@@ -35,8 +45,8 @@ pnpm add @mtpc/explain @mtpc/core
 
 | 依赖包 | 版本要求 | 说明 |
 |--------|----------|------|
-| `@mtpc/core` | ^1.0.0 | MTPC 核心包，提供基础权限能力 |
-| `@mtpc/shared` | ^1.0.0 | 共享工具函数库 |
+| `@mtpc/core` | workspace:* | MTPC 核心包，提供基础权限能力 |
+| `@mtpc/shared` | workspace:* | 共享工具函数库，提供权限代码解析等功能 |
 
 ## 3. 快速开始
 
@@ -63,6 +73,7 @@ mtpc.use(createExplainPlugin({
 await mtpc.init();
 
 // 创建权限解释器实例（使用便捷函数）
+// 注意：MTPC 实例必须设置了 permissionResolver，否则会抛出错误
 const explainer = createExplainerFromMTPC(mtpc);
 
 // 解释权限决策
@@ -146,9 +157,15 @@ createExplainPlugin(options?): PluginDefinition & { state: ExplainPluginState }
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `defaultLevel` | `ExplainLevel` | 默认解释级别：`'minimal'` | `'standard'` | `'detailed'` | `'debug'` |
-| `collectExplanations` | `boolean` | 是否自动收集权限解释结果 |
+| `defaultLevel` | `ExplainLevel` | 默认解释级别：`'minimal'` | `'standard'` | `'detailed'` | `'debug'`，默认 `'standard'` |
+| `collectExplanations` | `boolean` | 是否自动收集权限解释结果，默认 `false` |
 | `maxCollectedEntries` | `number` | 最大收集条目数，默认 1000 |
+
+**重要说明**：
+- 当 `collectExplanations` 为 `true` 时，插件会注册全局钩子 `afterAny`
+- 每次权限检查后，会自动收集权限检查结果到收集器
+- 收集的是权限检查结果，而不是完整的解释结果
+- 完整的解释结果需要用户通过 `PermissionExplainer` 显式生成
 
 #### 插件状态 (ExplainPluginState)
 
@@ -173,9 +190,69 @@ createExplainerFromMTPC(mtpc, options?): PermissionExplainer
 | `mtpc` | `MTPC` | MTPC 实例 |
 | `options` | `{ defaultLevel?: ExplainLevel }` | 可选配置，默认解释级别 |
 
-**注意**：MTPC 实例必须设置了 `permissionResolver`，否则会抛出错误。
+**重要说明**：
+- MTPC 实例必须设置了 `permissionResolver`，否则会抛出错误
+- 可以通过以下方式设置权限解析器：
+  1. 在 `createMTPC()` 时传入 `defaultPermissionResolver` 选项
+  2. 使用 `mtpc.setPermissionResolver()` 方法设置
+- 如果权限解析器不存在，会抛出以下错误：
+  ```
+  Error: MTPC instance does not have a permissionResolver. Please set one using setPermissionResolver() or provide it in the constructor.
+  ```
 
-### 4.3 PermissionExplainer 类
+**内部实现**：
+- 依赖 `@mtpc/core` 的 `PolicyEngine` 和 `PermissionEvaluationContext`
+- 依赖 `@mtpc/shared` 的 `parsePermissionCode()` 函数
+- 默认解释级别为 `'standard'`
+
+**示例**：
+```typescript
+// 方式1：在创建 MTPC 实例时设置
+const mtpc = createMTPC({
+  defaultPermissionResolver: async (tenantId, subjectId) => {
+    return new Set(['user:read', 'user:create']);
+  }
+});
+
+// 方式2：使用 setPermissionResolver 方法设置
+const mtpc = createMTPC();
+mtpc.setPermissionResolver(async (tenantId, subjectId) => {
+  return new Set(['user:read', 'user:create']);
+});
+
+// 创建解释器
+const explainer = createExplainerFromMTPC(mtpc);
+```
+
+### 4.3 createExplainer 函数
+
+创建权限解释器实例（便捷函数）：
+
+```typescript
+createExplainer(policyEngine, permissionResolver, options?): PermissionExplainer
+```
+
+#### 参数
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `policyEngine` | `PolicyEngine` | 策略引擎实例 |
+| `permissionResolver` | `(tenantId: string, subjectId: string) => Promise<Set<string>>` | 权限解析器 |
+| `options` | `{ defaultLevel?: ExplainLevel }` | 可选配置，默认解释级别 |
+
+**注意**：通常使用 `createExplainerFromMTPC()` 而不是直接使用此函数。
+
+**创建方式对比**：
+
+| 方式 | 适用场景 | 推荐度 |
+|------|----------|--------|
+| `createExplainerFromMTPC()` | 已有 MTPC 实例，需要快速创建解释器 | ⭐⭐⭐⭐⭐ |
+| `createExplainer()` | 需要独立控制策略引擎和权限解析器 | ⭐⭐ |
+| `new PermissionExplainer()` | 需要完全自定义配置 | ⭐ |
+
+### 4.4 PermissionExplainer 类
+
+**说明**：通常通过 `createExplainerFromMTPC()` 函数创建，不建议直接实例化。
 
 #### 构造函数
 
@@ -187,7 +264,12 @@ new PermissionExplainer(policyEngine, permissionResolver, options?)
 |------|------|------|
 | `policyEngine` | `PolicyEngine` | 策略引擎实例，用于评估策略 |
 | `permissionResolver` | `(tenantId: string, subjectId: string) => Promise<Set<string>>` | 权限解析器，用于获取主体的权限 |
-| `options` | `{ defaultLevel?: ExplainLevel }` | 可选配置，默认解释级别 |
+| `options` | `{ defaultLevel?: ExplainLevel }` | 可选配置，默认解释级别，默认 `'standard'` |
+
+**内部实现**：
+- 依赖 `@mtpc/core` 的 `PolicyEngine` 和 `PermissionEvaluationContext`
+- 依赖 `@mtpc/shared` 的 `parsePermissionCode()` 函数
+- 默认解释级别为 `'standard'`
 
 #### explain 方法
 
@@ -229,17 +311,35 @@ explainSubject(tenant, subject): Promise<{ roles: string[]; permissions: string[
 | `tenant` | `TenantContext` | 租户上下文 |
 | `subject` | `SubjectContext` | 主体上下文 |
 
+**权限解释流程**：
+1. **解析权限代码**: 使用 `parsePermissionCode()` 解析权限代码
+2. **获取主体权限**: 调用 `permissionResolver(tenantId, subjectId)` 获取主体权限
+3. **检查通配符权限**: 检查 `*` 和 `resource:*` 通配符权限
+4. **评估策略**: 调用 `policyEngine.evaluate()` 评估策略
+5. **构建解释结果**: 根据评估结果构建 `PermissionExplanation`
+
 ### 4.4 解释选项 (ExplainOptions)
 
 ```typescript
 interface ExplainOptions {
-  level?: ExplainLevel; // 解释级别：'minimal' | 'standard' | 'detailed' | 'debug'
-  includePolicies?: boolean; // 是否包含策略评估结果
-  includeContext?: boolean; // 是否包含完整上下文信息
-  includeConditions?: boolean; // 是否包含条件评估结果
-  maxPolicies?: number; // 最大返回的策略数量
+  level?: ExplainLevel;           // 解释级别：'minimal' | 'standard' | 'detailed' | 'debug'
+  includePolicies?: boolean;       // 是否包含策略评估结果
+  includeContext?: boolean;        // 是否包含完整上下文信息
+  includeConditions?: boolean;     // 是否包含条件评估结果（当前版本未实现）
+  maxPolicies?: number;           // 最大返回的策略数量（当前版本未实现）
 }
 ```
+
+**选项说明**：
+- `level`: 控制解释的详细程度
+  - `minimal`: 最小化信息，仅包含基本决策和原因
+  - `standard`: 标准信息，包含决策、原因、匹配的策略和规则
+  - `detailed`: 详细信息，包含所有策略和规则的评估结果
+  - `debug`: 调试信息，包含完整的评估过程和上下文
+- `includePolicies`: 包含策略评估结果会增加性能开销
+- `includeContext`: 包含完整上下文信息会增加响应大小
+- `includeConditions`: 当前版本未实现，保留用于未来扩展
+- `maxPolicies`: 当前版本未实现，保留用于未来扩展
 
 ### 4.5 解释结果 (PermissionExplanation)
 
@@ -272,6 +372,44 @@ const text = formatter.format(explanation);
 console.log(text);
 ```
 
+**构造函数选项**：
+```typescript
+interface TextFormatterOptions {
+  indent?: string;    // 缩进字符串，默认 '  '（两个空格）
+  useColors?: boolean; // 是否使用颜色输出，默认 false
+}
+```
+
+**输出格式示例**：
+```
+=== Permission: user:read ===
+
+Decision: ALLOW
+Reason: 权限被明确授予
+
+Context:
+  Tenant: tenant-1
+  Subject: user-1 (user)
+  Roles: admin, editor
+
+Evaluation Path:
+  → permission-check
+  → policy-evaluation
+
+Policies Evaluated:
+  ✓ Admin Policy [priority: 1000]
+  ✓ User Policy [priority: 50]
+  ✗ Guest Policy [priority: 10]
+
+Duration: 10ms
+Timestamp: 2024-01-01T00:00:00.000Z
+```
+
+**颜色说明**（当 `useColors: true` 时）：
+- `ALLOW`: 绿色
+- `DENY`: 红色
+- `NOT_APPLICABLE`: 黄色
+
 #### JSONFormatter
 
 将权限解释结果格式化为 JSON 格式：
@@ -282,6 +420,48 @@ import { JSONFormatter } from '@mtpc/explain';
 const formatter = new JSONFormatter({ pretty: true });
 const json = formatter.format(explanation);
 console.log(json);
+```
+
+**构造函数选项**：
+```typescript
+interface JSONFormatterOptions {
+  pretty?: boolean; // 是否美化输出，默认 true
+}
+```
+
+**输出格式示例**：
+```json
+{
+  "permission": "user:read",
+  "resource": "user",
+  "action": "read",
+  "decision": "allow",
+  "reason": "权限被明确授予",
+  "evaluationPath": ["permission-check"],
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "duration": 10,
+  "context": {
+    "tenant": {
+      "id": "tenant-1",
+      "status": "active"
+    },
+    "subject": {
+      "id": "user-1",
+      "type": "user",
+      "roles": ["admin", "editor"]
+    }
+  },
+  "policies": [
+    {
+      "id": "admin-policy",
+      "name": "Admin Policy",
+      "matched": true,
+      "effect": "allow",
+      "priority": 1000,
+      "enabled": true
+    }
+  ]
+}
 ```
 
 #### MarkdownFormatter
@@ -295,6 +475,90 @@ const formatter = new MarkdownFormatter();
 const markdown = formatter.format(explanation);
 console.log(markdown);
 ```
+
+**输出格式示例**：
+```markdown
+# Permission Check: user:read
+
+**Decision:** ✅ ALLOWED
+
+## Details
+
+| Property | Value |
+| --- | --- |
+| Permission | user:read |
+| Resource | user |
+| Action | read |
+| Reason | 权限被明确授予 |
+
+## Context
+
+- **Tenant:** tenant-1
+- **Subject:** user-1
+- **Type:** user
+- **Roles:** admin, editor
+
+## Evaluation Path
+
+```
+permission-check
+policy-evaluation
+```
+
+---
+
+*Generated at 2024-01-01T00:00:00.000Z in 10ms*
+```
+ 
+### 4.7 格式化器便捷函数
+
+#### createTextFormatter
+
+创建文本格式化器实例（便捷函数）：
+
+```typescript
+createTextFormatter(options?): TextFormatter
+```
+
+##### 参数
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `options.indent` | `string` | 缩进字符串，默认 '  ' |
+| `options.useColors` | `boolean` | 是否使用颜色输出，默认 false |
+
+#### createJSONFormatter
+
+创建 JSON 格式化器实例（便捷函数）：
+
+```typescript
+createJSONFormatter(options?): JSONFormatter
+```
+
+##### 参数
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `options.pretty` | `boolean` | 是否美化输出，默认 true |
+
+#### createMarkdownFormatter
+
+创建 Markdown 格式化器实例（便捷函数）：
+
+```typescript
+createMarkdownFormatter(): MarkdownFormatter
+```
+
+**示例**：
+```typescript
+import { createTextFormatter, createJSONFormatter, createMarkdownFormatter } from '@mtpc/explain';
+
+const textFormatter = createTextFormatter({ useColors: true });
+const jsonFormatter = createJSONFormatter({ pretty: true });
+const mdFormatter = createMarkdownFormatter();
+```
+
+---
 
 ## 5. 高级功能演示
 
@@ -351,6 +615,37 @@ const subjectExplanation = await explainer.explainSubject(
 console.log('主体角色：', subjectExplanation.roles);
 console.log('主体权限：', subjectExplanation.permissions);
 console.log('权限来源：', subjectExplanation.sources);
+```
+
+**返回值说明**：
+```typescript
+{
+  roles: string[],                                    // 主体角色列表
+  permissions: string[],                                // 主体权限列表
+  sources: Array<{ permission: string; source: string }>  // 权限来源列表
+}
+```
+
+**重要说明**：
+- `roles`: 从 `SubjectContext.roles` 获取，如果未提供则为空数组
+- `permissions`: 通过调用 `permissionResolver(tenantId, subjectId)` 获取
+- `sources`: 每个权限的来源信息，当前版本中 `source` 字段固定为 `'resolved'`
+  - `'resolved'` 表示权限是通过权限解析器获取的
+  - 当前版本无法追踪权限的实际来源（如角色、策略等）
+  - 未来版本可能会增强此功能
+
+**输出示例**：
+```javascript
+{
+  roles: ['admin', 'editor'],
+  permissions: ['user:read', 'user:create', 'user:update', 'user:delete'],
+  sources: [
+    { permission: 'user:read', source: 'resolved' },
+    { permission: 'user:create', source: 'resolved' },
+    { permission: 'user:update', source: 'resolved' },
+    { permission: 'user:delete', source: 'resolved' }
+  ]
+}
 ```
 
 ### 5.4 集成策略引擎
@@ -473,7 +768,109 @@ if (explainPlugin) {
   // 清理过期条目
   const cleaned = collector.cleanup();
   console.log('清理了', cleaned, '个过期条目');
+
+  // 导出所有条目
+  const allEntries = collector.export();
+  console.log('所有条目：', allEntries.length);
+
+  // 获取当前条目数量
+  console.log('当前条目数量：', collector.size);
 }
+```
+
+**创建收集器实例**：
+
+```typescript
+createCollector(options?): ExplanationCollector
+```
+
+#### 参数
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `options` | `CollectorOptions` | 收集器选项 |
+
+**示例**：
+```typescript
+const collector = createCollector({
+  maxEntries: 1000,
+  ttl: 3600000,
+  onCollect: (entry) => {
+    console.log('Collected:', entry.explanation.permission);
+  }
+});
+```
+
+---
+
+**ExplanationCollector 方法详解**：
+
+#### 构造函数选项
+```typescript
+interface CollectorOptions {
+  maxEntries?: number;  // 最大条目数，默认 1000
+  ttl?: number;         // 条目生存时间（毫秒），默认 3600000（1小时）
+  onCollect?: (entry: ExplanationEntry) => void;  // 收集回调
+}
+```
+
+#### 方法说明
+
+| 方法 | 参数 | 返回值 | 说明 |
+|------|------|--------|------|
+| `collect()` | `explanation, metadata?` | `void` | 收集单个权限解释 |
+| `collectBulk()` | `result, metadata?` | `void` | 收集批量权限解释结果 |
+| `getRecent()` | `count?` | `ExplanationEntry[]` | 获取最近的解释条目 |
+| `getByTenant()` | `tenantId` | `ExplanationEntry[]` | 按租户ID过滤 |
+| `getBySubject()` | `subjectId` | `ExplanationEntry[]` | 按主体ID过滤 |
+| `getByPermission()` | `permission` | `ExplanationEntry[]` | 按权限代码过滤 |
+| `getByDecision()` | `decision` | `ExplanationEntry[]` | 按决策类型过滤 |
+| `getDenied()` | - | `ExplanationEntry[]` | 获取所有被拒绝的条目 |
+| `getStats()` | - | `Stats` | 获取统计信息 |
+| `cleanup()` | - | `number` | 清理过期条目，返回清理数量 |
+| `clear()` | - | `void` | 清空所有条目 |
+| `export()` | - | `ExplanationEntry[]` | 导出所有条目副本 |
+| `size` | - | `number` | 获取当前条目数量 |
+
+#### 统计信息结构
+```typescript
+interface Stats {
+  total: number;                           // 总条目数
+  allowed: number;                         // 允许的条目数
+  denied: number;                          // 拒绝的条目数
+  notApplicable: number;                   // 不适用的条目数
+  averageDuration: number;                 // 平均评估耗时（毫秒）
+  byResource: Record<string, number>;      // 按资源统计
+  bySubject: Record<string, number>;       // 按主体统计
+}
+```
+
+#### ExplanationEntry 结构
+```typescript
+interface ExplanationEntry {
+  explanation: PermissionExplanation;  // 权限解释
+  collectedAt: Date;                 // 收集时间
+  requestId?: string;                 // 请求ID
+  metadata?: Record<string, unknown>; // 附加元数据
+}
+```
+
+**使用 onCollect 回调**：
+```typescript
+const collector = new ExplanationCollector({
+  maxEntries: 1000,
+  ttl: 3600000,
+  onCollect: (entry) => {
+    // 将审计日志发送到外部系统
+    auditLogger.log({
+      permission: entry.explanation.permission,
+      decision: entry.explanation.decision,
+      tenantId: entry.explanation.context.tenant.id,
+      subjectId: entry.explanation.context.subject.id,
+      timestamp: entry.collectedAt
+    });
+  }
+});
 ```
 
 ## 6. 最佳实践
@@ -543,6 +940,45 @@ function renderPermissionExplanation(explanation) {
 }
 ```
 
+### 6.5 错误处理建议
+
+```typescript
+try {
+  const explainer = createExplainerFromMTPC(mtpc);
+  const explanation = await explainer.explain(tenant, subject, permission);
+  // 处理解释结果
+} catch (error) {
+  if (error.message.includes('permissionResolver')) {
+    console.error('权限解析器未设置，请使用 setPermissionResolver() 方法设置');
+  } else {
+    console.error('解释权限时出错:', error);
+  }
+}
+```
+
+### 6.6 安全建议
+
+1. **保护敏感信息**: 避免在生产环境中输出完整的上下文信息
+2. **限制解释级别**: 生产环境使用 `minimal` 或 `standard` 级别
+3. **定期清理收集器**: 使用 `cleanup()` 方法定期清理过期条目
+4. **监控收集器大小**: 监控收集器的条目数量，防止内存泄漏
+
+### 6.7 监控建议
+
+```typescript
+// 定期获取统计信息
+setInterval(() => {
+  const stats = collector.getStats();
+  console.log('权限检查统计:', stats);
+  
+  // 发送到监控系统
+  metrics.gauge('mtpc.explanations.total', stats.total);
+  metrics.gauge('mtpc.explanations.allowed', stats.allowed);
+  metrics.gauge('mtpc.explanations.denied', stats.denied);
+  metrics.gauge('mtpc.explanations.averageDuration', stats.averageDuration);
+}, 60000);  // 每分钟
+```
+
 ## 7. 常见问题解答
 
 ### 7.1 Q: 解释结果中的 `evaluationPath` 是什么？
@@ -579,15 +1015,133 @@ A:
 
 A: 使用 `mtpc.getPermissionResolver()` 方法。如果返回 `undefined`，说明 MTPC 实例没有设置权限解析器，需要使用 `mtpc.setPermissionResolver()` 方法设置。
 
+**设置权限解析器的方式**：
+```typescript
+// 方式1：在创建 MTPC 实例时设置
+const mtpc = createMTPC({
+  defaultPermissionResolver: async (tenantId, subjectId) => {
+    return new Set(['user:read', 'user:create']);
+  }
+});
+
+// 方式2：使用 setPermissionResolver 方法设置
+const mtpc = createMTPC();
+mtpc.setPermissionResolver(async (tenantId, subjectId) => {
+  return new Set(['user:read', 'user:create']);
+});
+```
+
+**注意事项**：
+- `createExplainerFromMTPC()` 函数会检查 `permissionResolver` 是否存在
+- 如果不存在，会抛出错误：`MTPC instance does not have a permissionResolver. Please set one using setPermissionResolver() or provide it in the constructor.`
+- 建议在创建 MTPC 实例时设置 `defaultPermissionResolver`
+
+### 7.9 Q: `explainSubject` 方法的 `source` 字段是什么？
+
+A: `source` 字段表示权限的来源。当前版本中 `source` 字段固定为 `'resolved'`，表示权限是通过权限解析器获取的。当前版本无法追踪权限的实际来源（如角色、策略等）。
+
+**示例**:
+```javascript
+{
+  sources: [
+    { permission: 'user:read', source: 'resolved' },
+    { permission: 'user:create', source: 'resolved' }
+  ]
+}
+```
+
+### 7.10 Q: 如何清理收集器中的过期条目？
+
+A: 使用 `collector.cleanup()` 方法清理过期条目。该方法会删除超过 `ttl` 的条目，并返回清理的条目数量。
+
+**示例**:
+```typescript
+const cleaned = collector.cleanup();
+console.log('清理了', cleaned, '个过期条目');
+```
+
 ## 8. 性能优化建议
 
 1. **缓存解释结果**：对于频繁请求的相同权限解释，可以考虑缓存结果
 2. **使用合适的解释级别**：根据实际需求选择解释级别，避免不必要的详细信息
+   - 生产环境：使用 `minimal` 或 `standard`
+   - 开发环境：使用 `detailed` 或 `debug`
 3. **批量解释**：对于多个权限解释请求，使用批量解释 API 可以减少网络开销和处理时间
+   - 注意：当前版本 `explainBulk()` 是串行执行的，未来版本可能会优化为并行执行
 4. **异步处理**：解释功能支持异步调用，可以在后台处理，不影响主业务流程
 5. **合理设置超时**：对于可能耗时的解释请求，设置合理的超时时间
+6. **限制策略数量**：减少不必要的策略可以显著提升性能
+7. **设置合理的收集器大小**：根据实际需求调整 `maxEntries` 和 `ttl`
+8. **使用 onCollect 回调**：将审计日志发送到外部系统时，使用异步方式避免阻塞主流程
 
-## 9. 版本更新日志
+**性能指标参考**：
+
+| 操作 | 预期耗时 | 备注 |
+|------|----------|------|
+| `explain()` (minimal) | < 1ms | 最小开销 |
+| `explain()` (standard) | < 5ms | 中等开销 |
+| `explain()` (detailed) | < 20ms | 包含策略评估 |
+| `explainBulk()` (10个权限) | < 50ms | 串行执行 |
+| `collector.getStats()` | < 1ms | 快速统计 |
+| `collector.cleanup()` | < 10ms | 取决于条目数量 |
+| `formatter.format()` | < 1ms | 文本格式化 |
+| `formatter.formatBulk()` | < 5ms | 批量格式化 |
+
+## 9. 附录
+
+### A. 类型定义速查表
+
+| 类型 | 说明 |
+|------|------|
+| `ExplainLevel` | 解释级别：`'minimal'` | `'standard'` | `'detailed'` | `'debug'` |
+| `DecisionType` | 决策类型：`'allow'` | `'deny'` | `'not_applicable'` |
+| `PermissionExplanation` | 权限解释结果 |
+| `ExplanationContext` | 解释上下文 |
+| `ExplainOptions` | 解释选项 |
+| `BulkExplainRequest` | 批量解释请求 |
+| `BulkExplainResult` | 批量解释结果 |
+| `ExplanationEntry` | 解释条目 |
+| `ExplanationFormatter` | 解释格式化器接口 |
+| `ExplainPluginOptions` | 插件配置选项 |
+| `ExplainPluginState` | 插件状态 |
+| `CollectorOptions` | 收集器配置选项 |
+| `TextFormatterOptions` | 文本格式化器配置选项 |
+| `JSONFormatterOptions` | JSON 格式化器配置选项 |
+
+### B. API 速查表
+
+| API | 说明 |
+|-----|------|
+| `createExplainPlugin()` | 创建 Explain 插件 |
+| `createExplainerFromMTPC()` | 从 MTPC 实例创建权限解释器 |
+| `createExplainer()` | 直接创建权限解释器 |
+| `createCollector()` | 创建解释收集器 |
+| `createTextFormatter()` | 创建文本格式化器 |
+| `createJSONFormatter()` | 创建 JSON 格式化器 |
+| `createMarkdownFormatter()` | 创建 Markdown 格式化器 |
+| `PermissionExplainer.explain()` | 解释单个权限决策 |
+| `PermissionExplainer.explainBulk()` | 批量解释多个权限决策 |
+| `PermissionExplainer.explainSubject()` | 解释主体的角色和权限来源 |
+| `ExplanationCollector.collect()` | 收集单个权限解释 |
+| `ExplanationCollector.collectBulk()` | 收集批量权限解释结果 |
+| `ExplanationCollector.getRecent()` | 获取最近的解释条目 |
+| `ExplanationCollector.getByTenant()` | 按租户ID过滤 |
+| `ExplanationCollector.getBySubject()` | 按主体ID过滤 |
+| `ExplanationCollector.getByPermission()` | 按权限代码过滤 |
+| `ExplanationCollector.getByDecision()` | 按决策类型过滤 |
+| `ExplanationCollector.getDenied()` | 获取所有被拒绝的条目 |
+| `ExplanationCollector.getStats()` | 获取统计信息 |
+| `ExplanationCollector.cleanup()` | 清理过期条目 |
+| `ExplanationCollector.clear()` | 清空所有条目 |
+| `ExplanationCollector.export()` | 导出所有条目 |
+| `TextFormatter.format()` | 格式化为文本 |
+| `TextFormatter.formatBulk()` | 格式化批量结果为文本 |
+| `JSONFormatter.format()` | 格式化为 JSON |
+| `JSONFormatter.formatBulk()` | 格式化批量结果为 JSON |
+| `MarkdownFormatter.format()` | 格式化为 Markdown |
+| `MarkdownFormatter.formatBulk()` | 格式化批量结果为 Markdown |
+
+## 10. 版本更新日志
 
 ### v0.2.0 (当前版本)
 
