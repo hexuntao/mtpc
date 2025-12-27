@@ -6,13 +6,15 @@
 
 ### 核心功能
 
-- 多级缓存支持（内存缓存、LRU 缓存）
-- 智能缓存失效策略
-- 支持多种缓存写入策略（write-through、write-behind、refresh-ahead）
+- 多级缓存支持（MemoryCache、LRUCache）
+- 智能缓存失效策略（租户级、主体级、模式匹配）
+- 支持多种缓存驱逐策略（LRU、LFU、FIFO、TTL）
+- 支持多种缓存写入策略（Write-Through、Write-Behind、Refresh-Ahead）
 - 租户级别的缓存隔离
+- 版本控制机制
 - 缓存统计和监控
 - 易于与 MTPC Core 集成
-- 支持自定义缓存实现
+- 支持自定义缓存实现（通过 CacheProvider 接口）
 
 ### 适用场景
 
@@ -50,9 +52,9 @@ import { createPolicyCache } from '@mtpc/policy-cache';
 // 创建策略缓存实例
 const policyCache = createPolicyCache({
   // 缓存配置选项
-  ttl: 3600000, // 缓存过期时间：1小时（毫秒）
-  maxSize: 10000, // 最大缓存条目数
-  strategy: 'write-through' // 缓存写入策略
+  defaultTTL: 3600000, // 缓存过期时间：1小时（毫秒）
+  maxEntries: 10000, // 最大缓存条目数
+  strategy: 'lru' // 缓存驱逐策略：'lru' | 'lfu' | 'fifo' | 'ttl'
 });
 
 // 设置权限加载器
@@ -92,23 +94,23 @@ await checkPermission();
 
 ```typescript
 import { createMTPC } from '@mtpc/core';
-import { policyCachePlugin } from '@mtpc/policy-cache';
+import { createPolicyCachePlugin } from '@mtpc/policy-cache';
 
 // 创建 MTPC 实例
 const mtpc = createMTPC();
 
 // 使用策略缓存插件
-mtpc.use(policyCachePlugin({
+mtpc.use(createPolicyCachePlugin({
   // 插件配置选项
-  ttl: 1800000, // 30分钟
-  maxSize: 5000,
-  strategy: 'refresh-ahead'
+  defaultTTL: 1800000, // 30分钟
+  maxEntries: 5000,
+  strategy: 'lru' // 缓存驱逐策略：'lru' | 'lfu' | 'fifo' | 'ttl'
 }));
 
 // 初始化 MTPC
 await mtpc.init();
 
-// 现在 MTPC 会自动使用缓存的权限解析器
+// 现在 MTPC 会自动在写操作后使租户缓存失效
 ```
 
 ## 4. 核心 API 详解
@@ -129,13 +131,26 @@ new PolicyCache(options?)
 
 ```typescript
 interface PolicyCacheOptions {
-  ttl?: number; // 缓存过期时间（毫秒）
-  maxSize?: number; // 最大缓存条目数
-  strategy?: 'write-through' | 'write-behind' | 'refresh-ahead'; // 缓存写入策略
-  cacheType?: 'memory' | 'lru'; // 缓存类型
-  cache?: CacheManager; // 自定义缓存管理器实例
+  provider?: CacheProvider;           // 自定义缓存提供者
+  defaultTTL?: number;               // 默认缓存生存时间（毫秒），默认 60000 (60秒）
+  maxEntries?: number;               // 最大缓存条目数，默认 10000
+  strategy?: CacheStrategy;          // 缓存驱逐策略：'lru' | 'lfu' | 'fifo' | 'ttl'，默认 'lru'
+  keyPrefix?: string;                // 缓存键前缀，默认 'mtpc:'
+  enableStats?: boolean;             // 是否启用统计信息，默认 true
+  onHit?: (key: string) => void;    // 缓存命中时的回调函数
+  onMiss?: (key: string) => void;   // 缓存未命中时的回调函数
 }
+
+// CacheStrategy 类型
+type CacheStrategy = 'lru' | 'lfu' | 'fifo' | 'ttl';
 ```
+
+**默认配置值**：
+- `defaultTTL`: 60000 (60秒)
+- `maxEntries`: 10000
+- `keyPrefix`: 'mtpc:'
+- `enableStats`: true
+- `strategy`: 'lru'
 
 #### setPermissionLoader 方法
 
@@ -277,10 +292,13 @@ import { createPolicyCache } from '@mtpc/policy-cache';
 
 // 创建具有自定义配置的策略缓存
 const customCache = createPolicyCache({
-  ttl: 300000, // 5分钟过期
-  maxSize: 1000, // 最多缓存1000个条目
-  strategy: 'write-behind', // 写后策略
-  cacheType: 'lru' // 使用LRU缓存
+  defaultTTL: 300000, // 5分钟过期
+  maxEntries: 1000, // 最多缓存1000个条目
+  strategy: 'lru', // 缓存驱逐策略：'lru' | 'lfu' | 'fifo' | 'ttl'
+  keyPrefix: 'myapp:', // 自定义缓存键前缀
+  enableStats: true, // 启用统计信息
+  onHit: (key) => console.log(`Cache hit: ${key}`),
+  onMiss: (key) => console.log(`Cache miss: ${key}`)
 });
 
 // 设置权限加载器
@@ -341,55 +359,172 @@ policyCache.setPermissionLoader(async (tenantId, subjectId) => {
 });
 ```
 
-### 5.4 不同缓存策略的使用
+### 5.4 缓存驱逐策略
 
-#### 5.4.1 Write-Through 策略（默认）
+#### 5.4.1 LRU 策略（默认）
+
+最近最少使用（Least Recently Used）策略，优先淘汰最久未使用的缓存项。
 
 ```typescript
 import { createPolicyCache } from '@mtpc/policy-cache';
 
-// 写入穿透策略：先写入缓存，再写入数据源
-const writeThroughCache = createPolicyCache({
-  strategy: 'write-through'
+const lruCache = createPolicyCache({
+  defaultTTL: 3600000, // 1小时
+  maxEntries: 10000,
+  strategy: 'lru' // 最近最少使用
 });
 ```
 
-#### 5.4.2 Write-Behind 策略
+#### 5.4.2 LFU 策略
+
+最不经常使用（Least Frequently Used）策略，优先淘汰访问次数最少的缓存项。
 
 ```typescript
 import { createPolicyCache } from '@mtpc/policy-cache';
 
-// 写后策略：先写入缓存，异步写入数据源
-const writeBehindCache = createPolicyCache({
-  strategy: 'write-behind',
-  // write-behind 特定配置
-  batchSize: 10, // 批量写入大小
-  flushInterval: 5000 // 刷新间隔（毫秒）
+const lfuCache = createPolicyCache({
+  defaultTTL: 3600000,
+  maxEntries: 10000,
+  strategy: 'lfu' // 最不经常使用
 });
 ```
 
-#### 5.4.3 Refresh-Ahead 策略
+#### 5.4.3 FIFO 策略
+
+先进先出（First In First Out）策略，按插入顺序淘汰缓存项。
 
 ```typescript
 import { createPolicyCache } from '@mtpc/policy-cache';
 
-// 预刷新策略：在缓存过期前自动刷新
-const refreshAheadCache = createPolicyCache({
-  strategy: 'refresh-ahead',
-  // refresh-ahead 特定配置
-  refreshThreshold: 0.8 // 过期前 20% 时间刷新
+const fifoCache = createPolicyCache({
+  defaultTTL: 3600000,
+  maxEntries: 10000,
+  strategy: 'fifo' // 先进先出
 });
+```
+
+#### 5.4.4 TTL 策略
+
+基于时间的过期策略，优先淘汰已过期的缓存项。
+
+```typescript
+import { createPolicyCache } from '@mtpc/policy-cache';
+
+const ttlCache = createPolicyCache({
+  defaultTTL: 3600000,
+  maxEntries: 10000,
+  strategy: 'ttl' // 基于时间的过期
+});
+```
+
+### 5.5 缓存写入策略
+
+#### 5.5.1 Write-Through 策略
+
+直写策略：同步写入缓存和持久化存储，确保数据一致性。
+
+```typescript
+import { createPolicyCache, createWriteThroughCache } from '@mtpc/policy-cache';
+import { MemoryCache } from '@mtpc/policy-cache';
+
+// 创建底层缓存
+const memoryCache = new MemoryCache({
+  ttl: 60000,
+  maxSize: 10000
+});
+
+// 创建直写缓存
+const writeThroughCache = createWriteThroughCache(
+  memoryCache,
+  {
+    get: async (key) => {
+      // 从持久化存储获取
+      return await storage.get(key);
+    },
+    set: async (key, value) => {
+      // 写入持久化存储
+      await storage.set(key, value);
+    },
+    delete: async (key) => {
+      // 从持久化存储删除
+      await storage.delete(key);
+    }
+  },
+  { ttl: 60000 }
+);
+```
+
+#### 5.5.2 Write-Behind 策略
+
+写回策略：立即写入缓存，然后批量写入到持久化存储中。
+
+```typescript
+import { createWriteBehindCache } from '@mtpc/policy-cache';
+import { MemoryCache } from '@mtpc/policy-cache';
+
+const memoryCache = new MemoryCache({
+  ttl: 60000,
+  maxSize: 10000
+});
+
+const writeBehindCache = createWriteBehindCache(
+  memoryCache,
+  {
+    set: async (key, value) => {
+      await storage.set(key, value);
+    },
+    delete: async (key) => {
+      await storage.delete(key);
+    }
+  },
+  {
+    flushInterval: 1000, // 刷新间隔（毫秒）
+    maxBatchSize: 100 // 最大批量大小
+  }
+);
+
+// 停止并刷新所有待处理写操作
+await writeBehindCache.stop();
+```
+
+#### 5.5.3 Refresh-Ahead 策略
+
+预刷新策略：在缓存条目即将过期之前主动刷新。
+
+```typescript
+import { createRefreshAheadCache } from '@mtpc/policy-cache';
+import { MemoryCache } from '@mtpc/policy-cache';
+
+const memoryCache = new MemoryCache({
+  ttl: 60000,
+  maxSize: 10000
+});
+
+const refreshAheadCache = createRefreshAheadCache(
+  memoryCache,
+  async (key) => {
+    // 从数据源加载数据
+    return await dataSource.get(key);
+  },
+  {
+    ttl: 60000,
+    refreshThreshold: 0.8 // 过期前 20% 时间刷新
+  }
+);
+
+// 检查键是否正在刷新
+const isRefreshing = refreshAheadCache.isRefreshing('some-key');
 ```
 
 ### 5.5 自定义缓存实现
 
 ```typescript
 import { createPolicyCache } from '@mtpc/policy-cache';
-import { CacheManager } from '@mtpc/policy-cache/dist/cache';
+import { CacheProvider } from '@mtpc/policy-cache';
 
-// 实现自定义缓存管理器
-class CustomCacheManager implements CacheManager {
-  // 实现 CacheManager 接口
+// 实现自定义缓存提供者
+class CustomCacheProvider implements CacheProvider {
+  // 实现 CacheProvider 接口
   private cache = new Map<string, any>();
   
   async get<T>(key: string): Promise<T | null> {
@@ -440,9 +575,9 @@ class CustomCacheManager implements CacheManager {
   }
 }
 
-// 使用自定义缓存管理器
+// 使用自定义缓存提供者
 const customCache = createPolicyCache({
-  cache: new CustomCacheManager()
+  provider: new CustomCacheProvider()
 });
 ```
 
@@ -450,13 +585,14 @@ const customCache = createPolicyCache({
 
 ```typescript
 import { createPolicyCache } from '@mtpc/policy-cache';
+import { CacheProvider } from '@mtpc/policy-cache';
 import Redis from 'ioredis';
 
 // 连接到 Redis
 const redis = new Redis();
 
-// 实现基于 Redis 的缓存管理器
-class RedisCacheManager implements CacheManager {
+// 实现基于 Redis 的缓存提供者
+class RedisCacheProvider implements CacheProvider {
   async get<T>(key: string): Promise<T | null> {
     const value = await redis.get(key);
     return value ? JSON.parse(value) : null;
@@ -476,8 +612,21 @@ class RedisCacheManager implements CacheManager {
     return result > 0;
   }
   
+  async has(key: string): Promise<boolean> {
+    const result = await redis.exists(key);
+    return result > 0;
+  }
+  
   async clear(): Promise<void> {
     await redis.flushdb();
+  }
+  
+  async keys(): Promise<string[]> {
+    return await redis.keys('*');
+  }
+  
+  async size(): Promise<number> {
+    return await redis.dbsize();
   }
   
   async invalidateTenant(tenantId: string): Promise<number> {
@@ -489,7 +638,7 @@ class RedisCacheManager implements CacheManager {
     return result;
   }
   
-  getStats(): CacheStats {
+  getStats() {
     // Redis 统计需要特殊实现，这里简化处理
     return {
       hits: 0,
@@ -505,10 +654,176 @@ class RedisCacheManager implements CacheManager {
   }
 }
 
-// 使用 Redis 缓存
+// 使用 Redis 缓存提供者
 const redisCache = createPolicyCache({
-  cache: new RedisCacheManager()
+  provider: new RedisCacheProvider()
 });
+```
+
+### 5.7 LRUCache 高级用法
+
+LRUCache 提供了一些高级方法用于调试和特殊场景。
+
+```typescript
+import { LRUCache, createLRUCache } from '@mtpc/policy-cache';
+
+const lruCache = createLRUCache({
+  capacity: 1000,
+  ttl: 60000 // 60秒
+});
+
+// 获取值但不更新 LRU 顺序
+const value = lruCache.peek('some-key');
+
+// 获取所有缓存条目（用于调试）
+const allEntries = lruCache.entries();
+console.log('All cache entries:', allEntries);
+```
+
+### 5.8 CacheManager 版本控制
+
+CacheManager 提供了版本控制机制，用于跟踪租户的缓存版本。
+
+```typescript
+import { CacheManager, createCacheManager } from '@mtpc/policy-cache';
+
+const cacheManager = createCacheManager({
+  defaultTTL: 3600000,
+  maxEntries: 10000
+});
+
+// 获取租户的缓存版本
+const version = cacheManager.getVersion('tenant-1');
+console.log('Tenant version:', version);
+
+// 增加租户的缓存版本
+const newVersion = cacheManager.incrementVersion('tenant-1');
+console.log('New version:', newVersion);
+
+// 检查版本是否有效
+const isValid = cacheManager.isVersionValid('tenant-1', version);
+console.log('Is version valid:', isValid);
+```
+
+### 5.9 MemoryCache 清理过期缓存
+
+MemoryCache 提供了清理过期缓存的方法。
+
+```typescript
+import { MemoryCache, createMemoryCache } from '@mtpc/policy-cache';
+
+const memoryCache = createMemoryCache({
+  ttl: 60000,
+  maxSize: 10000
+});
+
+// 清理过期的缓存条目
+const cleaned = memoryCache.cleanup();
+console.log(`Cleaned ${cleaned} expired entries`);
+```
+
+### 5.10 WriteBehindCache 待处理操作管理
+
+WriteBehindCache 提供了管理待处理写操作的方法。
+
+```typescript
+import { WriteBehindCache, createWriteBehindCache } from '@mtpc/policy-cache';
+import { MemoryCache } from '@mtpc/policy-cache';
+
+const memoryCache = new MemoryCache({
+  ttl: 60000,
+  maxSize: 10000
+});
+
+const writeBehindCache = createWriteBehindCache(
+  memoryCache,
+  {
+    set: async (key, value) => {
+      await storage.set(key, value);
+    },
+    delete: async (key) => {
+      await storage.delete(key);
+    }
+  },
+  {
+    flushInterval: 1000,
+    maxBatchSize: 100
+  }
+);
+
+// 获取待处理写操作数量
+const pendingCount = writeBehindCache.getPendingCount();
+console.log('Pending writes:', pendingCount);
+
+// 手动刷新待处理写操作
+const flushed = await writeBehindCache.flush();
+console.log(`Flushed ${flushed} writes`);
+
+// 停止并刷新所有待处理写操作
+await writeBehindCache.stop();
+```
+
+### 5.11 RefreshAheadCache 刷新状态检查
+
+RefreshAheadCache 提供了检查键是否正在刷新的方法。
+
+```typescript
+import { RefreshAheadCache, createRefreshAheadCache } from '@mtpc/policy-cache';
+import { MemoryCache } from '@mtpc/policy-cache';
+
+const memoryCache = new MemoryCache({
+  ttl: 60000,
+  maxSize: 10000
+});
+
+const refreshAheadCache = createRefreshAheadCache(
+  memoryCache,
+  async (key) => {
+    return await dataSource.get(key);
+  },
+  {
+    ttl: 60000,
+    refreshThreshold: 0.8
+  }
+);
+
+// 检查键是否正在刷新
+const isRefreshing = refreshAheadCache.isRefreshing('some-key');
+console.log('Is refreshing:', isRefreshing);
+```
+
+### 5.12 WriteThroughCache 刷新方法
+
+WriteThroughCache 提供了手动刷新缓存的方法。
+
+```typescript
+import { WriteThroughCache, createWriteThroughCache } from '@mtpc/policy-cache';
+import { MemoryCache } from '@mtpc/policy-cache';
+
+const memoryCache = new MemoryCache({
+  ttl: 60000,
+  maxSize: 10000
+});
+
+const writeThroughCache = createWriteThroughCache(
+  memoryCache,
+  {
+    get: async (key) => {
+      return await storage.get(key);
+    },
+    set: async (key, value) => {
+      await storage.set(key, value);
+    },
+    delete: async (key) => {
+      await storage.delete(key);
+    }
+  },
+  { ttl: 60000 }
+);
+
+// 手动刷新指定键的缓存
+const value = await writeThroughCache.refresh('some-key');
+console.log('Refreshed value:', value);
 ```
 
 ## 6. 最佳实践
@@ -519,9 +834,9 @@ const redisCache = createPolicyCache({
 // 根据业务需求设置不同的缓存过期时间
 const policyCache = createPolicyCache({
   // 权限变化不频繁的场景，设置较长过期时间
-  ttl: 3600000, // 1小时
+  defaultTTL: 3600000, // 1小时
   // 对于关键权限或变化频繁的场景，设置较短过期时间
-  // ttl: 300000, // 5分钟
+  // defaultTTL: 300000, // 5分钟
 });
 ```
 
@@ -590,19 +905,27 @@ const tenantCache = createPolicyCache(getCacheConfig('large'));
 ### 6.5 结合使用多种缓存策略
 
 ```typescript
-// 针对不同场景使用不同的缓存策略
+// 针对不同场景使用不同的缓存驱逐策略
 
-// 写密集型场景使用 write-behind 策略
+// 写密集型场景使用 LRU 策略（驱逐最少使用的项）
 const writeIntensiveCache = createPolicyCache({
-  strategy: 'write-behind',
-  batchSize: 20,
-  flushInterval: 10000
+  strategy: 'lru',
+  maxEntries: 20000,
+  defaultTTL: 60000
 });
 
-// 读密集型场景使用 refresh-ahead 策略
+// 读密集型场景使用 LFU 策略（驱逐访问频率最低的项）
 const readIntensiveCache = createPolicyCache({
-  strategy: 'refresh-ahead',
-  refreshThreshold: 0.75
+  strategy: 'lfu',
+  maxEntries: 5000,
+  defaultTTL: 3600000
+});
+
+// FIFO 策略适用于顺序访问场景
+const fifoCache = createPolicyCache({
+  strategy: 'fifo',
+  maxEntries: 1000,
+  defaultTTL: 1800000
 });
 ```
 
@@ -647,7 +970,7 @@ A: 可以通过以下方式监控缓存性能：
 
 ### 7.6 Q: 支持分布式缓存吗？
 
-A: `@mtpc/policy-cache` 支持自定义缓存实现，可以通过实现 `CacheManager` 接口来集成分布式缓存系统（如 Redis、Memcached 等）。
+A: `@mtpc/policy-cache` 支持自定义缓存实现，可以通过实现 `CacheProvider` 接口来集成分布式缓存系统（如 Redis、Memcached 等）。
 
 ## 8. 性能优化建议
 
