@@ -115,29 +115,14 @@ export default {
     title: '文档',
     items:{
       index:'',
-      'getting-started': {
-        title: '快速开始',
-      },
       architecture: {
         title: '架构概览',
       },
-      packages: {
-        title: '核心包',
-        items: {
-          core: { title: '@mtpc/core' },
-          rbac: { title: '@mtpc/rbac' },
-          'adapter-hono': { title: '@mtpc/adapter-hono' },
-          'adapter-drizzle': { title: '@mtpc/adapter-drizzle' },
-        },
+      'getting-started': {
+        title: '快速开始',
       },
-      api:{
-        title:'API',
-        items:{
-          core: { title: 'Core API' },
-          rbac: { title: 'RBAC API' },
-          'adapter-hono': { title: 'Hono Adapter API' },
-          'adapter-drizzle': { title: 'Drizzle Adapter API' },
-        }
+      core: {
+        title: '核心包',
       },
       migration: {
         title: '迁移和升级',
@@ -158,6 +143,23 @@ export default {
       },
     }
   },
+  extensions:{
+    type: 'page',
+    title: '拓展',
+    items:{
+      rbac: { title: '@mtpc/rbac' },
+      'data-scope': { title: '@mtpc/data-scope' },
+      'adapter-hono': { title: '@mtpc/adapter-hono' },
+      'adapter-drizzle': { title: '@mtpc/adapter-drizzle' },
+      audit: { title: '@mtpc/audit' },
+      'policy-cache': { title: '@mtpc/policy-cache' },
+      explain: { title: '@mtpc/explain' },
+      'soft-delete': { title: '@mtpc/soft-delete' },
+      'codegen': { title: '@mtpc/codegen' },
+      'helper': { title: '@mtpc/helper' },
+      'adapter-react': { title: '@mtpc/adapter-react' },
+    }
+  },
   guides: {
     type: 'page',
     title: '开发指南',
@@ -169,17 +171,6 @@ export default {
       'performance-optimization': { title: '性能优化指南' },
       'plugin-development': { title: '插件开发指南' },
     },
-  },
-  extensions:{
-    type: 'page',
-    title: '拓展',
-    items:{
-      'policy-cache': { title: '@mtpc/policy-cache' },
-      explain: { title: '@mtpc/explain' },
-      audit: { title: '@mtpc/audit' },
-      'data-scope': { title: '@mtpc/data-scope' },
-      'soft-delete': { title: '@mtpc/soft-delete' },
-    }
   },
   tutorials:{
     type: 'page',

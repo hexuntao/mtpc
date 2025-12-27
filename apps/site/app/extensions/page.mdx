@@ -1,0 +1,266 @@
+---
+title: 官方扩展
+description: MTPC 官方扩展概览
+---
+
+# 官方扩展
+
+MTPC 采用 **Core + Extensions** 的整体架构设计。所有 **权限模型、性能优化、可观测性与诊断能力**，均通过官方扩展模块提供，而不是内嵌在 Core 中。
+
+## Extension 分类原则
+
+所有 MTPC 扩展遵循以下原则：
+
+1. **不修改 Core 抽象**：扩展只能组合、解释或加速 Core 能力
+2. **可插拔**：启用或移除扩展不影响其他模块
+3. **模型无关**：Core 不依赖任何具体扩展
+4. **Tenant-aware**：所有扩展必须显式支持多租户上下文
+
+## 权限模型扩展
+
+### @mtpc/rbac - Role-Based Access Control
+
+**定位**：权限模型扩展（Policy Model Extension）
+
+`@mtpc/rbac` 是构建在 MTPC Core 之上的一种**官方权限组织方式**，用于解决以下问题：
+
+- 权限如何聚合为 Role
+- 用户如何通过 Role 间接获得 Permission
+- 租户维度下的角色隔离
+
+**核心功能：**
+
+- 角色管理（CRUD）
+- 角色绑定
+- 权限检查
+- 角色继承
+- 权限缓存
+
+**文档：** [@mtpc/rbac](/docs/packages/rbac)
+
+---
+
+## 性能与可扩展性扩展
+
+### @mtpc/policy-cache - 策略缓存扩展
+
+**定位**：性能与可扩展性扩展（Performance Extension）
+
+`@mtpc/policy-cache` 用于优化 **Policy Evaluation** 的运行时性能，尤其在以下场景：
+
+- 多租户环境
+- 权限策略复杂
+- 高频权限校验
+
+**核心功能：**
+
+- Write-Through（直写）策略
+- Write-Behind（回写）策略
+- Refresh-Ahead（预刷新）策略
+- 缓存失效机制
+
+**文档：** [@mtpc/policy-cache](/docs/extensions/policy-cache)
+
+---
+
+## 可观测性与诊断扩展
+
+### @mtpc/explain - 权限决策解释扩展
+
+**定位**：可观测性与诊断扩展（Observability Extension）
+
+`@mtpc/explain` 提供对权限决策过程的**解释能力**，用于解决：
+
+- 为什么这个请求被允许？
+- 哪条 Policy / 哪个 Role 生效？
+- 是在哪个条件被拒绝？
+
+**核心功能：**
+
+- 权限决策追踪
+- 决策路径分析
+- 条件评估结果
+- 多种格式化输出（文本、JSON、HTML、Markdown）
+
+**文档：** [@mtpc/explain](/docs/extensions/explain)
+
+---
+
+## 企业功能扩展
+
+### @mtpc/audit - 审计日志扩展
+
+**定位**：企业功能扩展
+
+`@mtpc/audit` 提供**审计日志**功能，记录所有权限相关的操作：
+
+- 权限检查
+- 资源创建/更新/删除
+- 角色分配/撤销
+- 策略变更
+
+**核心功能：**
+
+- 事件收集
+- 事件过滤
+- 事件存储
+- 自定义事件处理
+
+**使用场景：**
+
+- 合规性要求高的企业用户
+- 安全审计
+- 操作追溯
+
+### @mtpc/data-scope - 数据范围控制扩展
+
+**定位**：企业功能扩展
+
+`@mtpc/data-scope` 提供**数据范围控制**功能，实现行级权限：
+
+- 租户级别隔离
+- 部门级别隔离
+- 团队级别隔离
+- 个人数据隔离
+
+**核心功能：**
+
+- 范围定义
+- 范围解析
+- 查询过滤
+- 自定义范围类型
+
+**使用场景：**
+
+- 多部门、多层级组织的系统管理员
+- 需要行级权限控制的开发者
+
+### @mtpc/soft-delete - 软删除扩展
+
+**定位**：企业功能扩展
+
+`@mtpc/soft-delete` 提供**软删除**功能，支持数据恢复：
+
+- 自动软删除
+- 软删除查询过滤
+- 数据恢复
+- 彻底删除
+
+**核心功能：**
+
+- 自动软删除钩子
+- 软删除查询过滤
+- 数据恢复接口
+- Schema 配置
+
+**使用场景：**
+
+- 需要数据恢复功能的开发者
+- 需要数据审计的系统管理员
+
+---
+
+## 扩展对比
+
+| 扩展 | 类型 | 主要功能 | 适用场景 |
+|--------|------|----------|----------|
+| [@mtpc/rbac](/docs/packages/rbac) | 权限模型 | 基于角色的访问控制 | 需要角色权限的系统 |
+| [@mtpc/policy-cache](/docs/extensions/policy-cache) | 性能优化 | 策略缓存 | 高并发、权限检查频繁 |
+| [@mtpc/explain](/docs/extensions/explain) | 可观测性 | 权限决策解释 | 调试、审计、Admin UI |
+| [@mtpc/audit](/docs/extensions/audit) | 企业功能 | 审计日志 | 合规性要求、安全审计 |
+| [@mtpc/data-scope](/docs/extensions/data-scope) | 企业功能 | 数据范围控制 | 多部门、多层级组织 |
+| [@mtpc/soft-delete](/docs/extensions/soft-delete) | 企业功能 | 软删除 | 数据恢复、数据审计 |
+
+## 集成示例
+
+### 集成多个扩展
+
+```ts
+import { createMTPC } from '@mtpc/core'
+import { createRBACPlugin } from '@mtpc/rbac'
+import { createPolicyCachePlugin } from '@mtpc/policy-cache'
+import { createExplainPlugin } from '@mtpc/explain'
+import { createAuditPlugin } from '@mtpc/audit'
+import { createDataScopePlugin } from '@mtpc/data-scope'
+import { createSoftDeletePlugin } from '@mtpc/soft-delete'
+
+// 创建 MTPC 实例
+const mtpc = createMTPC({
+  defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(rbacPlugin.state.evaluator)
+})
+
+// 注册所有扩展
+mtpc.use(createRBACPlugin({ cacheTTL: 300000 }))
+mtpc.use(createPolicyCachePlugin({ strategy: 'write-through', ttl: 300000 }))
+mtpc.use(createExplainPlugin({ enabled: true, storage: 'memory' }))
+mtpc.use(createAuditPlugin({ enabled: true, storage: 'database' }))
+mtpc.use(createDataScopePlugin({ enabled: true }))
+mtpc.use(createSoftDeletePlugin({ enabled: true }))
+
+await mtpc.init()
+
+console.log('MTPC 已初始化，所有扩展已启用')
+```
+
+### 按需启用扩展
+
+```ts
+import { createMTPC } from '@mtpc/core'
+
+// 生产环境：只启用性能相关扩展
+const mtpc = createMTPC({
+  defaultPermissionResolver: rbacPlugin.state.evaluator.getPermissions.bind(rbacPlugin.state.evaluator)
+})
+
+if (process.env.NODE_ENV === 'production') {
+  mtpc.use(createPolicyCachePlugin({ strategy: 'write-through' }))
+  mtpc.use(createAuditPlugin({ enabled: true }))
+} else {
+  // 开发环境：启用所有扩展
+  mtpc.use(createPolicyCachePlugin({ strategy: 'write-through' }))
+  mtpc.use(createExplainPlugin({ enabled: true }))
+  mtpc.use(createAuditPlugin({ enabled: true }))
+  mtpc.use(createDataScopePlugin({ enabled: true }))
+  mtpc.use(createSoftDeletePlugin({ enabled: true }))
+}
+
+await mtpc.init()
+```
+
+## 扩展开发指南
+
+### 创建自定义扩展
+
+```ts
+import { MTPCPlugin } from '@mtpc/core'
+
+const myPlugin: MTPCPlugin = {
+  name: 'my-plugin',
+  install(registry) {
+    // 注册自定义资源
+    registry.registerResource(customResource)
+  },
+  hooks: {
+    beforeCreate: async (ctx, data) => {
+      // 自定义逻辑
+    },
+  },
+}
+
+// 使用插件
+const mtpc = createMTPC()
+mtpc.use(myPlugin)
+await mtpc.init()
+```
+
+### 扩展最佳实践
+
+1. **单一职责**：每个扩展只负责一个特定功能
+2. **可配置**：提供丰富的配置选项
+3. **可测试**：编写完整的单元测试
+4. **文档完整**：提供详细的 API 文档和使用示例
+5. **向后兼容**：遵循语义化版本，保持 API 稳定
+
+---
+
+**继续学习：** [开发指南](/docs/guides) →
