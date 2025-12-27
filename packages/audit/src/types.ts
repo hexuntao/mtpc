@@ -21,55 +21,55 @@ export type AuditDecision = 'allow' | 'deny' | 'error' | 'info';
  */
 export interface AuditEntry {
   /** 唯一标识符 */
-  id: string; 
+  id: string;
   /** 租户ID */
-  tenantId: string; 
+  tenantId: string;
   /** 事件发生时间 */
-  timestamp: Date; 
+  timestamp: Date;
 
   // 谁：操作主体信息
   /** 主体ID，如用户ID */
-  subjectId?: string; 
+  subjectId?: string;
   /** 主体类型，如'user'、'system' */
-  subjectType?: string; 
+  subjectType?: string;
 
   // 什么：操作内容
   /** 审计分类 */
-  category: AuditCategory; 
+  category: AuditCategory;
   /** 具体动作，如"check", "create", "update", "delete" */
-  action: string; 
+  action: string;
   /** 资源名称 */
-  resource?: string; 
+  resource?: string;
   /** 资源标识符 */
-  resourceId?: string; 
+  resourceId?: string;
   /** 权限编码 */
-  permission?: string; 
+  permission?: string;
 
   // 结果：操作结果
   /** 决策结果 */
-  decision: AuditDecision; 
+  decision: AuditDecision;
   /** 是否成功 */
-  success: boolean; 
+  success: boolean;
   /** 原因说明 */
-  reason?: string; 
+  reason?: string;
 
   // 状态：资源变更前后状态
   /** 操作前状态 */
-  before?: unknown; 
+  before?: unknown;
   /** 操作后状态 */
-  after?: unknown; 
+  after?: unknown;
 
   // 请求上下文
   /** 请求IP地址 */
-  ip?: string; 
+  ip?: string;
   /** 用户代理 */
-  userAgent?: string; 
+  userAgent?: string;
   /** 请求ID */
-  requestId?: string; 
+  requestId?: string;
   /** 请求路径 */
-  path?: string; 
+  path?: string;
   /** 请求方法 */
-  method?: string; 
+  method?: string;
 
   // 额外数据
   metadata?: Record<string, unknown>; // 自定义元数据
@@ -87,25 +87,25 @@ export type AuditEntryInput = Omit<AuditEntry, 'id' | 'timestamp'> & {
  */
 export interface AuditQueryFilter {
   /** 租户ID筛选 */
-  tenantId?: string; 
+  tenantId?: string;
   /** 主体ID筛选 */
-  subjectId?: string; 
+  subjectId?: string;
   /** 资源名称筛选 */
-  resource?: string; 
+  resource?: string;
   /** 资源标识符筛选 */
-  resourceId?: string; 
+  resourceId?: string;
   /** 审计分类筛选 */
-  category?: AuditCategory; 
+  category?: AuditCategory;
   /** 决策结果筛选 */
-  decision?: AuditDecision; 
+  decision?: AuditDecision;
   /** 动作筛选 */
-  action?: string; 
+  action?: string;
   /** 权限编码筛选 */
-  permission?: string; 
+  permission?: string;
   /** 起始时间 */
-  from?: Date; 
+  from?: Date;
   /** 结束时间 */
-  to?: Date; 
+  to?: Date;
 }
 
 /**
@@ -113,15 +113,15 @@ export interface AuditQueryFilter {
  */
 export interface AuditQueryOptions {
   /** 查询过滤器 */
-  filter?: AuditQueryFilter; 
+  filter?: AuditQueryFilter;
   /** 每页数量 */
-  limit?: number; 
+  limit?: number;
   /** 偏移量 */
-  offset?: number; 
+  offset?: number;
   /** 排序字段 */
-  orderBy?: 'timestamp' | 'tenant' | 'subject'; 
+  orderBy?: 'timestamp' | 'tenant' | 'subject';
   /** 排序方向 */
-  orderDirection?: 'asc' | 'desc'; 
+  orderDirection?: 'asc' | 'desc';
 }
 
 /**
@@ -129,13 +129,13 @@ export interface AuditQueryOptions {
  */
 export interface AuditQueryResult {
   /** 审计条目列表 */
-  entries: AuditEntry[]; 
+  entries: AuditEntry[];
   /** 总条数 */
-  total: number; 
+  total: number;
   /** 当前页数量 */
-  limit: number; 
+  limit: number;
   /** 当前偏移量 */
-  offset: number; 
+  offset: number;
 }
 
 /**
@@ -147,21 +147,21 @@ export interface AuditStore {
    * @param entry 审计条目
    */
   log(entry: AuditEntry): Promise<void>;
-  
+
   /**
    * 查询审计记录
    * @param options 查询选项
    * @returns 查询结果
    */
   query(options?: AuditQueryOptions): Promise<AuditQueryResult>;
-  
+
   /**
    * 统计审计记录数量
    * @param filter 筛选条件
    * @returns 记录数量
    */
   count(filter?: AuditQueryFilter): Promise<number>;
-  
+
   /**
    * 清除审计记录
    * @param filter 筛选条件
@@ -174,21 +174,21 @@ export interface AuditStore {
  */
 export interface AuditOptions {
   /** 审计存储实现 */
-  store?: AuditStore; 
-  /** 是否异步记录（默认true） */
-  async?: boolean; 
+  store?: AuditStore;
+  /** 是否异步记录（默认 false，同步） */
+  async?: boolean;
   /** 审计数据掩码函数，用于敏感数据处理 */
-  mask?: (entry: AuditEntry) => AuditEntry; 
+  mask?: (entry: AuditEntry) => AuditEntry;
   /** 包含的审计事件类型 */
   include?: {
     /** 是否记录权限检查 */
-    permissionChecks?: boolean; 
+    permissionChecks?: boolean;
     /** 是否记录资源操作 */
-    resourceOperations?: boolean; 
+    resourceOperations?: boolean;
     /** 是否记录角色变更 */
-    roleChanges?: boolean; 
+    roleChanges?: boolean;
     /** 是否记录策略变更 */
-    policyChanges?: boolean; 
+    policyChanges?: boolean;
   };
 }
 
@@ -219,9 +219,9 @@ export interface NormalizedAuditContext {
  */
 export interface AuditPluginState {
   /** 审计存储实例 */
-  store: AuditStore; 
+  store: AuditStore;
   /** 审计配置选项 */
-  options: AuditOptions; 
+  options: AuditOptions;
 }
 
 /**
@@ -234,21 +234,21 @@ export interface AuditLogger {
    */
   logPermissionCheck(params: {
     /** MTPC上下文 */
-    ctx: MTPCContext; 
+    ctx: MTPCContext;
     /** 权限编码 */
-    permission: string; 
+    permission: string;
     /** 资源名称 */
-    resource?: string; 
+    resource?: string;
     /** 资源标识符 */
-    resourceId?: string; 
+    resourceId?: string;
     /** 决策结果 */
-    decision: AuditDecision; 
+    decision: AuditDecision;
     /** 是否成功 */
-    success: boolean; 
+    success: boolean;
     /** 原因说明 */
-    reason?: string; 
+    reason?: string;
     /** 自定义元数据 */
-    metadata?: Record<string, unknown>; 
+    metadata?: Record<string, unknown>;
   }): Promise<void>;
 
   /**
@@ -257,23 +257,23 @@ export interface AuditLogger {
    */
   logResourceOperation(params: {
     /** MTPC上下文 */
-    ctx: MTPCContext; 
+    ctx: MTPCContext;
     /** 操作类型，如"create" | "read" | "update" | "delete" */
-    operation: string; 
+    operation: string;
     /** 资源名称 */
-    resource: string; 
+    resource: string;
     /** 资源标识符 */
-    resourceId?: string; 
+    resourceId?: string;
     /** 是否成功 */
-    success: boolean; 
+    success: boolean;
     /** 操作前状态 */
-    before?: unknown; 
+    before?: unknown;
     /** 操作后状态 */
-    after?: unknown; 
+    after?: unknown;
     /** 原因说明 */
-    reason?: string; 
+    reason?: string;
     /** 自定义元数据 */
-    metadata?: Record<string, unknown>; 
+    metadata?: Record<string, unknown>;
   }): Promise<void>;
 
   /**
@@ -282,19 +282,19 @@ export interface AuditLogger {
    */
   logRoleChange(params: {
     /** MTPC上下文 */
-    ctx: MTPCContext; 
+    ctx: MTPCContext;
     /** 动作类型，如"assign" | "revoke" | "createRole" */
-    action: string; 
+    action: string;
     /** 主体ID */
-    subjectId?: string; 
+    subjectId?: string;
     /** 角色名称 */
-    role?: string; 
+    role?: string;
     /** 是否成功 */
-    success: boolean; 
+    success: boolean;
     /** 原因说明 */
-    reason?: string; 
+    reason?: string;
     /** 自定义元数据 */
-    metadata?: Record<string, unknown>; 
+    metadata?: Record<string, unknown>;
   }): Promise<void>;
 
   /**
@@ -303,17 +303,17 @@ export interface AuditLogger {
    */
   logPolicyChange(params: {
     /** MTPC上下文 */
-    ctx: MTPCContext; 
+    ctx: MTPCContext;
     /** 动作类型，如"createPolicy" | "updatePolicy" */
-    action: string; 
+    action: string;
     /** 策略ID */
-    policyId?: string; 
+    policyId?: string;
     /** 是否成功 */
-    success: boolean; 
+    success: boolean;
     /** 原因说明 */
-    reason?: string; 
+    reason?: string;
     /** 自定义元数据 */
-    metadata?: Record<string, unknown>; 
+    metadata?: Record<string, unknown>;
   }): Promise<void>;
 
   /**
@@ -322,23 +322,23 @@ export interface AuditLogger {
    */
   logCustom(params: {
     /** MTPC上下文 */
-    ctx: MTPCContext; 
+    ctx: MTPCContext;
     /** 审计分类，默认为'custom' */
-    category?: AuditCategory; 
+    category?: AuditCategory;
     /** 动作类型 */
-    action: string; 
+    action: string;
     /** 资源名称 */
-    resource?: string; 
+    resource?: string;
     /** 资源标识符 */
-    resourceId?: string; 
+    resourceId?: string;
     /** 决策结果 */
-    decision?: AuditDecision; 
+    decision?: AuditDecision;
     /** 是否成功 */
-    success?: boolean; 
+    success?: boolean;
     /** 原因说明 */
-    reason?: string; 
+    reason?: string;
     /** 自定义元数据 */
-    metadata?: Record<string, unknown>; 
+    metadata?: Record<string, unknown>;
   }): Promise<void>;
 
   /**
@@ -347,14 +347,14 @@ export interface AuditLogger {
    * @returns 查询结果
    */
   query(options?: AuditQueryOptions): Promise<AuditQueryResult>;
-  
+
   /**
    * 统计审计记录数量
    * @param filter 筛选条件
    * @returns 记录数量
    */
   count(filter?: AuditQueryFilter): Promise<number>;
-  
+
   /**
    * 清除审计记录
    * @param filter 筛选条件
