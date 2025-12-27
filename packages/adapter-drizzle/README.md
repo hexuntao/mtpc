@@ -136,8 +136,7 @@ import { createMTPC } from '@mtpc/core';
 import { createMTPCApp } from '@mtpc/adapter-hono';
 import { defineResource } from '@mtpc/core';
 import { z } from 'zod';
-import { createConnectionFromEnv } from '@mtpc/adapter-drizzle';
-import { createDrizzleHandlerFactory } from '@mtpc/adapter-drizzle/handler';
+import { createConnectionFromEnv, createDrizzleHandlerFactory } from '@mtpc/adapter-drizzle';
 
 // 定义资源
 const postResource = defineResource({
