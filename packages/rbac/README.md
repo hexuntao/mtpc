@@ -145,8 +145,10 @@ function createRBAC(options?: RBACOptions): RBAC
 | 属性 | 类型 | 默认值 | 说明 | 是否必填 |
 |------|------|--------|------|----------|
 | `store` | `RBACStore` | `InMemoryRBACStore` | 存储后端 | 否 |
-| `cacheTTL` | `number` | `300000` | 缓存过期时间（毫秒） | 否 |
+| `cacheEnabled` | `boolean` | `true` | 是否启用缓存（已废弃，请使用 cacheTTL） | 否 |
+| `cacheTTL` | `number` | `60000` | 缓存过期时间（毫秒），默认 1 分钟 | 否 |
 | `systemRoles` | `RoleDefinition[]` | - | 自定义系统角色 | 否 |
+| `permissionResolver` | `(tenantId: string, subjectId: string) => Promise<Set<string>>` | - | 自定义权限解析器，用于从外部获取额外权限 | 否 |
 
 #### 返回值
 
@@ -173,9 +175,10 @@ async function createRole(
 | `name` | `string` | - | 角色名称，唯一标识 | 是 |
 | `displayName` | `string` | - | 角色显示名称 | 是 |
 | `description` | `string` | - | 角色描述 | 否 |
+| `type` | `RoleType` | `'custom'` | 角色类型（system/custom/template） | 否 |
 | `permissions` | `string[]` | `[]` | 角色直接拥有的权限列表 | 否 |
 | `inherits` | `string[]` | `[]` | 继承的角色名称列表 | 否 |
-| `system` | `boolean` | `false` | 是否为系统角色 | 否 |
+| `metadata` | `Record<string, unknown>` | - | 自定义元数据 | 否 |
 
 #### 返回值
 
@@ -199,8 +202,10 @@ async function updateRole(
 |------|------|--------|------|----------|
 | `displayName` | `string` | - | 角色显示名称 | 否 |
 | `description` | `string` | - | 角色描述 | 否 |
+| `status` | `RoleStatus` | - | 角色状态（active/inactive/archived） | 否 |
 | `permissions` | `string[]` | - | 角色直接拥有的权限列表 | 否 |
 | `inherits` | `string[]` | - | 继承的角色名称列表 | 否 |
+| `metadata` | `Record<string, unknown>` | - | 自定义元数据 | 否 |
 
 #### 返回值
 
@@ -249,6 +254,86 @@ async function listRoles(
 #### 返回值
 
 角色定义列表 `RoleDefinition[]`。
+
+#### 4.2.6 getRolePermissions
+
+获取角色的所有权限，包括继承的权限。
+
+```typescript
+async function getRolePermissions(
+  tenantId: string,
+  roleId: string
+): Promise<Set<string>>
+```
+
+#### 返回值
+
+权限集合 `Set<string>`。
+
+#### 4.2.7 addPermission
+
+向角色添加单个权限。
+
+```typescript
+async function addPermission(
+  tenantId: string,
+  roleId: string,
+  permission: string
+): Promise<RoleDefinition | null>
+```
+
+#### 返回值
+
+更新后的角色定义，不存在则返回 `null`。
+
+#### 4.2.8 removePermission
+
+从角色中移除指定的权限。
+
+```typescript
+async function removePermission(
+  tenantId: string,
+  roleId: string,
+  permission: string
+): Promise<RoleDefinition | null>
+```
+
+#### 返回值
+
+更新后的角色定义，不存在则返回 `null`。
+
+#### 4.2.9 setPermissions
+
+完全替换角色的权限列表。
+
+```typescript
+async function setPermissions(
+  tenantId: string,
+  roleId: string,
+  permissions: string[]
+): Promise<RoleDefinition | null>
+```
+
+#### 返回值
+
+更新后的角色定义，不存在则返回 `null`。
+
+#### 4.2.10 cloneRole
+
+基于现有角色创建新的自定义角色。
+
+```typescript
+async function cloneRole(
+  tenantId: string,
+  sourceRoleId: string,
+  newName: string,
+  createdBy?: string
+): Promise<RoleDefinition>
+```
+
+#### 返回值
+
+创建的新角色定义。
 
 ### 4.3 角色绑定
 
@@ -331,6 +416,52 @@ async function hasRole(
 
 是否拥有该角色，`true` 表示拥有，`false` 表示不拥有。
 
+#### 4.3.5 revokeAllRoles
+
+撤销主体的所有角色。
+
+```typescript
+async function revokeAllRoles(
+  tenantId: string,
+  subjectType: BindingSubjectType,
+  subjectId: string
+): Promise<number>
+```
+
+#### 返回值
+
+撤销的绑定数量。
+
+#### 4.3.6 setExpiration
+
+设置角色绑定的过期时间。
+
+```typescript
+async function setExpiration(
+  tenantId: string,
+  bindingId: string,
+  expiresAt: Date | null
+): Promise<RoleBinding | null>
+```
+
+#### 返回值
+
+更新后的绑定，不存在则返回 `null`。
+
+#### 4.3.7 cleanupExpired
+
+清理所有已过期的角色绑定。
+
+```typescript
+async function cleanupExpired(
+  tenantId: string
+): Promise<number>
+```
+
+#### 返回值
+
+清理的绑定数量。
+
 ### 4.4 权限检查
 
 #### 4.4.1 checkPermission
@@ -362,8 +493,6 @@ async function checkPermission(
 | `allowed` | `boolean` | 是否允许访问 |
 | `reason` | `string` | 拒绝的原因 |
 | `matchedRoles` | `string[]` | 匹配的角色列表 |
-| `evaluatedRoles` | `string[]` | 评估的角色列表 |
-| `duration` | `number` | 评估耗时（毫秒） |
 
 #### 4.4.2 check
 
@@ -401,9 +530,8 @@ async function getEffectivePermissions(
 |------|------|------|
 | `permissions` | `Set<string>` | 有效权限集合 |
 | `roles` | `string[]` | 直接分配的角色列表 |
-| `inheritedRoles` | `string[]` | 继承的角色列表 |
-| `allRoles` | `string[]` | 所有相关角色列表 |
-| `duration` | `number` | 计算耗时（毫秒） |
+| `computedAt` | `Date` | 计算时间 |
+| `expiresAt` | `Date` | 缓存过期时间 |
 
 #### 4.4.4 getPermissions
 
@@ -460,7 +588,162 @@ function clearCache(): void
 
 ## 5. 高级功能
 
-### 5.1 角色继承
+### 5.1 角色构建器（RoleBuilder）
+
+`@mtpc/rbac` 提供了流式 API 用于构建角色定义。
+
+#### 5.1.1 创建构建器
+
+```typescript
+import { role } from '@mtpc/rbac';
+
+const builder = role('editor');
+```
+
+#### 5.1.2 设置显示名称
+
+```typescript
+builder.displayName('Content Editor');
+```
+
+#### 5.1.3 设置描述
+
+```typescript
+builder.description('Can edit and publish content');
+```
+
+#### 5.1.4 设置角色类型
+
+```typescript
+builder.type('custom'); // custom | system | template
+```
+
+#### 5.1.5 设置为系统角色
+
+```typescript
+builder.system();
+```
+
+#### 5.1.6 设置为模板角色
+
+```typescript
+builder.template();
+```
+
+#### 5.1.7 添加权限
+
+```typescript
+builder.permission('content:read');
+builder.permissions('content:read', 'content:write');
+```
+
+#### 5.1.8 添加资源权限
+
+```typescript
+builder.resourcePermissions('content', 'create', 'read', 'update', 'delete');
+```
+
+#### 5.1.9 添加完整 CRUD 权限
+
+```typescript
+builder.fullAccess('content');
+```
+
+#### 5.1.10 添加只读权限
+
+```typescript
+builder.readOnly('content');
+```
+
+#### 5.1.11 继承角色
+
+```typescript
+builder.inherit('viewer');
+builder.inherits('viewer', 'contributor');
+```
+
+#### 5.1.12 设置元数据
+
+```typescript
+builder.metadata({ category: 'content' });
+builder.metadata({ category: 'content', level: 'advanced' });
+```
+
+#### 5.1.13 构建输入
+
+```typescript
+const input = builder.build();
+await rbac.createRole('tenant-001', input);
+```
+
+#### 5.1.14 构建完整定义
+
+```typescript
+const role = builder.buildDefinition('role-001', 'system');
+```
+
+#### 5.1.15 预定义系统角色
+
+```typescript
+import { systemRoles } from '@mtpc/rbac';
+
+const superAdmin = systemRoles.superAdmin();
+const tenantAdmin = systemRoles.tenantAdmin();
+const viewer = systemRoles.viewer();
+```
+
+### 5.2 策略编译器（PolicyCompiler）
+
+`@mtpc/rbac` 提供了将角色编译为 MTPC 策略的功能。
+
+#### 5.2.1 编译所有角色为策略
+
+```typescript
+import { compileRolesToPolicies } from '@mtpc/rbac';
+
+const policies = await compileRolesToPolicies(store, 'tenant-001');
+for (const policy of policies) {
+  console.log(`Policy: ${policy.name}, Rules: ${policy.rules.length}`);
+}
+```
+
+#### 5.2.2 编译单个角色为策略
+
+```typescript
+import { compileRoleToPolicy } from '@mtpc/rbac';
+
+const policy = compileRoleToPolicy(role);
+console.log(`Policy ID: ${policy.id}`);
+```
+
+#### 5.2.3 策略 ID 转换
+
+```typescript
+import { roleToPolicyId, policyToRoleId } from '@mtpc/rbac';
+
+const policyId = roleToPolicyId('role-001'); // 'rbac-role-role-001'
+const roleId = policyToRoleId('rbac-role-role-001'); // 'role-001'
+```
+
+### 5.3 角色管理器访问
+
+```typescript
+const roleManager = rbac.roles;
+```
+
+### 5.4 绑定管理器访问
+
+```typescript
+const bindingManager = rbac.bindings;
+```
+
+### 5.5 存储后端访问
+
+```typescript
+const store = rbac.store;
+```
+
+### 5.6 角色继承
 
 ```typescript
 import { createRBAC } from '@mtpc/rbac';
@@ -588,14 +871,16 @@ for (const assignment of assignments) {
 
 ### 6.2 tenant_admin
 
-**租户管理员角色**，拥有租户内的所有权限。
+**租户管理员角色**，用于租户内的管理操作。
 
 | 属性 | 值 |
 |------|-----|
 | `name` | `tenant_admin` |
 | `displayName` | `Tenant Administrator` |
-| `permissions` | `['*']` |
+| `permissions` | `[]` |
 | `system` | `true` |
+
+**注意**：与 super_admin 不同，tenant_admin 不包含任何权限，需要根据业务需求手动添加权限。
 
 ### 6.3 viewer
 
@@ -607,6 +892,8 @@ for (const assignment of assignments) {
 | `displayName` | `Viewer` |
 | `permissions` | `[]` |
 | `system` | `true` |
+
+**注意**：与 tenant_admin 类似，viewer 不包含任何权限，需要根据业务需求手动添加权限。
 
 ## 7. 最佳实践
 
@@ -649,9 +936,39 @@ for (const assignment of assignments) {
 
 5. **防止权限提升**：严格控制角色创建和修改权限
 
-## 8. 常见问题解答
+## 8. 类型定义
 
-### 8.1 Q: 如何处理角色继承循环？
+### 8.1 RoleStatus
+
+角色状态类型，定义角色在系统中的生命周期状态。
+
+```typescript
+type RoleStatus = 'active' | 'inactive' | 'archived';
+```
+
+| 值 | 说明 |
+|------|------|
+| `active` | 角色处于活动状态，可以正常分配和使用 |
+| `inactive` | 角色被停用，暂时不可使用但保留数据 |
+| `archived` | 角色已归档，仅保留历史记录 |
+
+### 8.2 RoleType
+
+角色类型类型，定义角色的分类和用途。
+
+```typescript
+type RoleType = 'system' | 'custom' | 'template';
+```
+
+| 值 | 说明 |
+|------|------|
+| `system` | 系统预定义角色，由系统初始化时创建，不可修改和删除 |
+| `custom` | 用户自定义角色，由用户创建和管理 |
+| `template` | 角色模板，用于快速创建相似角色的基础模板 |
+
+## 9. 常见问题解答
+
+### 9.1 Q: 如何处理角色继承循环？
 
 A: `@mtpc/rbac` 的角色验证器会检测并防止循环继承，在创建或更新角色时，如果检测到循环继承，会抛出错误。
 
@@ -686,7 +1003,7 @@ A: 对于大量角色和用户，建议：
 3. 使用分页查询角色和绑定
 4. 考虑使用索引优化查询
 
-### 8.6 Q: 如何实现动态权限？
+### 9.6 Q: 如何实现动态权限？
 
 A: 可以结合 `@mtpc/core` 的策略引擎，实现基于条件的动态权限：
 
@@ -730,18 +1047,20 @@ const result = await mtpc.checkPermission({
 });
 ```
 
-## 9. 性能考量
+## 10. 性能考量
 
 ### 9.1 缓存机制
 
-- **默认缓存 TTL**：5分钟
-- **缓存键**：`{tenantId}:{subjectId}:effective-permissions`
+- **默认缓存 TTL**：1 分钟（60000ms）
+- **缓存键**：`{tenantId}:{subjectType}:{subjectId}`
 - **缓存失效**：当角色或绑定变更时自动失效
 - **缓存策略**：LRU 缓存，自动清理过期条目
 
 ### 9.2 性能优化建议
 
 1. **合理设置缓存 TTL**：根据权限变更频率调整
+   - 频繁变更的权限：较短的缓存时间（30 秒 - 1 分钟）
+   - 稳定的权限：较长的缓存时间（5 - 10 分钟）
 2. **使用批量操作**：减少数据库查询次数
 3. **优化角色继承结构**：避免过深的继承层级
 4. **使用索引**：在存储后端为常用查询字段添加索引
@@ -756,10 +1075,13 @@ const result = await mtpc.checkPermission({
 | 角色创建 | 0.5ms |
 | 角色分配 | 0.8ms |
 | 权限检查（缓存命中） | 0.2ms |
+
 | 权限检查（缓存未命中） | 5ms |
 | 有效权限计算 | 3ms |
 
-## 10. 注意事项
+**注意**：以上性能数据基于内存存储和默认缓存设置（1 分钟 TTL）的测试结果。
+
+## 11. 注意事项
 
 1. **角色命名**：角色名称必须唯一，建议使用语义化的名称
 2. **系统角色**：系统角色不能被修改或删除
@@ -770,20 +1092,22 @@ const result = await mtpc.checkPermission({
 7. **定期备份**：定期备份角色和绑定数据
 8. **测试覆盖**：确保所有权限逻辑都有充分的测试覆盖
 
-## 11. 版本更新日志
+## 12. 版本更新日志
 
 ### v1.0.0 (2024-01-01)
 
 - 初始版本发布
 - 支持角色管理和角色绑定
 - 支持角色继承
-- 提供系统角色
+- 提供系统角色（super_admin, tenant_admin, viewer）
 - 支持权限检查和有效权限计算
-- 内置缓存机制
+- 内置缓存机制（默认 1 分钟 TTL）
 - 支持多租户
 - 易于与 MTPC Core 集成
+- 提供角色构建器（RoleBuilder）流式 API
+- 提供策略编译器（compileRolesToPolicies）
 
-## 12. 贡献指南
+## 13. 贡献指南
 
 欢迎为 `@mtpc/rbac` 包贡献代码或提出改进建议。请遵循以下准则：
 
@@ -794,11 +1118,11 @@ const result = await mtpc.checkPermission({
 5. 更新相关文档
 6. 确保代码符合 TypeScript 类型安全要求
 
-## 13. 许可证
+## 14. 许可证
 
 `@mtpc/rbac` 包采用 MIT 许可证，详见 LICENSE 文件。
 
-## 14. 联系方式
+## 15. 联系方式
 
 - 项目仓库：https://github.com/your-org/mtpc
 - 问题反馈：https://github.com/your-org/mtpc/issues
