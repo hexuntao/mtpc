@@ -2,15 +2,18 @@
 
 > MTPC 的行级安全控制（Row-Level Security）扩展
 
+**版本**: 0.1.0
+
 ## 快速开始
 
-### 方式一：声明式配置（推荐 v0.2.0+）
+### 方式一：声明式配置（推荐）
 
 通过资源元数据声明式配置数据范围控制：
 
 ```typescript
 import { createMTPC, defineResource } from '@mtpc/core';
 import { createDataScopePlugin } from '@mtpc/data-scope';
+import { z } from 'zod';
 
 const mtpc = createMTPC();
 
@@ -146,9 +149,9 @@ src/
 | `resolver/` | 解析上下文，确定哪些范围适用于当前请求 |
 | `filter/` | 将范围转换为数据库查询的过滤条件 |
 
-## 关键业务逻辑与技术实现
+## 核心类型系统
 
-### 1. 范围类型系统
+### 1. 范围类型 (ScopeType)
 
 ```typescript
 export type ScopeType =
@@ -161,7 +164,7 @@ export type ScopeType =
   | 'custom';       // 自定义条件
 ```
 
-### 2. 范围条件操作符
+### 2. 范围条件操作符 (ScopeConditionOperator)
 
 ```typescript
 export type ScopeConditionOperator =
@@ -169,438 +172,319 @@ export type ScopeConditionOperator =
   | 'neq'       // 不等于
   | 'in'        // 在数组中
   | 'notIn'     // 不在数组中
-  | 'contains'  // 数组包含
+  | 'contains'  // 数组包含（用于数组字段）
   | 'hierarchy'; // 层级关系（需配合 HierarchyResolver）
 ```
 
-### 3. 范围解析流程
-
-```mermaid
-graph TD
-    A[请求开始] --> B{是系统用户?}
-    B -->|是| C[返回空过滤器]
-    B -->|否| D{是管理员?}
-    D -->|是| E[返回 all 范围]
-    D -->|否| F[收集适用范围]
-    F --> G[资源范围]
-    F --> H[角色范围]
-    F --> I[主体范围]
-    F --> J[默认范围]
-    G --> K[按优先级排序]
-    H --> K
-    I --> K
-    J --> K
-    K --> L[解析为过滤器]
-    L --> M[合并过滤器]
-    M --> N[返回结果]
-```
-
-### 4. 管理员检测逻辑
-
-管理员检测支持两种方式：
-
-1. **角色检测**: 检查用户是否拥有指定的管理员角色（默认 `['admin']`）
-2. **通配符权限**: 检查用户是否拥有 `*` 通配符权限
+### 3. 范围定义 (DataScopeDefinition)
 
 ```typescript
-// 可配置的管理员检查器
-const adminChecker = createAdminChecker(
-  ['admin', 'superuser'],  // 管理员角色
-  true                      // 检查通配符权限
-);
-```
-
-### 5. 层级解析器
-
-用于处理组织结构等层级关系：
-
-```typescript
-interface HierarchyResolver {
-  resolveRoot(rootId: string): Promise<string[]>;
-}
-
-// 示例：组织结构层级解析器
-const orgHierarchyResolver: HierarchyResolver = {
-  async resolveRoot(departmentId: string) {
-    // 返回该部门及其所有子部门的 ID
-    const descendants = await getDepartmentDescendants(departmentId);
-    return [departmentId, ...descendants.map(d => d.id)];
-  }
-};
-```
-
-## API 接口设计与使用方式
-
-### 主类：DataScope
-
-```typescript
-class DataScope {
-  // 定义新范围
-  async defineScope(definition: Omit<DataScopeDefinition, 'id'>): Promise<DataScopeDefinition>
-
-  // 获取范围
-  async getScope(id: string): Promise<DataScopeDefinition | null>
-
-  // 分配范围到资源/角色/主体
-  async assignToResource(tenantId: string, resourceName: string, scopeId: string, options?: { priority?: number }): Promise<ScopeAssignment>
-  async assignToRole(tenantId: string, roleName: string, scopeId: string, options?: { priority?: number }): Promise<ScopeAssignment>
-  async assignToSubject(tenantId: string, subjectId: string, scopeId: string, options?: { priority?: number }): Promise<ScopeAssignment>
-
-  // 解析范围
-  async resolve(ctx: MTPCContext, resourceName: string, action?: string, existingFilters?: FilterCondition[]): Promise<ScopeResolutionResult>
-
-  // 获取过滤器
-  async getFilters(ctx: MTPCContext, resourceName: string, existingFilters?: FilterCondition[]): Promise<FilterCondition[]>
-
-  // 集成到 MTPC
-  integrateWith(mtpc: MTPC): void
-
-  // 快速设置
-  async setupDefaultScopes(tenantId: string, roleScopes: Record<string, ScopeType>): Promise<void>
+export interface DataScopeDefinition {
+  id: string;                  // 唯一标识符
+  name: string;                // 显示名称
+  description?: string;         // 范围描述
+  type: ScopeType;             // 范围类型
+  conditions?: ScopeCondition[]; // 应用条件（仅 custom 类型需要）
+  priority?: number;            // 优先级（数值越大越优先）
+  combinable?: boolean;         // 是否可与其他范围组合
+  metadata?: Record<string, unknown>; // 元数据
 }
 ```
 
-### 范围构建器：流式 API
+### 4. 范围分配 (ScopeAssignment)
 
 ```typescript
-import { scope, createScope } from '@mtpc/data-scope';
+export interface ScopeAssignment {
+  id: string;                  // 分配记录的唯一 ID
+  tenantId: string;           // 租户 ID
+  scopeId: string;             // 范围定义 ID
+  targetType: 'resource' | 'role' | 'subject'; // 目标类型
+  targetId: string;           // 目标标识符
+  permission?: string;         // 可选：此分配仅适用于特定权限
+  priority?: number;           // 分配优先级
+  enabled: boolean;            // 是否启用
+  metadata?: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
 
-// 方式一：使用构建器
+### 5. 范围解析结果 (ScopeResolutionResult)
+
+```typescript
+export interface ScopeResolutionResult {
+  scopes: ResolvedScope[];           // 解析后的范围列表
+  combinedFilters: FilterCondition[]; // 合并后的过滤条件
+  appliedScopeIds: string[];         // 应用的范围 ID
+  resolvedAt: Date;                  // 解析时间
+}
+```
+
+## 预定义范围
+
+源码中预定义了以下范围：
+
+| 范围 ID | 名称 | 类型 | 优先级 | 描述 |
+|---------|------|------|--------|------|
+| `scope:all` | All Access | `all` | 1000 | 无数据限制 - 可访问所有记录（独占） |
+| `scope:tenant` | Tenant | `tenant` | 100 | 同一租户内的访问记录 |
+| `scope:self` | Self | `self` | 10 | 仅访问自己的记录 |
+| `scope:department` | Department | `department` | 50 | 同一部门的访问记录 |
+| `scope:team` | Team | `team` | 30 | 同一团队中的访问记录 |
+
+> **注意**: 虽然 `ScopeType` 类型中定义了 `'subordinates'` 类型，但源码中未提供对应的预定义范围 `SCOPE_SUBORDINATES`。如需使用此类型，需要通过 `scope()` 构建器自定义范围。
+
+## 范围定义
+
+### 使用范围构建器
+
+```typescript
+import { scope } from '@mtpc/data-scope';
+
 const customScope = scope('我的部门')
   .id('scope:my-department')
   .description('只能访问本部门的数据')
   .department()
   .priority(50)
   .build();
+```
 
-// 方式二：使用预设
+### 使用预设范围
+
+```typescript
+import { createScope } from '@mtpc/data-scope';
+
 const selfScope = createScope.self('个人数据', 'createdBy');
+const tenantScope = createScope.all('全部数据');
+const departmentScope = createScope.department('部门数据', 'departmentId', 'subject.metadata.departmentId');
+const teamScope = createScope.team('团队数据', 'teamId', 'subject.metadata.teamId');
 ```
 
-### 创建 DataScope 实例
+> **注意**: `createScope` 对象的方法（如 `createScope.self()`、`createScope.department()`）返回的是预定义的范围定义（`SCOPE_SELF`、`SCOPE_DEPARTMENT` 等），而不是动态创建新范围。这些方法主要用于快速引用预定义范围。
+
+### 自定义范围
 
 ```typescript
-import { createDataScope } from '@mtpc/data-scope';
+import { scope } from '@mtpc/data-scope';
 
-const dataScope = createDataScope({
-  // 存储配置
-  store: new InMemoryDataScopeStore(),
+const customScope = scope('我的项目')
+  .id('scope:my-projects')
+  .description('只能访问我参与的项目')
+  .type('custom')
+  .where('projectId', 'in', async (ctx) => {
+    // 动态解析：从数据库获取用户参与的项目
+    const projects = await db.projectMember.findMany({
+      where: { userId: ctx.subject.id },
+    });
+    return projects.map(p => p.projectId);
+  })
+  .priority(50)
+  .build();
+```
 
-  // 默认范围（当没有分配范围时使用）
-  defaultScope: 'tenant',
+## 范围分配
 
-  // 字段配置
-  ownerField: 'createdBy',
-  departmentField: 'departmentId',
-  teamField: 'teamId',
+### 分配给资源
 
-  // 缓存配置
-  cacheTTL: 60000, // 60 秒
+```typescript
+await dataScope.assignToResource(
+  'tenant-123',        // 租户 ID
+  'user',              // 资源名称
+  'scope:department',   // 范围 ID
+  { priority: 100 }    // 可选：优先级
+);
+```
 
-  // 管理员配置
+### 分配给角色
+
+```typescript
+await dataScope.assignToRole(
+  'tenant-123',        // 租户 ID
+  'manager',           // 角色名称
+  'scope:department',  // 范围 ID
+  { priority: 50 }     // 可选：优先级
+);
+```
+
+### 分配给主体
+
+```typescript
+await dataScope.assignToSubject(
+  'tenant-123',        // 租户 ID
+  'user-456',          // 主体 ID
+  'scope:self',         // 范围 ID
+  { priority: 10 }     // 可选：优先级
+);
+```
+
+### 快速设置默认范围
+
+```typescript
+await dataScope.setupDefaultScopes('tenant-123', {
+  admin: 'all',          // 管理员：无限制
+  manager: 'department',  // 经理：本部门
+  employee: 'self',       // 员工：仅个人
+});
+```
+
+## 范围解析
+
+### 解析范围
+
+```typescript
+const result = await dataScope.resolve(ctx, 'User', 'read');
+
+console.log('应用的范围:', result.appliedScopeIds);
+console.log('解析的范围:', result.scopes.map(s => ({
+  id: s.definition.id,
+  name: s.definition.name,
+  filters: s.filters,
+})));
+console.log('合并后的过滤器:', result.combinedFilters);
+console.log('解析时间:', result.resolvedAt);
+```
+
+### 获取过滤器
+
+```typescript
+const filters = await dataScope.getFilters(ctx, 'User');
+
+// 结果示例：
+// [
+//   { field: 'tenantId', operator: 'eq', value: 'tenant-123' },
+//   { field: 'departmentId', operator: 'eq', value: 'dept-456' }
+// ]
+```
+
+### 检查访问权限
+
+```typescript
+const hasUnrestricted = await dataScope.hasUnrestrictedAccess(ctx);
+if (hasUnrestricted) {
+  // 跳过数据过滤
+  return await db.user.findMany();
+} else {
+  // 应用数据范围过滤
+  const filters = await dataScope.getFilters(ctx, 'User');
+  return await db.user.findMany({ where: buildWhereClause(filters) });
+}
+```
+
+### 获取有效范围类型
+
+```typescript
+const scopeType = await dataScope.getResolver().getEffectiveScopeType(ctx, 'User');
+console.log(`用户的访问范围: ${scopeType}`); // 'department'
+```
+
+## 过滤器生成
+
+### 使用 FilterGenerator
+
+```typescript
+import { createFilterGenerator } from '@mtpc/data-scope';
+
+const generator = createFilterGenerator(ctx);
+
+// 为范围生成过滤器
+const filters = await generator.forScope(scopeDefinition);
+
+// 为多个范围生成过滤器
+const allFilters = await generator.forScopes([scope1, scope2]);
+
+// 生成租户过滤器
+const tenantFilter = generator.tenantFilter();
+
+// 生成所有者过滤器
+const ownerFilter = generator.ownerFilter('createdBy');
+```
+
+### 使用条件预设
+
+```typescript
+import { filterPresets } from '@mtpc/data-scope';
+
+// 按租户过滤
+const tenantFilter = filterPresets.byTenant(ctx);
+
+// 按所有者/创建者过滤
+const ownerFilter = filterPresets.byOwner(ctx);
+
+// 按部门过滤
+const departmentFilter = filterPresets.byDepartment(ctx);
+
+// 按团队过滤
+const teamFilter = filterPresets.byTeam(ctx);
+```
+
+## 插件集成
+
+### 创建插件
+
+```typescript
+import { createDataScopePlugin } from '@mtpc/data-scope';
+
+const plugin = createDataScopePlugin({
   adminRoles: ['admin', 'superuser'],
-  checkWildcardPermission: true,
-
-  // 层级解析器
-  hierarchyResolver: orgHierarchyResolver,
-});
-```
-
-## 与 core 包的依赖关系及交互机制
-
-### 依赖关系图
-
-```
-@mtpc/core
-    │
-    ├── MTPCContext           # 上下文（租户、主体）
-    ├── FilterCondition       # 过滤条件类型
-    ├── ResourceDefinition    # 资源定义
-    ├── ResourceHooks         # 资源钩子
-    └── PluginDefinition      # 插件定义
-         │
-         ▼
-@mtpc/data-scope
-    │
-    ├── 使用 MTPCContext 解析范围值
-    ├── 生成 FilterCondition
-    ├── 扩展 ResourceHooks.filterQuery
-    └── 实现 PluginDefinition
-```
-
-### 交互机制
-
-1. **通过 filterQuery 钩子集成**
-
-```typescript
-// data-scope 为每个资源注册 filterQuery 钩子
-dataScope.integrateWith(mtpc);
-
-// 当查询数据时，MTPC 会调用 filterQuery 钩子
-// data-scope 返回相应的过滤条件
-const filters = await dataScope.getFilters(ctx, 'User');
-// 结果: [{ field: 'departmentId', operator: 'eq', value: 'dept-123' }]
-```
-
-2. **使用 @mtpc/shared 工具**
-
-```typescript
-// context-resolver.ts 中使用 shared 包的工具
-import { getByPath } from '@mtpc/shared';
-
-export function resolveFromContext(ctx: MTPCContext, path: string): unknown {
-  return getByPath(ctx as unknown as Record<string, unknown>, path);
-}
-```
-
-## 性能优化策略
-
-### 1. 内置缓存机制
-
-```typescript
-class ScopeRegistry {
-  private cache: Map<string, { scope: DataScopeDefinition; expiresAt: number }>;
-  private cacheTTL: number;
-
-  async getScope(id: string): Promise<DataScopeDefinition | null> {
-    // 检查缓存
-    const cached = this.cache.get(id);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.scope;
-    }
-
-    // 从存储加载
-    const scope = await this.store.getScope(id);
-    if (scope) {
-      this.cache.set(id, {
-        scope,
-        expiresAt: Date.now() + this.cacheTTL,
-      });
-    }
-
-    return scope;
-  }
-}
-```
-
-### 2. 范围去重
-
-```typescript
-// 在 getScopesForSubject 中使用 Set 避免重复范围
-const seenIds = new Set<string>();
-for (const assignment of assignments) {
-  if (!seenIds.has(assignment.scopeId)) {
-    const scope = await this.getScope(assignment.scopeId);
-    if (scope) {
-      scopes.push(scope);
-      seenIds.add(assignment.scopeId);
-    }
-  }
-}
-```
-
-### 3. 优先级排序
-
-范围按优先级降序排列，高优先级范围先被评估：
-
-```typescript
-// 预定义范围的默认优先级
-SCOPE_ALL:       priority 1000 (最高)
-SCOPE_TENANT:    priority 100
-SCOPE_DEPARTMENT: priority 50
-SCOPE_TEAM:      priority 30
-SCOPE_SELF:      priority 10
-```
-
-### 4. 独占范围优化
-
-当遇到 `combinable: false` 的范围时，直接使用该范围，跳过其他范围：
-
-```typescript
-const exclusive = sorted.find(s => !s.definition.combinable);
-if (exclusive) {
-  return exclusive.filters; // 直接返回，不组合其他范围
-}
-```
-
-## 错误处理机制
-
-### 1. 范围验证
-
-```typescript
-export function validateScopeDefinition(scope: DataScopeDefinition): void {
-  if (!scope.id || typeof scope.id !== 'string') {
-    throw new Error('Scope must have a valid ID');
-  }
-
-  if (!scope.name || typeof scope.name !== 'string') {
-    throw new Error('Scope must have a valid name');
-  }
-
-  const validTypes: ScopeType[] = ['all', 'tenant', 'department', 'team', 'self', 'subordinates', 'custom'];
-  if (!validTypes.includes(scope.type)) {
-    throw new Error(`Invalid scope type: ${scope.type}`);
-  }
-
-  if (scope.type === 'custom' && (!scope.conditions || scope.conditions.length === 0)) {
-    throw new Error('Custom scope must have at least one condition');
-  }
-}
-```
-
-### 2. 预定义范围保护
-
-```typescript
-async deleteScope(id: string): Promise<boolean> {
-  // 防止删除预定义范围
-  if (Object.values(PREDEFINED_SCOPES).some(s => s.id === id)) {
-    throw new Error('Cannot delete predefined scope');
-  }
-  return this.scopes.delete(id);
-}
-```
-
-### 3. 冲突检测
-
-```typescript
-export function hasConflict(filters: FilterCondition[]): boolean {
-  // 检测 eq/neq 冲突
-  for (const filter of filters) {
-    const existing = fieldValues.get(filter.field);
-    if (existing) {
-      if (
-        (existing.operator === 'eq' && filter.operator === 'neq') ||
-        (existing.operator === 'neq' && filter.operator === 'eq')
-      ) {
-        if (existing.values.includes(filter.value)) {
-          return true; // 冲突：同一字段既有 eq 又有 neq 相同值
-        }
-      }
-    }
-  }
-  return false;
-}
-```
-
-## 潜在技术债务与优化点
-
-### 当前限制
-
-1. **OR 逻辑支持不完整**
-   - `combineFilters` 的 'or' 模式只是简单展平，实际 OR 逻辑需要查询层支持
-   - 建议在 FilterCondition 中添加逻辑运算符（AND/OR/NOT）
-
-2. **同步 ID 生成**
-   - `InMemoryDataScopeStore` 使用自增计数器生成 ID
-   - 多实例环境下可能产生 ID 冲突
-
-3. **无分布式缓存支持**
-   - 缓存是本地内存存储
-   - 多实例部署时缓存不共享
-
-### 建议优化
-
-1. **增强过滤器逻辑**
-   ```typescript
-   // 建议：支持嵌套逻辑
-   interface LogicalFilter {
-     operator: 'and' | 'or' | 'not';
-     filters: (FilterCondition | LogicalFilter)[];
-   }
-   ```
-
-2. **实现分布式存储**
-   ```typescript
-   // 建议：添加 Redis 存储实现
-   export class RedisDataScopeStore implements DataScopeStore {
-     // 使用 Redis 存储范围定义和分配
-   }
-   ```
-
-3. **添加范围继承**
-   ```typescript
-   // 建议：支持范围继承
-   interface DataScopeDefinition {
-     extends?: string; // 父范围 ID
-   }
-   ```
-
-4. **完善审计日志**
-   ```typescript
-   // 建议：记录范围解析日志
-   interface ScopeResolutionResult {
-     scopes: ResolvedScope[];
-     auditLog: {
-       resolvedAt: Date;
-       userId: string;
-       appliedScopes: string[];
-       reason: string;
-     };
-   }
-   ```
-
----
-
-## 完整使用示例
-
-### 示例 1：基础使用
-
-```typescript
-import { createMTPC } from '@mtpc/core';
-import { createDataScope, scope } from '@mtpc/data-scope';
-
-// 1. 创建 MTPC 和 DataScope 实例
-const mtpc = createMTPC();
-const dataScope = createDataScope({
   defaultScope: 'tenant',
-  adminRoles: ['admin'],
+  cacheTTL: 60000, // 60 秒
+  checkWildcardPermission: true,
+  hierarchyResolver: {
+    async resolveRoot(rootId: string): Promise<string[]> {
+      // 返回该部门及其所有子部门的 ID
+      const descendants = await getDepartmentDescendants(rootId);
+      return [rootId, ...descendants.map(d => d.id)];
+    }
+  }
 });
 
-// 2. 注册资源
-mtpc.registry.registerResource({
-  name: 'User',
-  permissions: ['user:read', 'user:create', 'user:update', 'user:delete'],
-  hooks: {},
-});
+// 注册插件
+mtpc.plugins.use(plugin);
 
-// 3. 集成 data-scope
-dataScope.integrateWith(mtpc);
-
-// 4. 定义自定义范围
-await dataScope.defineScope({
-  name: '本部门',
-  description: '只能访问本部门的数据',
-  type: 'department',
-  conditions: [
-    {
-      field: 'departmentId',
-      operator: 'eq',
-      value: ctx => ctx.subject.metadata?.departmentId,
-    },
-  ],
-  priority: 50,
-});
-
-// 5. 分配范围到角色
-await dataScope.assignToRole('tenant-123', 'manager', 'scope:department');
-
-// 6. 使用过滤器
-const ctx: MTPCContext = {
-  tenant: { id: 'tenant-123' },
-  subject: {
-    id: 'user-456',
-    type: 'user',
-    roles: ['manager'],
-    metadata: { departmentId: 'dept-789' },
-  },
-};
-
-const filters = await dataScope.getFilters(ctx, 'User');
-// 结果: [{ field: 'tenantId', operator: 'eq', value: 'tenant-123' },
-//        { field: 'departmentId', operator: 'eq', value: 'dept-789' }]
+await mtpc.init();
 ```
 
-### 示例 2：组织层级支持
+### 资源元数据配置
+
+```typescript
+defineResource({
+  name: 'user',
+  schema: z.object({ id: z.string() }),
+  metadata: {
+    dataScope: {
+      enabled: true,              // 是否启用（默认 true）
+      defaultScope: 'tenant',     // 默认范围类型
+      ownerField: 'createdBy',    // 所有者字段（默认 'createdBy'）
+      departmentField: 'departmentId', // 部门字段（默认 'departmentId'）
+      teamField: 'teamId',       // 团队字段（默认 'teamId'）
+      adminBypass: false,        // 管理员是否可绕过（默认 false）
+      customScopeId: 'scope:custom', // 自定义范围 ID
+    }
+  }
+});
+```
+
+> **注意**: 在当前源码实现中，`adminBypass` 和 `customScopeId` 字段在 `plugin.ts` 中未被实际使用。这些字段保留用于未来扩展。
+
+### 禁用资源的数据范围控制
+
+```typescript
+defineResource({
+  name: 'publicResource',
+  schema: z.object({ id: z.string() }),
+  metadata: {
+    dataScope: {
+      enabled: false, // 禁用数据范围控制
+    },
+  },
+});
+```
+
+## 高级特性
+
+### 层级解析器
+
+用于处理组织结构等层级关系：
 
 ```typescript
 import { createDataScope } from '@mtpc/data-scope';
@@ -635,102 +519,95 @@ await dataScope.defineScope({
 });
 ```
 
-### 示例 3：动态范围值
+### 管理员检测
+
+管理员检测支持两种方式：
+
+1. **角色检测**: 检查用户是否拥有指定的管理员角色（默认 `['admin']`）
+2. **通配符权限**: 检查用户是否拥有 `*` 通配符权限
 
 ```typescript
-// 范围值可以是静态值或解析函数
-const dynamicScope = await dataScope.defineScope({
-  name: '我的项目',
-  type: 'custom',
-  conditions: [
-    {
-      field: 'projectId',
-      operator: 'in',
-      // 函数值：运行时动态解析
-      value: async (ctx) => {
-        // 从数据库获取用户参与的项目
-        const projects = await db.projectMember.findMany({
-          where: { userId: ctx.subject.id },
-        });
-        return projects.map(p => p.projectId);
-      },
-    },
-  ],
-});
+import { createAdminChecker } from '@mtpc/data-scope';
+
+const adminChecker = createAdminChecker(
+  ['admin', 'superuser'],  // 管理员角色
+  true                      // 检查通配符权限
+);
+
+if (adminChecker(ctx)) {
+  // 用户是管理员或拥有通配符权限
+}
 ```
 
-### 示例 4：快速设置默认范围
+### 缓存机制
 
 ```typescript
-// 为不同角色设置默认范围
-await dataScope.setupDefaultScopes('tenant-123', {
-  admin: 'all',          // 管理员：无限制
-  manager: 'department',  // 经理：本部门
-  employee: 'self',       // 员工：仅个人
+const dataScope = createDataScope({
+  cacheTTL: 60000, // 60 秒缓存
 });
 
-// 等价于：
-await dataScope.assignToRole('tenant-123', 'admin', 'scope:all');
-await dataScope.assignToRole('tenant-123', 'manager', 'scope:department');
-await dataScope.assignToRole('tenant-123', 'employee', 'scope:self');
+// 清除缓存
+dataScope.clearCache();
 ```
 
-### 示例 5：检查访问权限
+### 自定义存储
 
 ```typescript
-// 检查用户是否有无限制访问权限
-const hasUnrestricted = await dataScope.hasUnrestrictedAccess(ctx);
-if (hasUnrestricted) {
-  // 跳过数据过滤
-  return await db.user.findMany();
-} else {
-  // 应用数据范围过滤
-  const filters = await dataScope.getFilters(ctx, 'User');
-  return await db.user.findMany({ where: buildWhereClause(filters) });
+import { DataScopeStore } from '@mtpc/data-scope';
+
+class CustomDataScopeStore implements DataScopeStore {
+  async createScope(scope: Omit<DataScopeDefinition, 'id'>): Promise<DataScopeDefinition> {
+    // 实现创建逻辑
+    return newScope;
+  }
+
+  async updateScope(id: string, updates: Partial<DataScopeDefinition>): Promise<DataScopeDefinition | null> {
+    // 实现更新逻辑
+    return updatedScope;
+  }
+
+  async deleteScope(id: string): Promise<boolean> {
+    // 实现删除逻辑
+    return true;
+  }
+
+  async getScope(id: string): Promise<DataScopeDefinition | null> {
+    // 实现获取逻辑
+    return scope;
+  }
+
+  async listScopes(): Promise<DataScopeDefinition[]> {
+    // 实现列表逻辑
+    return scopes;
+  }
+
+  async createAssignment(assignment: Omit<ScopeAssignment, 'id' | 'createdAt' | 'updatedAt'>): Promise<ScopeAssignment> {
+    // 实现创建分配逻辑
+    return newAssignment;
+  }
+
+  async deleteAssignment(id: string): Promise<boolean> {
+    // 实现删除分配逻辑
+    return true;
+  }
+
+  async getAssignmentsForTarget(tenantId: string, targetType: ScopeAssignment['targetType'], targetId: string): Promise<ScopeAssignment[]> {
+    // 实现获取分配逻辑
+    return assignments;
+  }
+
+  async getAssignmentsForResource(tenantId: string, resourceName: string): Promise<ScopeAssignment[]> {
+    // 实现获取资源分配逻辑
+    return assignments;
+  }
 }
 
-// 获取有效的范围类型
-const scopeType = await dataScope.getResolver().getEffectiveScopeType(ctx, 'User');
-console.log(`用户的访问范围: ${scopeType}`); // 'department'
+const dataScope = createDataScope({
+  store: new CustomDataScopeStore(),
+});
 ```
 
-### 示例 6：范围组合
-
-```typescript
-// 定义多个可组合的范围
-const tenantScope = scope('租户').tenant().build();
-const departmentScope = scope('部门').department().build();
-const teamScope = scope('团队').team().build();
-
-// 分配给用户
-await dataScope.assignToSubject('tenant-123', 'user-456', 'scope:tenant');
-await dataScope.assignToSubject('tenant-123', 'user-456', 'scope:department');
-await dataScope.assignToSubject('tenant-123', 'user-456', 'scope:team');
-
-// 解析时，所有范围会被组合（AND 逻辑）
-const result = await dataScope.resolve(ctx, 'User');
-// 结果包含所有三个范围的过滤条件
-```
-
-### 示例 7：独占范围
-
-```typescript
-// 定义独占范围（不可与其他范围组合）
-const adminScope = scope('管理员')
-  .all()
-  .exclusive() // 设置为独占
-  .priority(1000)
-  .build();
-
-// 当用户拥有独占范围时，只使用该范围
-await dataScope.assignToRole('tenant-123', 'admin', adminScope.id);
-
-// 解析时，即使有其他范围，也只返回 adminScope 的过滤器
-const result = await dataScope.resolve(ctx, 'User');
-// 结果: [] (空过滤器，无限制)
-```
-
-## 常见问题解答
+## 常见问题
 
 ### Q1: data-scope 与 rbac 有什么区别？
 
@@ -751,12 +628,10 @@ const users = await db.user.findMany({ where: buildWhereClause(filters) });
 
 ### Q2: 如何处理复杂的 OR 逻辑？
 
-**A:** 当前版本通过多个范围分配实现类似效果：
+**A:** 当前版本通过多个范围分配实现类似效果，OR 逻辑需要在查询层处理：
 
 ```typescript
 // 场景：用户可以访问自己的数据 OR 本团队的数据
-// 方案：为用户分配两个范围，由查询层处理 OR 逻辑
-
 await dataScope.assignToSubject('tenant-123', 'user-456', 'scope:self');
 await dataScope.assignToSubject('tenant-123', 'user-456', 'scope:team');
 
@@ -858,19 +733,68 @@ defineResource({
 });
 ```
 
-## 注意事项
+### Q8: 管理员如何绕过数据范围限制？
 
-1. **声明式配置优先**: v0.2.0+ 推荐使用资源元数据声明式配置数据范围
+**A:** 管理员检测有两种方式：
 
-2. **预定义范围保护**: 预定义范围（如 `scope:all`）无法被删除
+1. **角色检测**: 拥有 `adminRoles` 中指定的角色
+2. **通配符权限**: 拥有 `*` 权限
 
-3. **ID 唯一性**: 多实例部署时需确保范围 ID 唯一性
+```typescript
+const dataScope = createDataScope({
+  adminRoles: ['admin', 'superuser'],
+  checkWildcardPermission: true, // 启用通配符权限检查
+});
 
-4. **线程安全**: 当前 `InMemoryDataScopeStore` 不是线程安全的，单实例使用
+// 管理员会自动获得无限制访问权限
+```
 
-5. **类型安全**: 使用 TypeScript 时充分利用类型定义避免错误
+## 最佳实践
 
-6. **资源元数据**: 使用声明式配置时，确保在插件注册前完成所有资源注册
+### 设计原则
+
+1. **遵循最小权限原则**: 只授予必要的数据访问范围
+2. **使用预定义范围**: 优先使用预定义范围，避免重复定义
+3. **合理设置优先级**: 高优先级范围会覆盖低优先级范围
+4. **利用独占范围**: 对于需要完全控制的场景，使用独占范围
+5. **缓存优化**: 配置合理的缓存 TTL，平衡性能和数据一致性
+
+### 代码组织
+
+1. **集中管理范围定义**: 将所有范围定义放在单独的文件中
+2. **按租户组织范围分配**: 不同租户使用不同的范围配置
+3. **使用常量定义范围 ID**: 避免硬编码范围 ID
+4. **为范围添加清晰的描述**: 便于理解和维护
+
+```typescript
+// scopes.ts
+export const SCOPES = {
+  ALL: 'scope:all',
+  TENANT: 'scope:tenant',
+  DEPARTMENT: 'scope:department',
+  TEAM: 'scope:team',
+  SELF: 'scope:self',
+} as const;
+
+// 使用
+await dataScope.assignToRole(tenantId, 'admin', SCOPES.ALL);
+```
+
+### 性能优化
+
+1. **启用缓存**: 设置合理的 `cacheTTL`（建议 1-5 分钟）
+2. **减少范围数量**: 只分配必要的范围
+3. **使用预定义范围**: 避免重复创建相似范围
+4. **优化层级解析**: 缓存层级关系，避免重复查询
+5. **监控性能**: 记录范围解析耗时，及时发现问题
+
+### 安全实践
+
+1. **始终验证租户上下文**: 确保租户有效性
+2. **避免硬编码范围**: 使用配置或常量管理范围
+3. **定期审查范围配置**: 清理不必要的范围
+4. **记录范围应用日志**: 用于审计和调试
+5. **限制管理员权限**: 严格控制拥有无限制访问权限的用户
 
 ## 类型参考
 
@@ -883,6 +807,7 @@ interface DataScopeOptions {
   ownerField?: string;                       // 所有者字段名
   departmentField?: string;                  // 部门字段名
   teamField?: string;                        // 团队字段名
+  cacheEnabled?: boolean;                     // 是否启用缓存
   cacheTTL?: number;                         // 缓存 TTL（毫秒）
   adminRoles?: string[];                     // 管理员角色
   checkWildcardPermission?: boolean;         // 检查通配符权限
@@ -890,14 +815,14 @@ interface DataScopeOptions {
 }
 ```
 
-### ResourceDataScopeConfig (Core 包)
+### ResourceDataScopeConfig
 
 资源元数据中的数据范围配置：
 
 ```typescript
 interface ResourceDataScopeConfig {
   enabled?: boolean;                         // 是否启用（默认 true）
-  defaultScope?: 'all' | 'tenant' | 'department' | 'team' | 'self' | 'subordinates' | 'custom';
+  defaultScope?: ScopeType;                  // 默认范围类型
   ownerField?: string;                       // 所有者字段（默认 'createdBy'）
   departmentField?: string;                  // 部门字段（默认 'departmentId'）
   teamField?: string;                        // 团队字段（默认 'teamId'）
@@ -927,6 +852,32 @@ interface ResolvedScope {
 }
 ```
 
+## API 参考
+
+### DataScope 类
+
+| 方法 | 说明 |
+|------|------|
+| `defineScope(definition)` | 定义新范围 |
+| `getScope(id)` | 根据 ID 获取范围 |
+| `assignToResource(tenantId, resourceName, scopeId, options?)` | 将范围分配给资源 |
+| `assignToRole(tenantId, roleName, scopeId, options?)` | 将范围分配给角色 |
+| `assignToSubject(tenantId, subjectId, scopeId, options?)` | 将范围分配给主体 |
+| `resolve(ctx, resourceName, action?, existingFilters?)` | 解析上下文的范围 |
+| `getFilters(ctx, resourceName, existingFilters?)` | 获取上下文和资源的过滤器 |
+| `hasUnrestrictedAccess(ctx)` | 检查主体是否有无限制访问权限 |
+| `setupDefaultScopes(tenantId, roleScopes)` | 快速设置：将预定义范围分配给角色 |
+| `integrateWith(mtpc)` | 与 MTPC 集成 |
+| `clearCache()` | 清除缓存 |
+| `getRegistry()` | 获取注册表 |
+| `getResolver()` | 获取解析器 |
+
+### 插件 API
+
+| 方法 | 说明 |
+|------|------|
+| `createDataScopePlugin(options)` | 创建数据范围插件 |
+
 ---
 
-**更多信息**: 请参考 [MTPC 架构文档](../.claude/docs/architecture.md)
+**更多信息**: 请参考 [MTPC 架构文档](../mtpc-architecture.md)
