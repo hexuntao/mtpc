@@ -14,7 +14,6 @@
 10. [常见问题](#10-常见问题)
 11. [最佳实践](#11-最佳实践)
 12. [迁移指南](#12-迁移指南)
-13. [API 参考](#13-api-参考)
 
 ---
 
@@ -823,7 +822,7 @@ app.use('*', async (c, next) => {
 });
 ```
 
-### Q7: 为什么需要 defaultPermissionResolver？
+### Q7: 为什么需要 defaultTenantResolver？
 
 MTPC 需要知道用户有哪些权限才能进行权限检查。`defaultPermissionResolver` 用于根据租户 ID 和主体 ID 获取权限集合：
 
@@ -977,9 +976,9 @@ app.onError(mtpcErrorHandler({
 
 ---
 
-## 13. API 参考
+## 附录 A：API 参考
 
-### 13.1 主入口导出
+### A.1 主入口导出
 
 ```typescript
 // 上下文管理
@@ -1005,7 +1004,7 @@ export { createRPCRoutes, createTypedRPCApp };
 export { createRPCClient, createResourceClient, createMTPCClient };
 ```
 
-### 13.2 配置选项速查
+### A.2 配置选项速查
 
 | 选项 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -1018,25 +1017,6 @@ export { createRPCClient, createResourceClient, createMTPCClient };
 | authOptions.required | boolean | false | 认证是否必填 |
 | authOptions.headerName | string | 'x-subject-id' | 主体请求头名称 |
 | handlerFactory | function | InMemoryHandlerFactory | CRUD 处理器工厂 |
-
----
-
-## 版本更新日志
-
-### v0.1.0 (2024-12-27)
-
-- 初始版本发布
-- 支持创建完整的 MTPC Hono 应用
-- 支持创建最小化的 MTPC Hono 应用
-- 支持挂载 MTPC 路由到现有 Hono 应用
-- 提供租户解析、认证、权限检查中间件
-- 支持自动生成 CRUD 路由和 RPC 路由
-- 提供统一的错误处理机制
-- 支持自定义 CRUD 处理器
-- 支持自定义认证和租户解析
-- 新增多种租户解析方式（路径参数、子域名）
-- 新增 Bearer Token 和 API Key 认证
-- 新增 RPC 客户端支持
 
 ---
 

@@ -72,7 +72,7 @@ export interface SchemaOptions {
   /** 输出文件名 */
   outputFile?: string;
   /** 数据库方言 */
-  dialect?: 'postgresql' | 'mysql' | 'sqlite';
+  // dialect?: 'postgresql' | 'mysql' | 'sqlite';
   /** 租户 ID 列名 */
   tenantColumn?: string;
   /** 是否包含时间戳字段 */

@@ -93,10 +93,10 @@ function App() {
 |------|------|--------|------|
 | permission | string | undefined | 单个权限代码 |
 | permissions | string[] | undefined | 权限代码数组 |
-| mode | 'any' | 'all' | 'all' | 匹配模式，'any' 表示任意一个权限匹配即可，'all' 表示所有权限都必须匹配 |
+| mode | 'any' \| 'all' | 'all' | 匹配模式，'any' 表示任意一个权限匹配即可，'all' 表示所有权限都必须匹配 |
 | not | boolean | false | 是否取反，true 表示权限不允许时渲染 |
-| fallback | ReactNode | undefined | 权限不允许时的回退内容 |
-| children | ReactNode | ((allowed: boolean) => ReactNode) | - | 权限允许时渲染的内容 |
+| fallback | ReactNode \| (() => any) | undefined | 权限不允许时的回退内容 |
+| children | ReactNode \| ((allowed: boolean) => ReactNode) | - | 权限允许时渲染的内容 |
 
 ### 3. Cannot 组件
 
@@ -124,7 +124,7 @@ function App() {
 |------|------|--------|------|
 | permission | string | undefined | 单个权限代码 |
 | permissions | string[] | undefined | 权限代码数组 |
-| mode | 'any' | 'all' | 'all' | 匹配模式 |
+| mode | 'any' \| 'all' | 'all' | 匹配模式 |
 | options | { throwOnDenied?: boolean } | {} | 配置选项，`throwOnDenied` 表示权限被拒绝时是否抛出错误 |
 
 #### 返回值
@@ -146,8 +146,8 @@ function App() {
 | permissions | string[] | 权限列表 |
 | roles | string[] | 角色列表 |
 | loading | boolean | 权限加载状态 |
-| error | string | undefined | 权限加载错误信息 |
-| lastUpdated | Date | undefined | 权限最后更新时间 |
+| error | string \| undefined | 权限加载错误信息 |
+| lastUpdated | Date \| undefined | 权限最后更新时间 |
 | refresh | () => Promise<void> | 刷新权限的方法 |
 
 ### 7. useCan 钩子
@@ -265,6 +265,15 @@ function App() {
 | 参数 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
 | options | ApiFetcherOptions | - | API 获取器配置 |
+
+#### ApiFetcherOptions 类型
+
+| 属性 | 类型 | 描述 |
+|------|------|------|
+| baseUrl | string | API 的基础 URL，例如 "/api" |
+| path | string | '/permissions' | 权限端点路径，例如 "/permissions" |
+| headers | Record<string, string> | {} | 请求中包含的可选头信息 |
+| extractor | (response: unknown) => { permissions: string[]; roles?: string[] } | undefined | 提取器函数，用于将响应解析为指定格式 |
 
 #### 返回值
 
@@ -488,6 +497,87 @@ function AdminCheck() {
 }
 ```
 
+### 7. 使用 throwOnDenied 选项
+
+```typescript
+import { usePermission } from '@mtpc/adapter-react';
+
+// 权限被拒绝时抛出错误
+function ProtectedComponent() {
+  const { allowed } = usePermission('admin:dashboard', undefined, 'all', { throwOnDenied: true });
+  
+  return <div>管理员仪表板</div>;
+}
+
+// 在父组件中捕获错误
+function ParentComponent() {
+  try {
+    return <ProtectedComponent />;
+  } catch (error) {
+    return <div>您没有权限访问此内容</div>;
+  }
+}
+```
+
+### 8. 使用角色检查
+
+```typescript
+import { useHasRole, useAnyRole, useAllRoles, useRoles } from '@mtpc/adapter-react';
+
+// 检查单个角色
+function AdminOnly() {
+  const isAdmin = useHasRole('admin');
+  
+  return <div>{isAdmin ? '管理员内容' : '普通用户内容'}</div>;
+}
+
+// 检查任意一个角色
+function ModeratorAccess() {
+  const hasModeratorRole = useAnyRole(['moderator', 'admin']);
+  
+  return <div>{hasModeratorRole ? '可以访问' : '无权访问'}</div>;
+}
+
+// 检查所有角色
+function SuperUser() {
+  const isSuperUser = useAllRoles(['admin', 'superuser']);
+  
+  return <div>{isSuperUser ? '超级用户' : '普通用户'}</div>;
+}
+
+// 获取所有角色
+function UserRoles() {
+  const roles = useRoles();
+  
+  return <div>用户角色: {roles.join(', ')}</div>;
+}
+```
+
+### 9. 动态权限评估
+
+```typescript
+import { usePermissionContext } from '@mtpc/adapter-react';
+
+function DynamicCheck() {
+  const { evaluate, can, canAny, canAll } = usePermissionContext();
+  
+  // 详细评估结果
+  const result = evaluate(['user:read', 'user:write'], 'all');
+  console.log('评估结果:', result);
+  // { allowed: true, granted: ['user:read', 'user:write'], missing: [] }
+  
+  // 简单检查
+  const canRead = can('user:read'); // true
+  const canWrite = can('user:write'); // true
+  
+  // 批量检查
+  const canAnyResult = canAny(['user:delete', 'user:archive']); // false
+  const canAllResult = canAll(['user:read', 'user:write']); // true
+  
+  return <div>动态权限检查示例</div>;
+}
+```
+
 ## 常见问题解答
 
 ### 1. 如何处理权限加载状态？
@@ -563,12 +653,85 @@ function ProtectedRoute({ children, requiredPermission }) {
 <Route path="/admin" element={<ProtectedRoute requiredPermission="admin:*">AdminPanel</ProtectedRoute>} />
 ```
 
+### 5. 如何实现条件渲染？
+
+可以使用函数作为 `children` 来实现更复杂的条件渲染：
+
+```typescript
+import { Can } from '@mtpc/adapter-react';
+
+function UserCard() {
+  return (
+    <Can permission="user:read">
+      {(allowed) => (
+        <div className={allowed ? 'full-access' : 'limited-access'}>
+          {allowed ? '完整用户信息' : '受限用户信息'}
+        </div>
+      )}
+    </Can>
+  );
+}
+```
+
+### 6. 如何处理权限获取错误？
+
+```typescript
+import { usePermissions } from '@mtpc/adapter-react';
+
+function PermissionAwareComponent() {
+  const { loading, error, refresh } = usePermissions();
+  
+  if (loading) {
+    return <div>正在加载权限...</div>;
+  }
+  
+  if (error) {
+    return (
+      <div>
+        <p>加载权限失败: {error}</p>
+        <button onClick={refresh}>重试</button>
+      </div>
+    );
+  }
+  
+  return <div>权限加载成功</div>;
+}
+```
+
+## 通配符匹配规则
+
+adapter-react 支持以下通配符模式：
+
+| 模式 | 描述 | 示例 |
+|------|------|------|
+| `*` | 匹配所有权限 | `can('*')` 返回 true 如果用户有任何权限 |
+| `resource:*` | 匹配特定资源的所有操作 | `can('user:*')` 匹配 `user:read`、`user:write` 等 |
+| `*:action` | 匹配所有资源的特定操作 | `can('*:read')` 匹配任何资源的 `read` 操作 |
+| `resource:action` | 精确匹配 | `can('user:read')` 只匹配 `user:read` |
+
+### 匹配示例
+
+```typescript
+const { can } = usePermissionContext();
+
+// 假设用户权限为 ['user:read', 'user:write', 'order:*']
+
+can('user:read');     // true - 精确匹配
+can('user:write');    // true - 精确匹配
+can('user:delete');   // false - 未授予
+can('order:read');    // true - 匹配 order:*
+can('order:delete');  // true - 匹配 order:*
+can('product:read');  // false - 未授予
+can('*');             // false - 全局通配符需要显式授予
+```
+
 ## 性能优化
 
 1. **使用 `useMemo` 缓存权限检查结果**：对于复杂的权限检查，可以使用 `useMemo` 缓存结果，避免不必要的重新计算
 2. **避免在渲染过程中创建权限数组**：尽量使用常量或 `useMemo` 缓存权限数组，避免在每次渲染时创建新数组
 3. **合理使用 `autoFetch` 选项**：对于权限不经常变化的应用，可以考虑关闭自动刷新，手动控制刷新时机
 4. **使用 `PermissionGuard` 组件包裹大块内容**：对于需要权限控制的大块内容，使用 `PermissionGuard` 组件可以减少不必要的渲染
+5. **使用简化的钩子**：对于简单的权限检查，使用 `useCan` 替代 `usePermission` 可以减少不必要的计算
 
 ## 最佳实践
 
@@ -577,6 +740,8 @@ function ProtectedRoute({ children, requiredPermission }) {
 3. **合理使用通配符**：通配符可以简化权限管理，但应谨慎使用，避免过度授权
 4. **定期刷新权限**：对于权限经常变化的应用，应定期刷新权限，确保权限状态的准确性
 5. **处理权限加载状态和错误**：在权限加载过程中显示加载指示器，在加载失败时显示友好的错误信息
+6. **使用角色进行权限分组**：将相关权限组合成角色，便于管理和分配
+7. **避免在深层组件中重复获取上下文**：通过组件组合传递必要的权限信息，而不是在每个组件中都调用 `usePermissionContext`
 
 ## 版本兼容性
 

@@ -1,36 +1,48 @@
 # @mtpc/adapter-drizzle 使用指南
 
-## 1. 包简介
+## 目录
 
-`@mtpc/adapter-drizzle` 是 MTPC (Multi-Tenant Permission Core) 框架的 Drizzle ORM 数据访问层适配器，提供将多租户权限核心与 Drizzle ORM 无缝集成的解决方案，支持自动租户隔离、Repository 模式、Schema 生成工具和数据库迁移系统。
+1. [概述](#1-概述)
+2. [安装与配置](#2-安装与配置)
+3. [核心 API 详解](#3-核心-api-详解)
+4. [快速开始](#4-快速开始)
+5. [高级功能](#5-高级功能)
+6. [最佳实践](#6-最佳实践)
+7. [常见问题](#7-常见问题)
+8. [架构图示](#8-架构图示)
 
-### 核心功能
+---
+
+## 1. 概述
+
+### 1.1 包简介
+
+`@mtpc/adapter-drizzle` 是 MTPC (Multi-Tenant Permission Core) 框架的 Drizzle ORM 数据访问层适配器，提供将多租户权限核心与 Drizzle ORM 无缝集成的解决方案。
+
+### 1.2 核心功能
 
 - **自动租户隔离**：确保数据按租户正确隔离，避免跨租户访问
 - **Repository 模式**：提供统一的数据访问接口
-- **Drizzle Schema 生成**：从资源定义自动生成 Drizzle 表结构
-- **基础仓储模式**：提供通用的 CRUD 操作和查询构建器
-- **数据库迁移支持**：集成自定义迁移系统
-- **PostgreSQL 支持**：目前主要支持 PostgreSQL
-- **查询构建器**：支持复杂查询构建和执行
-- **CRUD 处理器**：提供通用的 CRUD 处理逻辑
+- **Schema 生成**：从资源定义自动生成 Drizzle 表结构
+- **CRUD 操作**：完整的 CRUD 操作支持
+- **钩子集成**：与 MTPC Core 钩子系统深度集成
+- **迁移管理**：数据库 schema 版本控制
+- **查询构建器**：支持链式调用构建复杂查询
 
-### 适用场景
+### 1.3 适用场景
 
 - 基于 Drizzle ORM 的多租户应用
 - 需要自动生成数据库 Schema 的场景
-- 采用仓储模式设计的数据访问层
+- 采用 Repository 模式设计的数据访问层
 - 需要数据库迁移管理的应用
 - 复杂查询构建需求
 - 多租户数据隔离需求
 
 ---
 
-## 2. 安装指南
+## 2. 安装与配置
 
 ### 2.1 安装依赖
-
-使用 pnpm 安装 `@mtpc/adapter-drizzle` 包：
 
 ```bash
 pnpm add @mtpc/adapter-drizzle @mtpc/core drizzle-orm postgres
@@ -40,211 +52,66 @@ pnpm add @mtpc/adapter-drizzle @mtpc/core drizzle-orm postgres
 
 | 依赖包 | 版本要求 | 说明 |
 |--------|----------|------|
-| `@mtpc/core` | workspace:* | MTPC 核心包，提供基础权限能力 |
+| `@mtpc/core` | workspace:* | MTPC 核心包 |
 | `drizzle-orm` | ^0.30.0 | Drizzle ORM 库 |
 | `postgres` | ^3.4.0 | PostgreSQL 驱动 |
 
----
-
-## 3. 快速开始
-
-### 3.1 基本使用示例
+### 2.3 数据库配置
 
 ```typescript
-import { createMTPC } from '@mtpc/core';
-import { defineResource } from '@mtpc/core';
-import { z } from 'zod';
-import { createConnectionFromEnv } from '@mtpc/adapter-drizzle';
-import { createRepositoryFactory } from '@mtpc/adapter-drizzle';
-import { generateAllTables } from '@mtpc/adapter-drizzle';
+import { createConnection } from '@mtpc/adapter-drizzle';
 
-// 定义资源
-const userResource = defineResource({
-  name: 'user',
-  schema: z.object({
-    id: z.string().uuid(),
-    name: z.string().min(2),
-    email: z.string().email(),
-    role: z.enum(['admin', 'user']),
-  }),
-  features: {
-    create: true,
-    read: true,
-    update: true,
-    delete: true,
-  },
+// 方式一：使用配置对象
+const { db, client } = createConnection({
+  connectionString: 'postgres://user:password@localhost:5432/mydb',
+  maxConnections: 10,
+  idleTimeout: 20,
+  ssl: false,
 });
 
-// 创建 MTPC 实例
-const mtpc = createMTPC();
-mtpc.registerResource(userResource);
-await mtpc.init();
-
-// 创建数据库连接（从环境变量读取 DATABASE_URL）
-const { db } = createConnectionFromEnv();
-
-// 生成 Drizzle 表结构
-const tables = generateAllTables([userResource], {
-  timestamps: true,
-  auditFields: true,
-});
-
-// 创建仓储工厂
-const repositoryFactory = createRepositoryFactory(db, tables);
-
-// 获取用户仓储
-const userRepository = repositoryFactory.getRepository('user');
-
-// 使用仓储进行 CRUD 操作
-async function example() {
-  // 创建租户上下文
-  const tenant = { id: 'tenant-001' };
-  const subject = { id: 'user-001', type: 'user' };
-  const ctx = { tenant, subject, request: {} };
-
-  // 创建用户
-  const createdUser = await userRepository.create(ctx, {
-    id: '1234-5678-9012',
-    name: 'John Doe',
-    email: 'john@example.com',
-    role: 'user',
-  });
-  console.log('Created user:', createdUser);
-
-  // 获取用户
-  const user = await userRepository.findById(ctx, '1234-5678-9012');
-  console.log('Got user:', user);
-
-  // 更新用户
-  const updatedUser = await userRepository.update(ctx, '1234-5678-9012', {
-    name: 'Jane Doe',
-  });
-  console.log('Updated user:', updatedUser);
-
-  // 删除用户
-  await userRepository.delete(ctx, '1234-5678-9012');
-  console.log('Deleted user');
-}
-
-example().catch(console.error);
+// 方式二：从环境变量读取
+const { db, client } = createConnectionFromEnv();
 ```
 
-### 3.2 与 Hono 集成示例
+**DatabaseConfig 选项**：
 
-```typescript
-import { createMTPC } from '@mtpc/core';
-import { createMTPCApp } from '@mtpc/adapter-hono';
-import { defineResource } from '@mtpc/core';
-import { z } from 'zod';
-import { createConnectionFromEnv, createDrizzleHandlerFactory } from '@mtpc/adapter-drizzle';
-
-// 定义资源
-const postResource = defineResource({
-  name: 'post',
-  schema: z.object({
-    id: z.string().uuid(),
-    title: z.string().min(1),
-    content: z.string().min(1),
-    authorId: z.string().uuid(),
-    published: z.boolean().default(false),
-  }),
-  features: {
-    create: true,
-    read: true,
-    update: true,
-    delete: true,
-    list: true,
-  },
-});
-
-// 创建 MTPC 实例
-const mtpc = createMTPC();
-mtpc.registerResource(postResource);
-await mtpc.init();
-
-// 创建数据库连接
-const { db } = createConnectionFromEnv();
-
-// 生成表结构
-import { generateAllTables } from '@mtpc/adapter-drizzle';
-const tables = generateAllTables([postResource]);
-
-// 创建 Drizzle 处理器工厂
-const drizzleHandlerFactory = createDrizzleHandlerFactory(db, tables);
-
-// 创建 MTPC Hono 应用，使用 Drizzle 处理器
-const app = createMTPCApp(mtpc, {
-  prefix: '/api',
-  logging: true,
-  errorHandling: true,
-  tenantOptions: { headerName: 'x-tenant-id' },
-  authOptions: { required: false },
-  handlerFactory: drizzleHandlerFactory.getHandlerFactoryFn(),
-});
-
-// 启动服务器
-app.fire(3000);
-```
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `connectionString` | `string` | - | 数据库连接字符串（必填） |
+| `maxConnections` | `number` | 10 | 最大连接数 |
+| `idleTimeout` | `number` | 20 | 空闲超时（秒） |
+| `ssl` | `boolean \| object` | false | SSL 配置 |
 
 ---
 
-## 4. 核心 API 详解
+## 3. 核心 API 详解
 
-### 4.1 数据库连接
+### 3.1 数据库连接
 
-#### `createConnection`
+#### `createConnection(config: DatabaseConfig)`
 
 创建 PostgreSQL 数据库连接。
 
 ```typescript
 import { createConnection } from '@mtpc/adapter-drizzle';
 
-function createConnection(config: DatabaseConfig): {
-  db: DrizzleDB;
-  client: ReturnType<typeof postgres>;
-}
+const { db, client } = createConnection({
+  connectionString: process.env.DATABASE_URL,
+  maxConnections: 10,
+  idleTimeout: 20,
+  ssl: process.env.NODE_ENV === 'production',
+});
 ```
 
-**DatabaseConfig**
-
-| 属性 | 类型 | 默认值 | 说明 | 是否必填 |
-|------|------|--------|------|----------|
-| `connectionString` | `string` | - | 数据库连接 URL | 是 |
-| `maxConnections` | `number` | 10 | 最大连接数 | 否 |
-| `idleTimeout` | `number` | 20 | 空闲超时（秒） | 否 |
-| `ssl` | `boolean \| object` | false | SSL 配置 | 否 |
-
-**返回值**
-
-| 属性 | 类型 | 说明 |
-|------|------|------|
-| `db` | `DrizzleDB` | Drizzle ORM 数据库实例 |
-| `client` | `Postgres` | PostgreSQL 连接实例 |
-
-#### `createConnectionFromEnv`
+#### `createConnectionFromEnv()`
 
 从环境变量创建连接，自动读取 `DATABASE_URL`。
 
 ```typescript
 import { createConnectionFromEnv } from '@mtpc/adapter-drizzle';
 
-function createConnectionFromEnv(): {
-  db: DrizzleDB;
-  client: ReturnType<typeof postgres>;
-}
-```
-
-**环境变量**
-
-| 变量 | 说明 |
-|------|------|
-| `DATABASE_URL` | 数据库连接字符串（必填） |
-| `NODE_ENV` | 用于判断是否启用 SSL（production 时启用） |
-
-**示例**
-
-```bash
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/mtpc
+// 需要设置环境变量：DATABASE_URL=postgres://...
+const { db, client } = createConnectionFromEnv();
 ```
 
 #### `ConnectionPool`
@@ -252,113 +119,142 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/mtpc
 连接池管理器。
 
 ```typescript
-import { createConnectionPool } from '@mtpc/adapter-drizzle';
+import { createConnectionPool, closeConnection } from '@mtpc/adapter-drizzle';
 
-function createConnectionPool(config: DatabaseConfig): ConnectionPool
+const pool = createConnectionPool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+// 获取数据库实例
+const db = pool.getDb();
+
+// 健康检查
+const isHealthy = await pool.healthCheck();
+
+// 关闭连接池
+await pool.close();
 ```
 
-**ConnectionPool 方法**
+### 3.2 Schema 生成
 
-| 方法 | 参数 | 返回值 | 说明 |
-|------|------|--------|------|
-| `getDb()` | - | `DrizzleDB` | 获取数据库实例 |
-| `close()` | - | `Promise<void>` | 关闭连接池 |
-| `healthCheck()` | - | `Promise<boolean>` | 健康检查 |
+#### `generateTable(resource, options)`
 
-### 4.2 Schema 生成
-
-#### `generateTable`
-
-从资源定义生成单张 Drizzle 表。
+从资源定义生成单张表。
 
 ```typescript
 import { generateTable } from '@mtpc/adapter-drizzle';
+import { defineResource } from '@mtpc/core';
+import { z } from 'zod';
 
-function generateTable(
-  resource: ResourceDefinition,
-  options?: SchemaGenerationOptions
-): PgTable
+const userResource = defineResource({
+  name: 'user',
+  schema: z.object({
+    id: z.string().uuid(),
+    name: z.string().min(2),
+    email: z.string().email(),
+  }),
+  features: { create: true, read: true, update: true, delete: true },
+});
+
+// 生成表结构
+const userTable = generateTable(userResource, {
+  tenantColumn: 'tenant_id',
+  timestamps: true,
+  softDelete: false,
+  auditFields: true,
+});
 ```
 
-**SchemaGenerationOptions**
+**SchemaGenerationOptions**：
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `tenantColumn` | `string` | 'tenant_id' | 租户 ID 列名 |
-| `timestamps` | `boolean` | true | 是否添加时间戳字段 |
-| `softDelete` | `boolean` | false | 是否添加软删除字段 |
-| `auditFields` | `boolean` | false | 是否添加审计字段 |
+| `tenantColumn` | `string` | 'tenant_id' | 租户列名 |
+| `timestamps` | `boolean` | true | 添加时间戳 |
+| `softDelete` | `boolean` | false | 添加软删除字段 |
+| `auditFields` | `boolean` | false | 添加审计字段 |
 
-**返回值**
+#### `generateAllTables(resources, options)`
 
-生成的 Drizzle `PgTable` 对象。
-
-#### `generateAllTables`
-
-从资源列表批量生成 Drizzle 表。
+批量生成所有表的 Schema。
 
 ```typescript
 import { generateAllTables } from '@mtpc/adapter-drizzle';
 
-function generateAllTables(
-  resources: ResourceDefinition[],
-  options?: SchemaGenerationOptions
-): Record<string, PgTable>
+const tables = generateAllTables([userResource, productResource, orderResource], {
+  timestamps: true,
+  auditFields: true,
+});
+
+console.log(tables);
+// { user: PgTable, product: PgTable, order: PgTable }
 ```
 
-**返回值**
+### 3.3 Repository 工厂
 
-表名到 `PgTable` 定义的映射对象。
+#### `createRepositoryFactory(db, tables)`
 
-#### Zod 类型映射
-
-| Zod 类型 | Drizzle 类型 |
-|----------|--------------|
-| `ZodString` (无 max) | `text` |
-| `ZodString` (max ≤ 255) | `varchar` |
-| `ZodString` (uuid) | `uuid` |
-| `ZodNumber` (int) | `integer` |
-| `ZodNumber` | `doublePrecision` |
-| `ZodBigInt` | `bigint` |
-| `ZodBoolean` | `boolean` |
-| `ZodDate` | `timestamp` |
-| `ZodArray` / `ZodObject` / `ZodRecord` | `jsonb` |
-| `ZodEnum` / `ZodNativeEnum` | `text` |
-
-### 4.3 Repository 模式
-
-#### `createRepositoryFactory`
-
-创建 Drizzle Repository 工厂。
+创建 Repository 工厂实例。
 
 ```typescript
 import { createRepositoryFactory } from '@mtpc/adapter-drizzle';
+import { generateAllTables } from '@mtpc/adapter-drizzle';
 
-function createRepositoryFactory(
-  db: DrizzleDB,
-  tables: Record<string, PgTable>
-): RepositoryFactory
+// 生成表结构
+const tables = generateAllTables([userResource, productResource]);
+
+// 创建工厂
+const factory = createRepositoryFactory(db, tables);
+
+// 获取用户 Repository
+const userRepo = factory.getRepository('user');
+
+// 获取产品 Repository（支持驼峰或蛇形命名）
+const productRepo = factory.getRepository('product');
+const orderRepo = factory.getRepository('order'); // 或 'order'
 ```
 
-**RepositoryFactory 方法**
+**RepositoryFactory 方法**：
 
 | 方法 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
-| `getRepository<T>(resourceName: string)` | 资源名称 | `TenantRepository<T>` | 获取指定资源的仓储实例 |
-| `registerTable(name: string, table: PgTable)` | 表名、表定义 | `void` | 注册表定义 |
+| `getRepository<T>(resourceName)` | 资源名称 | `TenantRepository<T>` | 获取指定资源的仓储实例 |
+| `registerTable(name, table)` | 表名、表定义 | `void` | 注册表定义 |
 | `getTableNames()` | - | `string[]` | 获取所有表名 |
 | `clearCache()` | - | `void` | 清空缓存 |
 
-**命名支持**
+### 3.4 CRUD Repository
 
-- 驼峰命名：`userProfile` → `user_profile` 表
-- 蛇形命名：`user_profile` → `user_profile` 表
+#### BaseRepository 方法
 
-#### `TenantRepository`
+```typescript
+interface Repository<T> {
+  findById(ctx: MTPCContext, id: string): Promise<T | null>;
+  findMany(ctx: MTPCContext, options?: QueryOptions): Promise<PaginatedResult<T>>;
+  create(ctx: MTPCContext, data: Partial<T>): Promise<T>;
+  update(ctx: MTPCContext, id: string, data: Partial<T>): Promise<T | null>;
+  delete(ctx: MTPCContext, id: string): Promise<boolean>;
+  count(ctx: MTPCContext, options?: QueryOptions): Promise<number>;
+}
+```
 
-租户仓储类，继承自 `BaseRepository`。
+#### TenantRepository 扩展方法
 
-**RepositoryOptions**
+```typescript
+class TenantRepository<T> extends BaseRepository<T> {
+  findAllForTenant(ctx: MTPCContext): Promise<T[]>;
+  createMany(ctx: MTPCContext, items: Partial<T>[]): Promise<T[]>;
+  updateMany(ctx: MTPCContext, ids: string[], data: Partial<T>): Promise<number>;
+  deleteMany(ctx: MTPCContext, ids: string[]): Promise<number>;
+  softDelete(ctx: MTPCContext, id: string): Promise<boolean>;
+  softDeleteMany(ctx: MTPCContext, ids: string[]): Promise<number>;
+  restore(ctx: MTPCContext, id: string): Promise<T | null>;
+  findByIdIncludingDeleted(ctx: MTPCContext, id: string): Promise<T | null>;
+  findDeleted(ctx: MTPCContext, options?: QueryOptions): Promise<PaginatedResult<T>>;
+}
+```
+
+**RepositoryOptions**：
 
 ```typescript
 interface RepositoryOptions {
@@ -367,114 +263,73 @@ interface RepositoryOptions {
 }
 ```
 
-**BaseRepository 方法**
+### 3.5 查询构建器
 
-| 方法 | 参数 | 返回值 | 说明 |
-|------|------|--------|------|
-| `findById(ctx, id)` | 上下文、ID | `Promise<T \| null>` | 根据 ID 查找 |
-| `findMany(ctx, options)` | 上下文、查询选项 | `Promise<PaginatedResult<T>>` | 分页查询 |
-| `create(ctx, data)` | 上下文、数据 | `Promise<T>` | 创建记录 |
-| `update(ctx, id, data)` | 上下文、ID、数据 | `Promise<T \| null>` | 更新记录 |
-| `delete(ctx, id)` | 上下文、ID | `Promise<boolean>` | 删除记录（硬删除） |
-| `softDelete(ctx, id)` | 上下文、ID | `Promise<boolean>` | 软删除 |
-| `count(ctx, options)` | 上下文、查询选项 | `Promise<number>` | 统计数量 |
-| `findOne(ctx, conditions)` | 上下文、条件 | `Promise<T \| null>` | 按条件查找 |
-| `exists(ctx, id)` | 上下文、ID | `Promise<boolean>` | 检查存在 |
+#### `createQueryBuilder(db, table, ctx)`
 
-**TenantRepository 扩展方法**
-
-| 方法 | 参数 | 返回值 | 说明 |
-|------|------|--------|------|
-| `findAllForTenant(ctx)` | 上下文 | `Promise<T[]>` | 查询租户所有数据 |
-| `createMany(ctx, items)` | 上下文、数据数组 | `Promise<T[]>` | 批量创建 |
-| `updateMany(ctx, ids, data)` | 上下文、ID数组、数据 | `Promise<number>` | 批量更新 |
-| `deleteMany(ctx, ids)` | 上下文、ID数组 | `Promise<number>` | 批量删除 |
-| `softDeleteMany(ctx, ids)` | 上下文、ID数组 | `Promise<number>` | 批量软删除 |
-| `restore(ctx, id)` | 上下文、ID | `Promise<T \| null>` | 恢复软删除 |
-| `findByIdIncludingDeleted(ctx, id)` | 上下文、ID | `Promise<T \| null>` | 包含已删除查询 |
-| `findDeleted(ctx, options)` | 上下文、查询选项 | `Promise<PaginatedResult<T>>` | 查询已删除记录 |
-
-**支持的过滤运算符**
-
-`eq`、`neq`、`gt`、`gte`、`lt`、`lte`、`in`、`contains`、`startsWith`、`endsWith`、`isNull`、`isNotNull`
-
-### 4.4 查询构建器
-
-#### `createQueryBuilder`
-
-创建查询构建器。
+创建查询构建器实例。
 
 ```typescript
 import { createQueryBuilder } from '@mtpc/adapter-drizzle';
 
-function createQueryBuilder<T extends Record<string, unknown>>(
-  db: DrizzleDB,
-  table: PgTable,
-  ctx: MTPCContext
-): QueryBuilder<T>
-```
-
-**QueryBuilder 方法**
-
-| 方法 | 参数 | 返回值 | 说明 |
-|------|------|--------|------|
-| `where(field, operator, value)` | 字段、运算符、值 | `this` | 添加条件 |
-| `whereEquals(field, value)` | 字段、值 | `this` | 等于条件 |
-| `whereIn(field, values)` | 字段、值数组 | `this` | IN 条件 |
-| `whereLike(field, pattern)` | 字段、模式 | `this` | LIKE 条件 |
-| `whereNull(field)` | 字段 | `this` | IS NULL |
-| `whereNotNull(field)` | 字段 | `this` | IS NOT NULL |
-| `whereBetween(field, min, max)` | 字段、最小值、最大值 | `this` | BETWEEN |
-| `orWhere(conditions)` | 条件数组 | `this` | OR 条件 |
-| `orderBy(field, direction)` | 字段、方向 | `this` | 排序 |
-| `limit(value)` | 数量 | `this` | 限制数量 |
-| `offset(value)` | 偏移量 | `this` | 偏移量 |
-| `select(...columns)` | 列名数组 | `this` | 选择列（待实现） |
-| `withDeleted()` | - | `this` | 包含已删除 |
-| `getMany()` | - | `Promise<T[]>` | 获取所有结果 |
-| `getOne()` | - | `Promise<T \| null>` | 获取单个结果 |
-| `count()` | - | `Promise<number>` | 统计数量 |
-| `exists()` | - | `Promise<boolean>` | 检查存在 |
-
-**示例**
-
-```typescript
 const users = await createQueryBuilder(db, userTable, ctx)
   .whereEquals('status', 'active')
   .whereLike('name', 'John%')
   .whereIn('role', ['admin', 'editor'])
   .orderBy('createdAt', 'desc')
   .limit(10)
+  .offset(0)
   .getMany();
+
+const count = await createQueryBuilder(db, userTable, ctx)
+  .whereEquals('status', 'active')
+  .count();
+
+const exists = await createQueryBuilder(db, userTable, ctx)
+  .whereEquals('email', 'test@example.com')
+  .exists();
 ```
 
-### 4.5 CRUD 处理器
-
-#### `createDrizzleHandlerFactory`
-
-创建 Drizzle CRUD 处理器工厂。
-
-```typescript
-import { createDrizzleHandlerFactory } from '@mtpc/adapter-drizzle/handler';
-
-function createDrizzleHandlerFactory(
-  db: DrizzleDB,
-  tables: Record<string, PgTable>
-): DrizzleHandlerFactory
-```
-
-**HandlerFactory 方法**
+**QueryBuilder 方法**：
 
 | 方法 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
-| `createHandler<T>(resource)` | 资源定义 | `DrizzleCRUDHandler<T>` | 创建处理器 |
-| `getHandlerFactoryFn()` | - | `工厂函数` | 获取用于 Hono 的工厂函数 |
-| `registerTable(name, table)` | 表名、表定义 | `void` | 注册表 |
-| `clearCache()` | - | `void` | 清空缓存 |
+| `where(field, operator, value)` | 字段名、运算符、值 | `this` | 添加条件 |
+| `whereEquals(field, value)` | 字段名、值 | `this` | 等于条件 |
+| `whereIn(field, values)` | 字段名、值数组 | `this` | IN 条件 |
+| `whereLike(field, pattern)` | 字段名、模式 | `this` | LIKE 条件 |
+| `whereNull(field)` | 字段名 | `this` | IS NULL |
+| `whereNotNull(field)` | 字段名 | `this` | IS NOT NULL |
+| `whereBetween(field, min, max)` | 字段名、最小值、最大值 | `this` | BETWEEN |
+| `orWhere(conditions)` | 条件数组 | `this` | OR 条件 |
+| `orderBy(field, direction)` | 字段名、方向 | `this` | 排序 |
+| `limit(value)` | 数量 | `this` | 限制数量 |
+| `offset(value)` | 偏移量 | `this` | 偏移量 |
+| `select(...columns)` | 列名数组 | `this` | 选择列（未完成） |
+| `withDeleted()` | - | `this` | 包含已删除 |
+| `getMany()` | - | `Promise<T[]>` | 获取所有 |
+| `getOne()` | - | `Promise<T \| null>` | 获取单个 |
+| `count()` | - | `Promise<number>` | 统计数量 |
+| `exists()` | - | `Promise<boolean>` | 检查存在 |
 
-#### `DrizzleCRUDHandler`
+**支持的运算符**：`eq`、`neq`、`gt`、`gte`、`lt`、`lte`、`in`、`like`、`isNull`、`isNotNull`
 
-Drizzle CRUD 处理器。
+### 3.6 CRUD 处理器
+
+#### `createDrizzleHandlerFactory(db, tables)`
+
+创建 CRUD 处理器工厂。
+
+```typescript
+import { createDrizzleHandlerFactory } from '@mtpc/adapter-drizzle';
+
+const handlerFactory = createDrizzleHandlerFactory(db, tables);
+
+// 获取用于 Hono 的工厂函数
+const createHandler = handlerFactory.getHandlerFactoryFn();
+```
+
+#### `DrizzleCRUDHandler` 方法
 
 ```typescript
 class DrizzleCRUDHandler<T> implements CRUDHandler<T> {
@@ -487,131 +342,175 @@ class DrizzleCRUDHandler<T> implements CRUDHandler<T> {
 }
 ```
 
-### 4.6 数据库迁移
+### 3.7 迁移管理
 
-#### `createMigrationRunner`
+#### `createMigrationRunner(db, options)`
 
 创建迁移运行器。
 
 ```typescript
-import { createMigrationRunner } from '@mtpc/adapter-drizzle/pg/migrations';
+import { createMigrationRunner, createSystemTablesMigration } from '@mtpc/adapter-drizzle';
 
-function createMigrationRunner(
-  db: DrizzleDB,
-  options?: { tableName?: string }
-): MigrationRunner
+const runner = createMigrationRunner(db, { tableName: 'mtpc_migrations' });
+
+// 注册系统表迁移
+runner.register(createSystemTablesMigration());
+
+// 执行所有待执行迁移
+await runner.migrate();
+
+// 回滚最后一次迁移
+await runner.rollback();
+
+// 回滚所有迁移
+await runner.reset();
 ```
 
-**MigrationRunner 方法**
+**MigrationRunner 方法**：
 
 | 方法 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
 | `register(migration)` | 迁移定义 | `this` | 注册单个迁移 |
 | `registerMany(migrations)` | 迁移数组 | `this` | 批量注册 |
 | `init()` | - | `Promise<void>` | 初始化迁移表 |
-| `migrate()` | - | `Promise<string[]>` | 执行所有迁移 |
-| `rollback()` | - | `Promise<string \| null>` | 回滚最后一次迁移 |
-| `reset()` | - | `Promise<void>` | 重置所有迁移 |
-| `getPending()` | - | `Promise<Migration[]>` | 获取待执行迁移 |
-| `getExecuted()` | - | `Promise<MigrationRecord[]>` | 获取已执行迁移 |
+| `migrate()` | - | `Promise<string[]>` | 执行迁移 |
+| `rollback()` | - | `Promise<string \| null>` | 回滚迁移 |
+| `reset()` | - | `Promise<void>` | 重置所有 |
 
-#### `createSystemTablesMigration`
+---
 
-创建 MTPC 系统表迁移。
+## 4. 快速开始
+
+### 4.1 完整示例
 
 ```typescript
-import { createSystemTablesMigration } from '@mtpc/adapter-drizzle/pg/migrations';
+import { createMTPC } from '@mtpc/core';
+import { defineResource } from '@mtpc/core';
+import { z } from 'zod';
+import { createConnectionFromEnv } from '@mtpc/adapter-drizzle';
+import { createRepositoryFactory } from '@mtpc/adapter-drizzle';
+import { generateAllTables } from '@mtpc/adapter-drizzle';
 
-function createSystemTablesMigration(): Migration
+// 1. 定义资源
+const userResource = defineResource({
+  name: 'user',
+  schema: z.object({
+    id: z.string().uuid(),
+    name: z.string().min(2),
+    email: z.string().email(),
+    role: z.enum(['admin', 'user', 'guest']),
+  }),
+  features: { create: true, read: true, update: true, delete: true },
+});
+
+// 2. 创建 MTPC 实例
+const mtpc = createMTPC();
+mtpc.registerResource(userResource);
+await mtpc.init();
+
+// 3. 创建数据库连接
+const { db } = createConnectionFromEnv();
+
+// 4. 生成并注册表
+const tables = generateAllTables([userResource], {
+  timestamps: true,
+  auditFields: true,
+});
+
+// 5. 创建 Repository 工厂
+const factory = createRepositoryFactory(db, tables);
+
+// 6. 获取 Repository
+const userRepo = factory.getRepository('user');
+
+// 7. 使用 Repository（需要租户上下文）
+import { createTenantContext } from '@mtpc/core';
+
+const tenant = createTenantContext('tenant-001');
+const subject = { id: 'user-001', type: 'user' as const };
+const ctx = { tenant, subject, request: {} };
+
+// 创建用户
+const user = await userRepo.create(ctx, {
+  id: '123e4567-e89b-12d3-a456-426614174000',
+  name: '张三',
+  email: 'zhangsan@example.com',
+  role: 'admin',
+});
+
+// 查询用户
+const foundUser = await userRepo.findById(ctx, '123e4567-e89b-12d3-a456-426614174000');
+
+// 列表查询
+const { data: users, total } = await userRepo.findMany(ctx, {
+  pagination: { page: 1, pageSize: 10 },
+  sort: [{ field: 'createdAt', direction: 'desc' }],
+});
+
+// 更新用户
+const updated = await userRepo.update(ctx, '123e4567-e89b-12d3-a456-426614174000', {
+  name: '李四',
+});
+
+// 删除用户
+await userRepo.delete(ctx, '123e4567-e89b-12d3-a456-426614174000');
 ```
 
-**创建的表**
-
-- `tenants` - 租户表
-- `permission_assignments` - 权限分配表
-- `audit_logs` - 审计日志表
-
-**示例**
+### 4.2 与 Hono 集成
 
 ```typescript
-const runner = createMigrationRunner(db);
-runner.register(createSystemTablesMigration());
-await runner.migrate();
+import { createMTPCApp } from '@mtpc/adapter-hono';
+import { createDrizzleHandlerFactory } from '@mtpc/adapter-drizzle';
+
+const handlerFactory = createDrizzleHandlerFactory(db, tables);
+
+const app = createMTPCApp(mtpc, {
+  prefix: '/api',
+  handlerFactory: handlerFactory.getHandlerFactoryFn(),
+});
+
+app.fire();
 ```
 
 ---
 
 ## 5. 高级功能
 
-### 5.1 自定义 Schema 生成
+### 5.1 批量操作
 
 ```typescript
-import { generateTable } from '@mtpc/adapter-drizzle';
-import { defineResource } from '@mtpc/core';
-import { z } from 'zod';
+// 批量创建
+const users = await userRepo.createMany(ctx, [
+  { name: '用户1', email: 'user1@example.com' },
+  { name: '用户2', email: 'user2@example.com' },
+  { name: '用户3', email: 'user3@example.com' },
+]);
 
-const productResource = defineResource({
-  name: 'product',
-  schema: z.object({
-    id: z.string().uuid(),
-    name: z.string().min(1),
-    price: z.number().min(0),
-    category: z.string().min(1),
-  }),
-  features: {
-    create: true,
-    read: true,
-    update: true,
-    delete: true,
-  },
+// 批量更新
+const updatedCount = await userRepo.updateMany(ctx, ['id1', 'id2', 'id3'], {
+  status: 'inactive',
 });
 
-// 生成自定义 Schema
-const table = generateTable(productResource, {
-  dialect: 'postgresql',
-  tenantColumn: 'company_id',  // 自定义租户列名
-  timestamps: true,
-  softDelete: true,
-  auditFields: true,
-  idType: 'uuid',
-});
-
-console.log('Generated Table:', table);
+// 批量删除
+const deletedCount = await userRepo.deleteMany(ctx, ['id1', 'id2']);
 ```
 
-### 5.2 复杂查询构建
+### 5.2 软删除
 
 ```typescript
-import { createQueryBuilder } from '@mtpc/adapter-drizzle';
+// 软删除
+await userRepo.softDelete(ctx, 'user-id');
 
-// 构建复杂查询
-async function complexQueryExample() {
-  // 查找活跃用户，按名称排序，限制 10 条
-  const activeUsers = await createQueryBuilder(db, userTable, ctx)
-    .whereEquals('active', true)
-    .whereIn('role', ['admin', 'editor'])
-    .orderBy('name', 'asc')
-    .limit(10)
-    .getMany();
-  
-  console.log('Active users:', activeUsers);
-  
-  // 统计管理员用户数量
-  const adminCount = await createQueryBuilder(db, userTable, ctx)
-    .whereEquals('role', 'admin')
-    .count();
-  
-  console.log('Admin count:', adminCount);
-  
-  // 检查用户是否存在
-  const exists = await createQueryBuilder(db, userTable, ctx)
-    .whereEquals('email', 'test@example.com')
-    .exists();
-  
-  console.log('User exists:', exists);
-}
+// 恢复
+await userRepo.restore(ctx, 'user-id');
 
-complexQueryExample().catch(console.error);
+// 查询已删除记录
+const deleted = await userRepo.findDeleted(ctx, {
+  pagination: { page: 1, pageSize: 10 },
+});
+
+// 包含已删除的查询
+const user = await userRepo.findByIdIncludingDeleted(ctx, 'user-id');
 ```
 
 ### 5.3 自定义 Repository
@@ -619,55 +518,69 @@ complexQueryExample().catch(console.error);
 ```typescript
 import { BaseRepository, type RepositoryOptions } from '@mtpc/adapter-drizzle/repository';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
-
-// 自定义仓储类，扩展基础仓储
 class CustomUserRepository extends BaseRepository<User> {
   constructor(db, table, tableName) {
     super(db, table, tableName, { tenantColumn: 'tenant_id' });
   }
-  
-  // 自定义方法
+
   async findByEmail(email: string): Promise<User | null> {
     return this.findOne(ctx, [{ field: 'email', operator: 'eq', value: email }]);
   }
-  
-  // 自定义批量更新方法
-  async batchUpdateStatus(ids: string[], status: string): Promise<number> {
-    return this.updateMany(ctx, ids, { status } as Partial<User>);
+
+  async findByRole(role: string): Promise<User[]> {
+    return this.findMany(ctx, {
+      filters: [{ field: 'role', operator: 'eq', value: role }],
+    });
   }
 }
 
-// 使用自定义仓储
-const customUserRepo = new CustomUserRepository(db, userTable, 'users');
-const user = await customUserRepo.findByEmail('test@example.com');
+// 使用自定义 Repository
+const customRepo = new CustomUserRepository(db, userTable, 'users');
+const user = await customRepo.findByEmail('test@example.com');
 ```
 
-### 5.4 数据库迁移
+### 5.4 复杂查询构建
 
 ```typescript
-import { createConnectionFromEnv } from '@mtpc/adapter-drizzle';
-import { createMigrationRunner, createSystemTablesMigration } from '@mtpc/adapter-drizzle/pg/migrations';
-import { generateAllTables } from '@mtpc/adapter-drizzle/schema';
-import { resources } from './resources';
+import { createQueryBuilder } from '@mtpc/adapter-drizzle';
 
-// 创建数据库连接
-const { db } = createConnectionFromEnv();
+const results = await createQueryBuilder(db, userTable, ctx)
+  .whereEquals('status', 'active')
+  .whereIn('role', ['admin', 'manager'])
+  .whereLike('name', '%张%')
+  .whereBetween('createdAt', new Date('2024-01-01'), new Date('2024-12-31'))
+  .orderBy('createdAt', 'desc')
+  .limit(20)
+  .getMany();
+```
+
+### 5.5 自定义 Schema 生成
+
+```typescript
+import { generateTable } from '@mtpc/adapter-drizzle';
+
+const customTable = generateTable(productResource, {
+  tenantColumn: 'company_id',      // 自定义租户列名
+  timestamps: true,                // 包含时间戳
+  softDelete: true,                // 包含软删除
+  auditFields: true,               // 包含审计字段
+});
+```
+
+### 5.6 迁移管理
+
+```typescript
+import { createMigrationRunner, createSystemTablesMigration } from '@mtpc/adapter-drizzle';
 
 // 创建迁移运行器
-const runner = createMigrationRunner(db, { tableName: 'mtpc_migrations' });
+const runner = createMigrationRunner(db, { tableName: 'my_migrations' });
 
 // 注册系统表迁移
 runner.register(createSystemTablesMigration());
 
-// 注册自定义迁移
+// 自定义迁移
 runner.register({
-  id: '20240101_add_user_profile',
+  id: '20240101_add_user_fields',
   name: 'Add user profile fields',
   async up(db) {
     await db.execute(sql.raw(`
@@ -687,40 +600,22 @@ runner.register({
 await runner.migrate();
 
 // 检查迁移状态
-const status = await runner.getPending();
-console.log('Pending migrations:', status);
-```
-
-### 5.5 事务处理
-
-```typescript
-import { createConnection } from '@mtpc/adapter-drizzle';
-
-const { db } = createConnection({
-  connectionString: process.env.DATABASE_URL,
-});
-
-// 使用事务
-await db.transaction(async (tx) => {
-  // 在事务中执行操作
-  await tx.insert(userTable).values({ ... });
-  await tx.insert(orderTable).values({ ... });
-  // 如果发生错误，事务会自动回滚
-});
+const pending = await runner.getPending();
+const executed = await runner.getExecuted();
 ```
 
 ---
 
 ## 6. 最佳实践
 
-### 6.1 项目结构推荐
+### 6.1 项目结构
 
 ```
 src/
 ├── db/
-│   ├── index.ts           # 数据库连接和初始化
-│   ├── schema.ts          # 表结构定义
-│   └── migrations/        # 迁移文件
+│   ├── index.ts          # 数据库连接和初始化
+│   ├── schema.ts         # 表结构定义
+│   └── migrations/       # 迁移文件
 ├── repositories/
 │   ├── user.repository.ts
 │   ├── product.repository.ts
@@ -731,72 +626,87 @@ src/
     └── index.ts
 ```
 
-### 6.2 资源定义设计
-
-- 为每个资源定义清晰的 Schema
-- 使用描述性的资源名称和字段名
-- 明确资源的 CRUD 操作
-- 合理设计数据类型
-- 考虑多租户隔离需求
-
-### 6.3 Repository 模式使用
-
-- 为每个资源创建专门的仓储类
-- 扩展基础仓储实现自定义方法
-- 避免在仓储外直接操作数据库
-- 使用查询构建器构建复杂查询
-- 保持仓储方法的单一职责
-
-### 6.4 数据库连接管理
-
-- 使用连接池管理数据库连接
-- 合理配置连接池大小
-- 及时关闭不需要的连接
-- 为不同环境配置不同的连接参数
-- 考虑使用事务处理复杂操作
-
-### 6.5 迁移管理
-
-- 为每个 Schema 变更生成单独的迁移文件
-- 按时间顺序执行迁移
-- 测试迁移的向上和向下迁移
-- 考虑使用迁移版本控制
-- 在生产环境中谨慎执行迁移
-
-### 6.6 性能优化
-
-1. **索引优化**：为经常查询的字段添加索引
-2. **批量操作**：使用批量操作减少数据库请求
-3. **查询优化**：优化复杂查询，避免全表扫描
-4. **分页查询**：使用分页减少返回数据量
-5. **避免 N+1 查询**：使用 Drizzle 的关系查询优化
-
-### 6.7 安全考虑
-
-- 确保租户数据正确隔离
-- 避免 SQL 注入
-- 使用参数化查询
-- 限制数据库用户权限
-- 加密敏感数据
-- 定期备份数据
-
----
-
-## 7. 常见问题解答
-
-### Q1: 如何自定义租户列名？
-
-**方案一**：在 Schema 生成时
+### 6.2 Repository 封装
 
 ```typescript
-const table = generateTable(resource, {
-  tenantColumn: 'company_id',
+// repositories/user.repository.ts
+import { createRepositoryFactory } from '@mtpc/adapter-drizzle';
+import { userTable } from '../db/schema';
+
+export class UserRepository {
+  constructor(private factory: ReturnType<typeof createRepositoryFactory>) {}
+
+  get repo() {
+    return this.factory.getRepository('user');
+  }
+
+  async findByEmail(email: string) {
+    // 自定义查询逻辑
+  }
+
+  async findActiveUsers() {
+    // 自定义查询逻辑
+  }
+}
+```
+
+### 6.3 错误处理
+
+```typescript
+try {
+  const user = await userRepo.findById(ctx, userId);
+  if (!user) {
+    throw new Error('用户不存在');
+  }
+  // ...
+} catch (error) {
+  console.error('用户操作失败:', error);
+  throw error;
+}
+```
+
+### 6.4 事务支持
+
+```typescript
+await db.transaction(async (tx) => {
+  // 在事务中执行操作
+  await tx.insert(userTable).values({ ... });
+  await tx.insert(orderTable).values({ ... });
+  // 如果发生错误，事务会自动回滚
 });
 ```
 
-**方案二**：在 Repository 中
+### 6.5 性能优化
 
 ```typescript
+// 1. 使用批量操作
+await userRepo.createMany(ctx, users); // 比循环 create 更高效
+
+// 2. 合理使用索引
+// Schema 生成器会自动为 tenant_id 和 created_at 添加索引
+
+// 3. 分页查询
+const { data, total } = await userRepo.findMany(ctx, {
+  pagination: { page: 1, pageSize: 20 }, // 限制每页数量
+});
+
+// 4. 只查询需要的字段（select 方法待完善）
+// const users = await query.select('id', 'name', 'email').getMany();
+```
+
+---
+
+## 7. 常见问题
+
+### Q1: 如何自定义租户列名？
+
+```typescript
+// 在 Schema 生成时
+const table = generateTable(resource, {
+  tenantColumn: 'company_id',
+});
+
+// 在 Repository 中
 const repo = new BaseRepository(db, table, tableName, {
   tenantColumn: 'company_id',
 });
@@ -829,7 +739,7 @@ await userRepo.create(ctx, userData);
 // 跨表操作使用事务
 await db.transaction(async (tx) => {
   await tx.insert(orderTable).values(orderData);
-  await tx.update(userTable).set({ balance: newBalance });
+  await tx.update(userTable).set({ balance: newBalance }).where(eq(userTable.id, userId));
 });
 ```
 
@@ -865,7 +775,7 @@ export const myExistingTable = pgTable('my_existing_table', {
 const factory = createRepositoryFactory(db, { myExistingTable });
 ```
 
-### Q6: 查询构建器的 select 方法为什么不起作用？
+### Q6: 查询构建器为什么不返回指定字段？
 
 `select` 方法当前标记为 TODO，尚未实现。如需只查询特定字段，可以使用 Drizzle 原生查询：
 
@@ -881,91 +791,156 @@ const users = await db
 
 ---
 
-## 8. 性能考量
+## 8. 架构图示
 
-### 8.1 数据库连接池
+### 8.1 数据流图
 
-- 合理配置连接池大小，避免过多连接消耗资源
-- 监控连接池使用率，及时调整配置
-- 使用连接池复用连接，减少连接建立开销
+```mermaid
+flowchart TD
+    subgraph Application Layer
+        API[API Handler]
+        Repo[Repository]
+        Query[Query Builder]
+    end
 
-### 8.2 查询性能
+    subgraph Adapter Layer
+        HandlerFactory[CRUD Handler Factory]
+        RepositoryFactory[Repository Factory]
+        SchemaGen[Schema Generator]
+    end
 
-- 避免全表扫描，为经常查询的字段添加索引
-- 使用 Drizzle ORM 的查询优化功能
-- 避免 N+1 查询问题
-- 使用分页减少返回数据量
+    subgraph Drizzle ORM
+        QueryBuilder[Drizzle Query Builder]
+        Tables[Drizzle Tables]
+    end
 
-### 8.3 Schema 设计
+    subgraph Database
+        PG[(PostgreSQL)]
+    end
 
-- 合理设计表结构，避免过度规范化
-- 使用合适的数据类型
-- 为外键添加索引
-- 考虑数据增长，设计可扩展的 Schema
+    API -->|CRUD Operations| HandlerFactory
+    HandlerFactory -->|Creates| Repo
+    RepositoryFactory -->|Manages| Repo
+    Query -->|Builds Queries| QueryBuilder
+    QueryBuilder -->|Executes| Tables
+    Tables -->|SQL| PG
+    Repo -->|Uses| Tables
+    SchemaGen -->|Generates| Tables
+```
 
-### 8.4 仓储操作
+### 8.2 租户隔离流程
 
-- 使用批量操作减少数据库请求
-- 避免在循环中执行数据库操作
-- 合理使用缓存
-- 考虑使用读写分离
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Handler
+    participant Repository
+    participant DB
 
-### 8.5 迁移性能
+    Client->>Handler: CRUD Request + Tenant Context
+    Handler->>Repository: Execute Operation + Tenant ID
+    Repository->>Repository: Build Query + tenant_id filter
+    Repository->>DB: SQL with WHERE tenant_id = ?
+    DB-->>Repository: Query Result
+    Repository-->>Handler: Filtered Result
+    Handler-->>Client: Response
+```
 
-- 避免大型迁移，将大迁移拆分为多个小迁移
-- 在非高峰时间执行迁移
-- 测试迁移性能，避免影响生产环境
+### 8.3 Repository 继承结构
+
+```mermaid
+classDiagram
+    class Repository~T~ {
+        <<interface>>
+        +findById(ctx, id) Promise~T | null~
+        +findMany(ctx, options) Promise~PaginatedResult~T~~
+        +create(ctx, data) Promise~T~
+        +update(ctx, id, data) Promise~T | null~
+        +delete(ctx, id) Promise~boolean~
+        +count(ctx, options) Promise~number~
+    }
+
+    class BaseRepository~T~ {
+        #db: DrizzleDB
+        #table: PgTable
+        #tenantColumn: string
+        +buildWhereConditions(ctx, filters)
+        +buildOrderBy(sort)
+    }
+
+    class TenantRepository~T~ {
+        +findAllForTenant(ctx) Promise~T[]~
+        +createMany(ctx, items) Promise~T[]~
+        +updateMany(ctx, ids, data) Promise~number~
+        +deleteMany(ctx, ids) Promise~number~
+        +softDelete(ctx, id) Promise~boolean~
+        +restore(ctx, id) Promise~T | null~
+    }
+
+    Repository <|.. BaseRepository
+    BaseRepository <|-- TenantRepository
+```
 
 ---
 
-## 9. 注意事项
+## 附录
 
-1. **租户隔离**：确保所有数据库操作都包含租户 ID 过滤，避免跨租户访问
-2. **Schema 一致性**：确保生成的 Schema 与资源定义一致
-3. **迁移安全**：在生产环境中谨慎执行迁移，建议先在测试环境验证
-4. **事务处理**：对于跨表操作，使用事务确保数据一致性
-5. **连接管理**：确保及时关闭数据库连接，避免连接泄漏
-6. **错误处理**：合理处理数据库错误，避免泄露敏感信息
-7. **测试覆盖**：确保所有数据库操作都经过充分测试
-8. **版本兼容性**：注意 Drizzle ORM 版本兼容性，避免版本冲突
-9. **性能监控**：监控数据库性能，及时发现和解决问题
-10. **备份策略**：定期备份数据库，确保数据安全
+### A. 类型参考
 
----
+```typescript
+// 核心类型
+type MTPCContext = {
+  tenant: { id: string; status?: string; metadata?: Record<string, unknown> };
+  subject: { id: string; type: string; attributes?: Record<string, unknown> };
+  request: { id?: string; timestamp?: Date; ip?: string; path?: string; method?: string };
+};
 
-## 10. 版本更新日志
+type PaginatedResult<T> = {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+};
 
-### v0.1.0 (2024-12-27)
+type QueryOptions = {
+  pagination?: { page?: number; pageSize?: number };
+  sort?: SortOptions[];
+  filters?: FilterCondition[];
+};
 
-- 初始版本发布
-- 支持 PostgreSQL 数据库
-- 自动租户隔离
-- Schema 生成功能
-- 基础 Repository 模式
-- 数据库迁移支持
-- CRUD 处理器
-- 查询构建器
+type FilterCondition = {
+  field: string;
+  operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'contains' | 'startsWith' | 'endsWith' | 'isNull' | 'isNotNull';
+  value: unknown;
+};
 
----
+type SortOptions = {
+  field: string;
+  direction: 'asc' | 'desc';
+};
+```
 
-## 11. 贡献指南
+### B. 错误处理
 
-欢迎为 `@mtpc/adapter-drizzle` 包贡献代码或提出改进建议。请遵循以下准则：
+```typescript
+// 常见错误类型
+class TableNotFoundError extends Error {
+  constructor(resourceName: string) {
+    super(`Table not found for resource: ${resourceName}`);
+    this.name = 'TableNotFoundError';
+  }
+}
 
-1. 提交 Issues 描述问题或建议
-2. 提交 Pull Requests 前确保所有测试通过
-3. 遵循项目的代码风格和命名规范
-4. 提供完整的测试用例
-5. 更新相关文档
-6. 确保代码符合 TypeScript 类型安全要求
-7. 考虑向后兼容性
-8. 提供清晰的变更说明
-
----
-
-## 12. 许可证
-
-`@mtpc/adapter-drizzle` 包采用 MIT 许可证，详见 LICENSE 文件。
+class ColumnNotFoundError extends Error {
+  constructor(columnName: string) {
+    super(`Column not found: ${columnName}`);
+    this.name = 'ColumnNotFoundError';
+  }
+}
+```
 
 ---
 

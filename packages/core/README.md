@@ -12,8 +12,9 @@
 8. [插件系统](#8-插件系统)
 9. [钩子系统](#9-钩子系统)
 10. [多租户支持](#10-多租户支持)
-11. [常见问题](#11-常见问题)
-12. [最佳实践](#12-最佳实践)
+11. [API 参考](#11-api-参考)
+12. [常见问题](#12-常见问题)
+13. [最佳实践](#13-最佳实践)
 
 ---
 
@@ -475,6 +476,13 @@ mtpc.registerResources([
   productResource,
   orderResource
 ]);
+
+// 或者使用数组展开
+mtpc.registerResources(...[
+  userResource,
+  productResource,
+  orderResource
+]);
 ```
 
 ---
@@ -589,6 +597,19 @@ const checkResults = await Promise.all([
 console.log('批量检查结果:', checkResults);
 console.log('是否所有权限都允许:', checkResults.every(r => r.allowed));
 console.log('是否有任意权限允许:', checkResults.some(r => r.allowed));
+
+// 使用循环批量检查
+const permissions = [
+  { resource: 'user', action: 'read' },
+  { resource: 'user', action: 'update' },
+  { resource: 'user', action: 'delete' }
+];
+
+const results = new Map();
+for (const perm of permissions) {
+  const result = await mtpc.checkPermission({ ...context, ...perm });
+  results.set(`${perm.resource}:${perm.action}`, result);
+}
 ```
 
 ### 5.5 通配符权限
@@ -602,6 +623,29 @@ const userAdminPermissions = new Set(['user:*']);
 
 // 通配符操作权限表示所有资源的指定操作
 const readAllPermissions = new Set(['*:read']);
+```
+
+### 5.6 权限缓存
+
+PermissionChecker 内置了权限缓存机制，可以显著提高性能：
+
+```typescript
+import { PermissionChecker } from '@mtpc/core';
+
+const checker = new PermissionChecker({
+  cacheSize: 1000,        // 缓存大小
+  cacheTtl: 60000,        // 缓存生存时间（毫秒）
+  permissionResolver: async (tenantId, subjectId) => {
+    // 从数据库或缓存获取权限
+    return await getPermissions(tenantId, subjectId);
+  }
+});
+
+// 清除缓存
+checker.clearCache();
+
+// 清除特定主体的缓存
+checker.clearSubjectCache(tenantId, subjectId);
 ```
 
 ---
@@ -1222,11 +1266,11 @@ if (audit) {
 
 ```typescript
 // 获取所有已注册的插件
-const allPlugins = mtpc.plugins.list();
+const allPlugins = mtpc.getPlugins();
 console.log('所有插件:', allPlugins);
 
 // 检查插件是否已安装
-const isInstalled = mtpc.plugins.isInstalled('audit-log');
+const isInstalled = mtpc.hasPlugin('audit-log');
 console.log('审计插件已安装:', isInstalled);
 
 // 获取插件实例
@@ -1693,7 +1737,335 @@ app.use((req, res, next) => {
 
 ---
 
-## 11. 常见问题
+## 11. API 参考
+
+### 11.1 MTPC 类
+
+#### 11.1.1 构造函数
+
+```typescript
+createMTPC(options?: MTPCOptions): MTPC
+```
+
+**参数**:
+- `options.defaultPermissionResolver`: 默认权限解析器函数
+- `options.multiTenant`: 多租户配置选项
+
+**返回值**: MTPC 实例
+
+#### 11.1.2 资源管理
+
+```typescript
+// 注册单个资源
+registerResource(resource: ResourceDefinition): void
+
+// 批量注册资源
+registerResources(...resources: ResourceDefinition[]): void
+
+// 获取资源定义
+getResource(name: string): ResourceDefinition | undefined
+```
+
+#### 11.1.3 策略管理
+
+```typescript
+// 注册单个策略
+registerPolicy(policy: PolicyDefinition): void
+
+// 批量注册策略
+registerPolicies(...policies: PolicyDefinition[]): void
+
+// 评估策略
+evaluatePolicies(context: MTPCContext): Promise<EvaluationResult[]>
+```
+
+#### 11.1.4 插件管理
+
+```typescript
+// 使用插件
+use(plugin: PluginDefinition): void
+
+// 获取插件实例
+getPlugin(name: string): PluginInstance | undefined
+
+// 获取所有插件
+getPlugins(): Map<string, PluginInstance>
+
+// 检查插件是否存在
+hasPlugin(name: string): boolean
+```
+
+#### 11.1.5 权限检查
+
+```typescript
+// 创建上下文
+createContext(tenant: TenantContext, subject: SubjectContext): MTPCContext
+
+// 检查权限
+checkPermission(context: MTPCContext): Promise<PermissionCheckResult>
+
+// 检查权限（无权限时抛出异常）
+requirePermission(context: MTPCContext): Promise<void>
+```
+
+#### 11.1.6 初始化与状态
+
+```typescript
+// 初始化 MTPC
+init(): Promise<void>
+
+// 检查是否已初始化
+isInitialized(): boolean
+
+// 获取系统摘要
+getSummary(): MTPCSummary
+
+// 导出元数据
+exportMetadata(): RegistryMetadata
+```
+
+#### 11.1.7 权限解析器
+
+```typescript
+// 设置权限解析器
+setPermissionResolver(resolver: PermissionResolver): void
+
+// 获取权限解析器
+getPermissionResolver(): PermissionResolver
+```
+
+#### 11.1.8 租户管理
+
+```typescript
+// 获取租户管理器
+get tenants(): TenantManager
+```
+
+### 11.2 Resource 相关
+
+#### 11.2.1 defineResource
+
+```typescript
+defineResource<T>(definition: ResourceDefinition<T>): ResourceDefinition<T>
+```
+
+#### 11.2.2 ResourceBuilder
+
+```typescript
+class ResourceBuilder<T> {
+  constructor(name: string)
+
+  setSchema(schema: z.ZodType<T>): this
+  setFeatures(features: ResourceFeatures): this
+  setMetadata(metadata: ResourceMetadata): this
+  addPermission(permission: CustomPermission): this
+  addHook<K extends keyof ResourceHooks<T>>(name: K, hook: ResourceHooks<T>[K]): this
+  setRelations(relations: ResourceRelations): this
+  build(): ResourceDefinition<T>
+}
+```
+
+### 11.3 Policy 相关
+
+#### 11.3.1 PolicyBuilder
+
+```typescript
+class PolicyBuilder {
+  constructor(id: string)
+
+  setName(name: string): this
+  setDescription(description: string): this
+  setPriority(priority: PolicyPriority): this
+  setEnabled(enabled: boolean): this
+  addRule(rule: PolicyRule): this
+  withCondition(condition: PolicyCondition): this
+  build(): PolicyDefinition
+}
+```
+
+### 11.4 Registry 相关
+
+#### 11.4.1 UnifiedRegistry
+
+```typescript
+class UnifiedRegistry {
+  resources: ResourceRegistry
+  permissions: PermissionRegistry
+  policies: PolicyRegistry
+
+  registerResource(resource: ResourceDefinition): void
+  registerPolicy(policy: PolicyDefinition): void
+  exportMetadata(): RegistryMetadata
+  freeze(): void
+  isFrozen(): boolean
+}
+```
+
+#### 11.4.2 ResourceRegistry
+
+```typescript
+class ResourceRegistry {
+  register(resource: ResourceDefinition): void
+  get(name: string): ResourceDefinition | undefined
+  getAll(): ResourceDefinition[]
+  getByGroup(group: string): ResourceDefinition[]
+  has(name: string): boolean
+  getNames(): string[]
+  freeze(): void
+  isFrozen(): boolean
+}
+```
+
+#### 11.4.3 PermissionRegistry
+
+```typescript
+class PermissionRegistry {
+  register(resourceName: string, permission: PermissionDefinition): void
+  registerMany(resourceName: string, permissions: PermissionDefinition[]): void
+  get(code: string): PermissionDefinition | undefined
+  getAll(): PermissionDefinition[]
+  getByResource(resourceName: string): PermissionDefinition[]
+  has(code: string): boolean
+  getCodes(): string[]
+}
+```
+
+#### 11.4.4 PolicyRegistry
+
+```typescript
+class PolicyRegistry {
+  register(policy: PolicyDefinition): void
+  get(id: string): PolicyDefinition | undefined
+  getAll(): PolicyDefinition[]
+  getEnabledPolicies(): PolicyDefinition[]
+  has(id: string): boolean
+}
+```
+
+### 11.5 Tenant 相关
+
+#### 11.5.1 租户上下文函数
+
+```typescript
+// 创建租户上下文
+createTenantContext(id: string, options?: { status?: TenantStatus; metadata?: Record<string, unknown> }): TenantContext
+
+// 验证租户上下文
+validateTenantContext(tenant: TenantContext | null | undefined): asserts tenant is TenantContext
+
+// 检查租户是否活跃
+isTenantActive(tenant: TenantContext): boolean
+
+// 创建系统租户
+createSystemTenant(): TenantContext
+
+// 默认租户
+DEFAULT_TENANT: TenantContext
+```
+
+#### 11.5.2 TenantContextHolder
+
+```typescript
+class TenantContextHolder {
+  static set(tenant: TenantContext): void
+  static get(): TenantContext | null
+  static getOrThrow(): TenantContext
+  static clear(): void
+  static run<T>(tenant: TenantContext, fn: () => T): T
+  static runAsync<T>(tenant: TenantContext, fn: () => Promise<T>): Promise<T>
+}
+```
+
+#### 11.5.3 TenantManager
+
+```typescript
+class TenantManager {
+  constructor(store: TenantStore, options?: { cacheTtl?: number })
+
+  getTenant(id: string): Promise<TenantInfo | null>
+  getTenantOrThrow(id: string): Promise<TenantInfo>
+  createContext(id: string): Promise<TenantContext>
+  validateAndGetContext(id: string): Promise<TenantContext>
+  listTenants(): Promise<TenantInfo[]>
+  createTenant(info: Omit<TenantInfo, 'createdAt' | 'updatedAt'>): Promise<TenantInfo>
+  updateTenant(id: string, info: Partial<TenantInfo>): Promise<TenantInfo>
+  deleteTenant(id: string): Promise<void>
+  invalidateCache(id: string): void
+  clearCache(): void
+}
+```
+
+#### 11.5.4 租户解析器
+
+```typescript
+// 请求头解析器
+createHeaderResolver(headerName?: string): TenantResolver<{ headers: Record<string, string | undefined> }>
+
+// 子域名解析器
+createSubdomainResolver(baseDomain: string): TenantResolver<{ hostname: string }>
+
+// 路径解析器
+createPathResolver(prefix?: string): TenantResolver<{ path: string }>
+
+// 查询参数解析器
+createQueryResolver(paramName?: string): TenantResolver<{ query: Record<string, string | undefined> }>
+
+// 复合解析器
+createCompositeResolver<T>(...resolvers: TenantResolver<T>[]): TenantResolver<T>
+
+// 带后备的解析器
+createResolverWithFallback<T>(resolver: TenantResolver<T>, fallback: TenantContext): TenantResolver<T>
+
+// 带验证的解析器
+createValidatingResolver<T>(resolver: TenantResolver<T>, validator: (tenant: TenantContext) => Promise<boolean> | boolean): TenantResolver<T>
+```
+
+### 11.6 Hooks 相关
+
+#### 11.6.1 GlobalHooksManager
+
+```typescript
+class GlobalHooksManager {
+  addBeforeAny(hook: BeforeAnyHook): void
+  addAfterAny(hook: AfterAnyHook): void
+  addOnError(hook: OnErrorHook): void
+  executeBeforeAny(context: MTPCContext, operation: string, resourceName: string): Promise<HookResult>
+  executeAfterAny(context: MTPCContext, operation: string, resourceName: string, result: unknown): Promise<void>
+  executeOnError(context: MTPCContext, operation: string, resourceName: string, error: Error): Promise<void>
+  clear(): void
+  getHooks(): GlobalHooks
+}
+
+// 工厂函数
+createGlobalHooksManager(): GlobalHooksManager
+```
+
+#### 11.6.2 HookExecutor
+
+```typescript
+class HookExecutor<T> {
+  constructor(hooks: ResourceHooks<T>)
+
+  executeBeforeCreate(context: MTPCContext, data: T): Promise<HookResult<T>>
+  executeAfterCreate(context: MTPCContext, data: T, created: T): Promise<void>
+  executeBeforeRead(context: MTPCContext, id: string): Promise<HookResult<string>>
+  executeAfterRead(context: MTPCContext, id: string, data: T | null): Promise<T | null>
+  executeBeforeUpdate(context: MTPCContext, id: string, data: Partial<T>): Promise<HookResult<Partial<T>>>
+  executeAfterUpdate(context: MTPCContext, id: string, data: Partial<T>, updated: T): Promise<void>
+  executeBeforeDelete(context: MTPCContext, id: string): Promise<HookResult<string>>
+  executeAfterDelete(context: MTPCContext, id: string, deleted: T): Promise<void>
+  executeBeforeList(context: MTPCContext, options: QueryOptions): Promise<HookResult<QueryOptions>>
+  executeAfterList(context: MTPCContext, options: QueryOptions, results: T[]): Promise<T[]>
+  executeFilterQuery(context: MTPCContext, baseFilters: FilterCondition[]): Promise<HookResult<FilterCondition[]>>
+}
+
+// 工厂函数
+createHookExecutor<T>(hooks: ResourceHooks<T>): HookExecutor<T>
+```
+
+---
+
+## 12. 常见问题
 
 ### Q1: 如何扩展自定义条件类型？
 
@@ -1884,9 +2256,9 @@ mtpc.registerPolicy({
 
 ---
 
-## 12. 最佳实践
+## 13. 最佳实践
 
-### 12.1 设计原则
+### 13.1 设计原则
 
 1. **遵循业务无关原则**：保持权限逻辑与业务逻辑分离
 2. **采用 Schema 驱动**：使用 Schema 定义作为单一事实源
@@ -1894,35 +2266,35 @@ mtpc.registerPolicy({
 4. **遵循默认拒绝原则**：确保安全
 5. **实现最小权限原则**：只授予必要的权限
 
-### 12.2 代码组织
+### 13.2 代码组织
 
 1. **集中管理资源定义**：将所有资源定义放在单独的文件中
 2. **按功能模块组织策略**：将策略按功能模块分组
 3. **使用插件扩展功能**：保持核心代码简洁
 4. **为权限检查添加详细日志**：便于调试和审计
 
-### 12.3 性能优化
+### 13.3 性能优化
 
 1. **合理使用权限缓存**：配置合适的缓存大小和 TTL
 2. **批量处理权限检查**：使用 `Promise.all` 并行执行
 3. **优化策略评估逻辑**：减少复杂条件和策略数量
 4. **监控性能指标**：定期检查权限检查性能
 
-### 12.4 安全实践
+### 13.4 安全实践
 
 1. **始终验证租户上下文**：确保租户有效性
 2. **避免硬编码权限**：使用策略系统管理权限
 3. **定期审查权限配置**：清理不必要的权限
 4. **实现权限审计**：记录所有权限检查
 
-### 12.5 可维护性
+### 13.5 可维护性
 
 1. **为资源和权限添加清晰的描述**：便于理解和管理
 2. **使用一致的命名规范**：提高代码可读性
 3. **编写单元测试和集成测试**：确保功能正确性
 4. **保持文档更新**：及时更新使用文档
 
-### 12.6 错误处理
+### 13.6 错误处理
 
 ```typescript
 import {
@@ -1958,7 +2330,7 @@ try {
 }
 ```
 
-### 12.7 性能监控
+### 13.7 性能监控
 
 ```typescript
 // 监控权限检查性能
@@ -1993,44 +2365,67 @@ mtpc.checkPermission = async (context) => {
 
 ## 附录
 
-### A. 核心 API 参考
+### A. 类型定义
 
-| API | 描述 |
-| --- | --- |
-| `createMTPC(options)` | 创建 MTPC 实例 |
-| `defineResource(definition)` | 定义资源 |
-| `mtpc.registerResource(resource)` | 注册资源 |
-| `mtpc.registerResources(...resources)` | 批量注册资源 |
-| `mtpc.registerPolicy(policy)` | 注册策略 |
-| `mtpc.registerPolicies(...policies)` | 批量注册策略 |
-| `mtpc.use(plugin)` | 使用插件 |
-| `mtpc.init()` | 初始化 MTPC 实例 |
-| `mtpc.isInitialized()` | 检查是否已初始化 |
-| `mtpc.getPlugin(name)` | 获取已安装的插件实例 |
-| `mtpc.plugins.list()` | 获取所有已注册的插件 |
-| `mtpc.plugins.isInstalled(name)` | 检查插件是否已安装 |
-| `mtpc.setPermissionResolver(resolver)` | 设置权限解析器 |
-| `mtpc.getPermissionResolver()` | 获取当前权限解析器 |
-| `mtpc.createContext(tenant, subject)` | 创建上下文 |
-| `mtpc.checkPermission(context)` | 检查权限 |
-| `mtpc.requirePermission(context)` | 检查权限并在无权限时抛出异常 |
-| `mtpc.evaluatePolicy(context)` | 评估策略 |
-| `mtpc.getResource(name)` | 根据名称获取资源定义 |
-| `mtpc.exportMetadata()` | 导出元数据供 UI 使用 |
-| `mtpc.getSummary()` | 获取系统摘要信息 |
-| `mtpc.tenants` | 获取租户管理器 |
+#### A.1 MTPCOptions
 
-### B. 错误类型
+```typescript
+interface MTPCOptions {
+  defaultPermissionResolver?: PermissionResolver;
+  multiTenant?: MultiTenantOptions;
+}
+```
 
-| 错误类型 | 描述 |
-| --- | --- |
-| `PermissionDeniedError` | 权限拒绝错误 |
-| `InvalidTenantError` | 无效的租户ID |
-| `MissingTenantContextError` | 缺少租户上下文 |
-| `ResourceNotFoundError` | 资源未找到 |
-| `PolicyNotFoundError` | 策略未找到 |
+#### A.2 PermissionResolver
 
-### C. 性能指标
+```typescript
+type PermissionResolver = (tenantId: string, subjectId: string) => Promise<Set<string>>;
+```
+
+#### A.3 MTPCContext
+
+```typescript
+interface MTPCContext {
+  tenant: TenantContext;
+  subject: SubjectContext;
+  resource: string;
+  action: string;
+}
+```
+
+#### A.4 TenantContext
+
+```typescript
+interface TenantContext {
+  id: string;
+  status?: TenantStatus;
+  metadata?: Record<string, unknown>;
+}
+```
+
+#### A.5 SubjectContext
+
+```typescript
+interface SubjectContext {
+  id: string;
+  type: string;
+  attributes?: Record<string, unknown>;
+  permissions?: Set<string>;
+}
+```
+
+#### A.6 PermissionCheckResult
+
+```typescript
+interface PermissionCheckResult {
+  allowed: boolean;
+  permission: string;
+  reason: string;
+  evaluationTime: number;
+}
+```
+
+### B. 性能指标
 
 | 指标 | 目标值 | 优化建议 |
 | --- | --- | --- |
@@ -2039,7 +2434,7 @@ mtpc.checkPermission = async (context) => {
 | 策略评估延迟 | < 10ms | 优化策略条件，减少复杂规则 |
 | 缓存命中率 | > 90% | 优化缓存策略，调整过期时间 |
 
-### D. 版本历史
+### C. 版本历史
 
 #### 1.0.0
 - 初始版本发布
