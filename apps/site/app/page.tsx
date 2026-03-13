@@ -14,282 +14,271 @@ import type { FC } from 'react';
 
 export const metadata: Metadata = {
   description:
-    'Build fast, customizable, and content-rich websites with Nextra. Powered by Next.js, it offers seamless Markdown support, customizable themes, file conventions, and easy integration with MDX, making it perfect for documentation, blogs, and static websites.',
+    'MTPC (Multi-Tenant Permission Core) - 业务无关、可嵌入、可组合的多租户权限内核',
 };
 
 const IndexPage: FC = () => {
   return (
-    <div className="home-content">
-      <div className="content-container">
-        <h1 className="headline">
-          Make beautiful websites <br className="max-sm:hidden" />
-          with Next.js & MDX
-        </h1>
-        <p className="subtitle">
-          Simple, powerful and flexible site generation framework <br className="max-md:hidden" />
-          with everything you love from{' '}
-          <Link href="https://nextjs.org" className="text-current">
-            Next.js
-          </Link>
-          .
-        </p>
-        <p className="subtitle">
-          <Link className={styles.cta} href="/docs">
-            Get started <span>→</span>
-          </Link>
-        </p>
-      </div>
-      <div className="features-container x:border-b nextra-border">
-        <div className="content-container">
-          <Features>
-            <Feature index={0} large centered id="docs-card" href="/docs/docs-theme/start">
-              <Image src={docsCard} alt="Background" loading="eager" />
-              <Image src={docsCardDark} alt="Background (Dark)" loading="eager" />
-              <h3>
-                Full-power documentation <br className="show-on-mobile" />
-                in minutes
-              </h3>
-            </Feature>
-            <Feature index={1} centered href="/docs/guide/image">
-              <h3>
-                Links and images are <br className="show-on-mobile" />
-                always <span className="font-light">optimized</span>
-              </h3>
-              <p className="mb-8 text-start">
-                Nextra automatically converts Markdown links and images to use{' '}
-                <Link href="https://nextjs.org/docs/routing/introduction#linking-between-pages">
-                  Next.js Link
-                </Link>{' '}
-                and{' '}
-                <Link href="https://nextjs.org/docs/app/getting-started/images#local-images">
-                  Next.js Image
-                </Link>{' '}
-                when possible. No slow navigation or layout shift.
-              </p>
-              <div>
-                <div className={styles.optimization}>
-                  <div style={{ fontSize: '.9rem' }} className="leading-8">
-                    <code>[Learn more](/more)</code>
-                    <br />
-                    <code>![Hero](/hero.png)</code>
-                  </div>
-                </div>
-                <ArrowRightIcon
-                  width="1.2em"
-                  className="mx-auto my-6 rotate-90 text-neutral-600 dark:text-neutral-400"
-                />
-                <div className={styles.optimization}>
-                  <div style={{ fontSize: '.9rem' }} className="leading-8">
-                    <code>{'<Link .../>'}</code>
-                    <br />
-                    <code>{'<Image .../>'}</code>
-                  </div>
-                </div>
-              </div>
-            </Feature>
-            <Feature index={2} id="highlighting-card" href="/docs/guide/syntax-highlighting">
-              <h3>
-                Advanced syntax <br className="show-on-mobile" />
-                highlighting solution
-              </h3>
-              <p>
-                Performant and reliable build-time syntax highlighting powered by{' '}
-                <Link href="https://shiki.style">Shiki</Link>.
-              </p>
-            </Feature>
-            <Feature index={3} href="/docs/guide/i18n">
-              <h3>
-                I18n as easy as <br className="show-on-mobile" />
-                creating new files
-              </h3>
-              <p className="mb-4">
-                Place your page files in folders specific to each locale, Nextra and Next.js will
-                handle the rest for you.
-              </p>
-              <I18n />
-            </Feature>
-            <Feature
-              index={4}
-              centered
-              className="flex flex-col items-center justify-center bg-[url(/assets/gradient-bg.jpeg)] bg-cover bg-center text-white"
-              href="/docs/guide/markdown"
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-blue-900 dark:to-indigo-900">
+      {/* Hero Section */}
+      <div className="container mx-auto px-4 py-16">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="mb-8">
+            <div className="inline-flex items-center gap-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20 dark:border-slate-700/50 shadow-lg">
+              <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">开源权限内核</span>
+            </div>
+          </div>
+          
+          <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent mb-6">
+            MTPC
+          </h1>
+          
+          <p className="text-xl md:text-2xl text-slate-700 dark:text-slate-300 mb-8 leading-relaxed">
+            业务无关、可嵌入、可组合的多租户权限内核
+            <br />
+            为现代 SaaS 应用提供强大而灵活的权限控制
+          </p>
+          
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <Link 
+              href="/docs/getting-started" 
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-lg font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 shadow-xl"
             >
-              <MdxIcon className="w-4/6 [filter:drop-shadow(0_2px_10px_rgba(0,0,0,.1))]" />
-              <p style={{ textShadow: '0 2px 4px rgb(0 0 0 / 20%)' }}>
-                <Link href="https://mdxjs.com/blog/v3" className="!text-current">
-                  MDX 3
-                </Link>{' '}
-                lets you use Components inside Markdown, <br className="hide-medium" />
-                with huge performance boost since v1.
-              </p>
-            </Feature>
-            <Feature index={5} centered className="feat-darkmode flex items-center justify-center">
-              <MotionDiv
-                animate={{
-                  backgroundPosition: ['0% 0%', '50% 40%', '50% 40%', '100% 100%'],
-                  backgroundImage: [
-                    'radial-gradient(farthest-corner, #e2e5ea, #e2e5ea)',
-                    'radial-gradient(farthest-corner, #06080a, #e2e5ea)',
-                    'radial-gradient(farthest-corner, #06080a, #e2e5ea)',
-                    'radial-gradient(farthest-corner, #e2e5ea, #e2e5ea)',
-                  ],
-                }}
-                transition={{
-                  backgroundPosition: {
-                    times: [0, 0.5, 0.5, 1],
-                    repeat: Infinity,
-                    duration: 10,
-                    delay: 1,
-                  },
-                  backgroundImage: {
-                    times: [0, 0.2, 0.8, 1],
-                    repeat: Infinity,
-                    duration: 10,
-                    delay: 1,
-                  },
-                }}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  backgroundImage: 'radial-gradient(farthest-corner, #06080a, #e2e5ea)',
-                  backgroundSize: '400% 400%',
-                  backgroundRepeat: 'no-repeat',
-                }}
-              />
-              <MotionH3
-                animate={{
-                  color: ['#dae5ff', '#fff', '#fff', '#dae5ff'],
-                }}
-                transition={{
-                  color: {
-                    times: [0.25, 0.35, 0.7, 0.8],
-                    repeat: Infinity,
-                    duration: 10,
-                    delay: 1,
-                  },
-                }}
-                style={{
-                  position: 'relative',
-                  mixBlendMode: 'difference',
-                }}
-              >
-                Dark <br />
-                mode <br />
-                included
-              </MotionH3>
-            </Feature>
-            <Feature
-              index={6}
-              large
-              id="search-card"
-              href="/docs/docs-theme/theme-configuration#search"
+              开始使用
+            </Link>
+            <Link 
+              href="/docs/architecture" 
+              className="border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 px-8 py-4 rounded-lg font-semibold hover:border-blue-500 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-400 transition-all duration-300"
             >
-              <h3>
-                Full-text search,
-                <br />
-                zero-config needed
-              </h3>
-              <p className="z-2">
-                Nextra indexes your content automatically at build-time and performs incredibly fast
-                full-text search via{' '}
-                <Link href="https://github.com/cloudcannon/pagefind">Pagefind</Link>.
-              </p>
-              <div className="absolute inset-0 z-1 size-full bg-[linear-gradient(to_right,white_250px,_transparent)] max-sm:hidden dark:bg-[linear-gradient(to_right,#202020_250px,_transparent)]" />
-              <video
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="x:focus-visible:nextra-focus block dark:hidden"
-              >
-                <source src="/assets/search.mp4" type="video/mp4" />
-              </video>
-              <video
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="x:focus-visible:nextra-focus hidden -translate-x-4 dark:block"
-              >
-                <source src="/assets/search-dark.mp4" type="video/mp4" />
-              </video>
-            </Feature>
-            <Feature
-              index={7}
-              large
-              id="fs-card"
-              style={{
-                color: 'white',
-                backgroundImage: 'url(/assets/routing.png), url(/assets/gradient-bg.jpeg)',
-                backgroundSize: '140%, 180%',
-                backgroundPosition: '130px -8px, top',
-                backgroundRepeat: 'no-repeat',
-                textShadow: '0 1px 6px rgb(38 59 82 / 18%)',
-                aspectRatio: '1.765',
-              }}
-              href="/docs/docs-theme/page-configuration"
-            >
-              <h3>
-                Organize pages intuitively, <br />
-                with file-system routing from Next.js
-              </h3>
-            </Feature>
-            <Feature
-              index={8}
-              id="a11y-card"
-              style={{
-                backgroundSize: 750,
-                backgroundRepeat: 'no-repeat',
-                minHeight: 288,
-              }}
-            >
-              <h3>A11y as a top priority</h3>
-              <p>
-                Nextra respects system options <br className="show-on-mobile" />
-                such as <b>Increase Contrast</b> and <b>Reduce Motion</b>.
-              </p>
-            </Feature>
-            <Feature index={9} href="/docs/guide/ssg">
-              <h3>
-                Hybrid rendering, <br />
-                next generation
-              </h3>
-              <p className="mr-6">
-                You can leverage the hybrid rendering power from Next.js with your Markdown content
-                including{' '}
-                <Link href="https://nextjs.org/docs/app/building-your-application/rendering/server-components">
-                  Server Components
-                </Link>
-                ,{' '}
-                <Link href="https://nextjs.org/docs/app/building-your-application/rendering/client-components">
-                  Client Components
-                </Link>
-                , and{' '}
-                <Link href="https://nextjs.org/docs/app/building-your-application/data-fetching/incremental-static-regeneration">
-                  Incremental Static Regeneration (ISR)
-                </Link>
-                .
-              </p>
-            </Feature>
-            <Feature index={10} large>
-              <h3>And more...</h3>
-              <p>
-                SEO / RTL Layout / Pluggable Themes / Built-in Components / Last Git Edit Time /
-                Multi-Docs...
-                <br />A lot of new possibilities to be explored.
-              </p>
-              <p className="subtitle">
-                <Link className="no-underline" href="/docs">
-                  Start using Nextra →
-                </Link>
-              </p>
-            </Feature>
-          </Features>
+              了解架构
+            </Link>
+          </div>
+          
+          <div className="mt-12 text-sm text-slate-500 dark:text-slate-400">
+            TypeScript • 框架无关 • 插件化扩展 • 类型安全
+          </div>
         </div>
       </div>
+
+      {/* Features Grid */}
+      <div className="container mx-auto px-4 py-16">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <FeatureCard
+              title="业务无关"
+              description="核心不包含具体业务模型，仅提供抽象与派生能力，适用于各种业务场景"
+              icon="🏗️"
+            />
+            <FeatureCard
+              title="Schema 驱动"
+              description="Resource Definition 是唯一权威来源，其它一切均由其派生"
+              icon="📐"
+            />
+            <FeatureCard
+              title="编译期优先"
+              description="能在编译期生成的内容绝不推迟到运行期，确保类型安全与一致性"
+              icon="⚡"
+            />
+            <FeatureCard
+              title="库而非服务"
+              description="以内嵌库方式运行，不是独立微服务，易于集成到现有项目"
+              icon="📦"
+            />
+            <FeatureCard
+              title="可扩展设计"
+              description="所有企业级能力通过插件、钩子与策略扩展，而非硬编码"
+              icon="🔌"
+            />
+            <FeatureCard
+              title="默认拒绝"
+              description="权限校验失败即拒绝访问，不存在'隐式放行'，确保安全性"
+              icon="🔒"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Start Section */}
+      <div className="container mx-auto px-4 py-16">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-800 dark:text-white mb-4">
+              5 分钟快速上手
+            </h2>
+            <p className="text-lg text-slate-600 dark:text-slate-400">
+              从安装到第一个权限检查，只需几个简单步骤
+            </p>
+          </div>
+          
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="flex gap-2">
+                  <div className="w-3 h-3 bg-red-400 rounded-full"></div>
+                  <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
+                  <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+                </div>
+                <span className="text-sm text-slate-500 dark:text-slate-400">终端</span>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                <div className="flex gap-4">
+                  <span className="text-slate-500 dark:text-slate-400">$</span>
+                  <span className="text-slate-800 dark:text-white">npm install @mtpc/core zod</span>
+                </div>
+                <div className="flex gap-4">
+                  <span className="text-slate-500 dark:text-slate-400">$</span>
+                  <span className="text-slate-800 dark:text-white">pnpm add @mtpc/core zod</span>
+                </div>
+                <div className="flex gap-4">
+                  <span className="text-slate-500 dark:text-slate-400">$</span>
+                  <span className="text-slate-800 dark:text-white">yarn add @mtpc/core zod</span>
+                </div>
+              </div>
+              
+              <div className="mt-8 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                <pre className="text-sm text-slate-800 dark:text-slate-200 overflow-x-auto">
+{`import { createMTPC, defineResource } from '@mtpc/core'
+import { z } from 'zod'
+
+// 创建 MTPC 实例
+const mtpc = createMTPC()
+
+// 定义资源
+const userResource = defineResource({
+  name: 'user',
+  schema: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().email()
+  }),
+  features: {
+    creatable: true,
+    readable: true,
+    updatable: true,
+    deletable: true
+  }
+})
+
+// 注册资源并初始化
+mtpc.registerResource(userResource)
+await mtpc.init()
+
+// 检查权限
+const result = await mtpc.checkPermission({
+  tenant: { id: 'tenant-001' },
+  subject: { id: 'user-123', type: 'user' },
+  resource: 'user',
+  action: 'create'
+})
+
+console.log(result.allowed) // true/false`}
+                </pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Ecosystem Section */}
+      <div className="container mx-auto px-4 py-16">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-800 dark:text-white mb-4">
+              完整的生态系统
+            </h2>
+            <p className="text-lg text-slate-600 dark:text-slate-400">
+              丰富的扩展包和适配器，满足各种业务需求
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <EcosystemCard
+              title="核心包"
+              packages={['@mtpc/core', '@mtpc/rbac', '@mtpc/shared']}
+              description="提供基础的权限控制能力"
+            />
+            <EcosystemCard
+              title="框架适配器"
+              packages={['@mtpc/adapter-hono', '@mtpc/adapter-drizzle', '@mtpc/adapter-react', '@mtpc/adapter-vue']}
+              description="支持多种 Web 框架和数据库"
+            />
+            <EcosystemCard
+              title="官方扩展"
+              packages={['@mtpc/policy-cache', '@mtpc/audit', '@mtpc/data-scope', '@mtpc/soft-delete']}
+              description="企业级功能扩展"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* CTA Section */}
+      <div className="container mx-auto px-4 py-16">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="bg-gradient-to-r from-blue-600/10 to-indigo-600/10 dark:from-blue-600/20 dark:to-indigo-600/20 backdrop-blur-sm rounded-2xl p-8 border border-blue-200/50 dark:border-blue-800/50">
+            <h2 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white mb-4">
+              准备开始了吗？
+            </h2>
+            <p className="text-lg text-slate-600 dark:text-slate-300 mb-8">
+              加入我们，为你的应用构建强大而灵活的权限系统
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link 
+                href="/docs/getting-started" 
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-lg font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 shadow-xl"
+              >
+                开始使用 →
+              </Link>
+              <Link 
+                href="/docs/tutorials" 
+                className="border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 px-8 py-4 rounded-lg font-semibold hover:border-blue-500 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-400 transition-all duration-300"
+              >
+                查看教程
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface FeatureCardProps {
+  title: string;
+  description: string;
+  icon: string;
+}
+
+const FeatureCard: React.FC<FeatureCardProps> = ({ title, description, icon }) => {
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+      <div className="text-4xl mb-4">{icon}</div>
+      <h3 className="text-xl font-semibold text-slate-800 dark:text-white mb-2">{title}</h3>
+      <p className="text-slate-600 dark:text-slate-300">{description}</p>
+    </div>
+  );
+};
+
+interface EcosystemCardProps {
+  title: string;
+  packages: string[];
+  description: string;
+}
+
+const EcosystemCard: React.FC<EcosystemCardProps> = ({ title, packages, description }) => {
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+      <h3 className="text-xl font-semibold text-slate-800 dark:text-white mb-4">{title}</h3>
+      <div className="space-y-2 mb-4">
+        {packages.map((pkg: string) => (
+          <div key={pkg} className="bg-slate-50 dark:bg-slate-900 px-3 py-2 rounded-lg text-sm font-mono text-slate-700 dark:text-slate-300">
+            {pkg}
+          </div>
+        ))}
+      </div>
+      <p className="text-slate-600 dark:text-slate-300 text-sm">{description}</p>
     </div>
   );
 };
